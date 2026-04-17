@@ -482,7 +482,54 @@ function (window, undefined)
 			return value;
 		}
 		value = _sanitizeCode(value);
-		const result = _safe_eval_closure.call(null, {}, Api, {}, {}, function(){}, {}, customXMLHttpRequest, {}, {}, timeout, interval, value);
+
+		const allParams = {
+			"Function":         {},
+			"window":           {},
+			"AscDesktopEditor": {},
+			"alert":            function(){},
+			"document":         {},
+			"XMLHttpRequest":   customXMLHttpRequest,
+			"self":             {},
+			"globalThis":       {},
+			"setTimeout":       timeout,
+			"setInterval":      interval,
+
+			"Api":              Api,
+			"App":              Api,
+			"ThisApplication":  Api
+		};
+
+		switch (window.g_asc_plugins.api.editorId)
+		{
+			case AscCommon.c_oEditorId.Word:
+			{
+				allParams["ThisDocument"] = Api.GetDocument();
+				break;
+			}
+			case AscCommon.c_oEditorId.Presentation:
+			{
+				allParams["ThisPresentation"] = Api.GetPresentation();
+				break;
+			}
+			case AscCommon.c_oEditorId.Spreadsheet:
+			{
+				allParams["ThisWorkbook"] = Api;
+				break;
+			}
+			default:
+				break;
+		}
+
+		const names  = Object.keys(allParams).concat("value");
+		const values = Object.values(allParams).concat(value);
+
+		const _safe_eval_closure = Function.apply(
+			null,
+			names.concat("\"use strict\"; return eval(\"\\\"use strict\\\";\\r\\n\" + value)")
+		);
+
+		const result = _safe_eval_closure.apply(null, values);
 		protoFunc.constructor = normalConstructor;
 		if (protoFuncGen)
 			protoFuncGen.prototype.next = generatorNext;
