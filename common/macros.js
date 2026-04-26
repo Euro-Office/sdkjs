@@ -430,7 +430,6 @@ function (window, undefined)
 	window["AscCommon"].CDocumentMacros = CDocumentMacros;
 	window['AscCommon'].VbaProject = VbaProject;
 
-	var _safe_eval_closure = new Function("Function", "Api", "window", "AscDesktopEditor", "alert", "document", "XMLHttpRequest", "self", "globalThis", "setTimeout", "setInterval", "value", "\"use strict\"; return eval(\"\\\"use strict\\\";\\r\\n\" + value)");
 	function _safePluginEval(value) {
 		let protoFunc = Object.getPrototypeOf(function(){});
 		// for minimization we use eval!!!
@@ -524,15 +523,47 @@ function (window, undefined)
 		const names  = Object.keys(allParams).concat("value");
 		const values = Object.values(allParams).concat(value);
 
-		const _safe_eval_closure = Function.apply(
-			null,
-			names.concat("\"use strict\"; return eval(\"\\\"use strict\\\";\\r\\n\" + value)")
-		);
+		// Replace window.eval via property getter so the macro can use direct eval once,
+		// then turn it into a stub. Direct eval requires the identifier `eval` to resolve
+		// to %eval% itself; returning the real eval from the getter on first read keeps
+		// direct-eval semantics for our own wrapper call (user code runs in the wrapper's
+		// scope with this===null). All later reads return a stub, so `var e = eval; e(...)`
+		// can't escape to global scope.
+		const prevEvalDesc = Object.getOwnPropertyDescriptor(window, 'eval');
+		const realEval = window.eval;
+		let evalCallsLeft = 1;
+		const evalStub = function(){};
+		Object.defineProperty(window, 'eval', {
+			configurable: true,
+			get: function() {
+				if (evalCallsLeft > 0) {
+					evalCallsLeft--;
+					return realEval;
+				}
+				return evalStub;
+			},
+			set: function(){} // for IE
+		});
 
-		const result = _safe_eval_closure.apply(null, values);
-		protoFunc.constructor = normalConstructor;
-		if (protoFuncGen)
-			protoFuncGen.prototype.next = generatorNext;
+		let result;
+		try {
+			const _safe_eval_closure = Function.apply(
+				null,
+				names.concat("\"use strict\"; return eval(\"\\\"use strict\\\";\\r\\n\" + value)")
+			);
+			result = _safe_eval_closure.apply(null, values);
+		} finally {
+			if (prevEvalDesc) {
+				Object.defineProperty(window, 'eval', prevEvalDesc);
+			} else {
+				delete window.eval;
+				window.eval = realEval;
+			}
+			protoFunc.constructor = normalConstructor;
+			if (protoFuncGen)
+				protoFuncGen.prototype.next = generatorNext;
+		}
+
 		return result;
 	};
 	window['AscCommon'].safePluginEval = function(value){
