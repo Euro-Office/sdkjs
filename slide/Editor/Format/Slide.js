@@ -837,6 +837,10 @@ AscFormat.InitClass(Slide, AscFormat.CBaseFormatObject, AscDFH.historyitem_type_
         if(this.collaborativeMarks) {
             this.collaborativeMarks.Update_OnAdd(_pos);
         }
+        let logicDocument = Asc.editor.getLogicDocument();
+        if (logicDocument && logicDocument.processSlideJumpLinksInSubtree) {
+            logicDocument.processSlideJumpLinksInSubtree(item, true);
+        }
     };
 
     Slide.prototype.shapeRemove = function (pos, count) {

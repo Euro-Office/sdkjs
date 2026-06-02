@@ -922,6 +922,7 @@
 			ret.history = this.history;
 			ret.highlightClick = this.highlightClick;
 			ret.endSnd = this.endSnd;
+			ret.slideJumpTargetId = this.slideJumpTargetId;
 			return ret;
 		};
 
@@ -960,9 +961,11 @@
 		};
 		drawingsChangesMap[AscDFH.historyitem_CNvPr_SetHlinkClick] = function (oClass, value) {
 			oClass.hlinkClick = value;
+			oClass.checkSlideJumpLink();
 		};
 		drawingsChangesMap[AscDFH.historyitem_CNvPr_SetHlinkHover] = function (oClass, value) {
 			oClass.hlinkHover = value;
+			oClass.checkSlideJumpLink();
 		};
 		drawingsChangesMap[AscDFH.historyitem_NvPr_SetIsPhoto] = function (oClass, value) {
 			oClass.isPhoto = value;
@@ -8187,10 +8190,24 @@
 		CNvPr.prototype.setHlinkClick = function (pr) {
 			AscCommon.History.Add(new CChangesDrawingsObjectNoId(this, AscDFH.historyitem_CNvPr_SetHlinkClick, this.hlinkClick, pr));
 			this.hlinkClick = pr;
+			this.checkSlideJumpLink();
 		};
 		CNvPr.prototype.setHlinkHover = function (pr) {
 			AscCommon.History.Add(new CChangesDrawingsObjectNoId(this, AscDFH.historyitem_CNvPr_SetHlinkHover, this.hlinkHover, pr));
 			this.hlinkHover = pr;
+			this.checkSlideJumpLink();
+		};
+		CNvPr.prototype.checkSlideJumpLink = function () {
+			let logicDocument = Asc.editor.getLogicDocument();
+			if (!logicDocument || !logicDocument.bindSlideJumpLink) {
+				return;
+			}
+			if (this.hlinkClick && AscFormat.IsSlideJumpLinkValue(this.hlinkClick.id)) {
+				logicDocument.bindSlideJumpLink(this.hlinkClick);
+			}
+			if (this.hlinkHover && AscFormat.IsSlideJumpLinkValue(this.hlinkHover.id)) {
+				logicDocument.bindSlideJumpLink(this.hlinkHover);
+			}
 		};
 		CNvPr.prototype.setTitle = function (title) {
 			AscCommon.History.Add(new CChangesDrawingsString(this, AscDFH.historyitem_CNvPr_SetTitle, this.title, title));
@@ -20546,6 +20563,9 @@
 		window['AscFormat'].CLn = CLn;
 		window['AscFormat'].DefaultShapeDefinition = DefaultShapeDefinition;
 		window['AscFormat'].CNvPr = CNvPr;
+		window['AscFormat'].IsSlideJumpLinkValue = function (value) {
+			return typeof value === "string" && (0 === value.indexOf("ppaction://hlinksldjumpslide") || "ppaction://noaction" === value);
+		};
 		window['AscFormat'].NvPr = NvPr;
 		window['AscFormat'].Ph = Ph;
 		window['AscFormat'].UniNvPr = UniNvPr;

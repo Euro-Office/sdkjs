@@ -610,6 +610,22 @@
         }
     };
 
+    CChangesDrawingsContent.prototype.private_ProcessSlideJumpLinks = function (isAdd) {
+        if (this.Type !== AscDFH.historyitem_SlideAddToSpTree
+            && this.Type !== AscDFH.historyitem_SlideRemoveFromSpTree
+            && this.Type !== AscDFH.historyitem_GroupShapeAddToSpTree
+            && this.Type !== AscDFH.historyitem_GroupShapeRemoveFromSpTree) {
+            return;
+        }
+        var logicDocument = Asc.editor.getLogicDocument();
+        if (!logicDocument || !logicDocument.processSlideJumpLinksInSubtree) {
+            return;
+        }
+        for (var i = 0; i < this.Items.length; ++i) {
+            logicDocument.processSlideJumpLinksInSubtree(this.Items[i], isAdd);
+        }
+    };
+
     CChangesDrawingsContent.prototype.Load = function () {
         if (this.IsAdd()) {
             this.private_InsertInArrayLoad();
@@ -617,6 +633,7 @@
         else {
             this.private_RemoveInArrayLoad();
         }
+        this.private_ProcessSlideJumpLinks(this.IsAdd());
         this.RefreshRecalcData();
     };
 
@@ -627,6 +644,7 @@
         else {
             this.private_InsertInArrayUndoRedo();
         }
+        this.private_ProcessSlideJumpLinks(!this.IsAdd());
     };
 
     CChangesDrawingsContent.prototype.Redo = function () {
@@ -636,6 +654,7 @@
         else {
             this.private_RemoveInArrayUndoRedo();
         }
+        this.private_ProcessSlideJumpLinks(this.IsAdd());
     };
     CChangesDrawingsContent.prototype.IsContentChange = function () {
         return false;
@@ -734,6 +753,7 @@
                 }
             }
         }
+        this.private_ProcessSlideJumpLinks(this.IsAdd());
     };
 
     CChangesDrawingsContentPresentation.prototype.CheckCorrect = function(){

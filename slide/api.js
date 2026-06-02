@@ -5808,6 +5808,7 @@ background-repeat: no-repeat;\
 			{
 				if (this.LoadedObject === 1)
 				{
+					this.WordControl.m_oLogicDocument.bindSlideJumpLinks();
 					if (this.isApplyChangesOnOpenEnabled)
 					{
                         if (AscCommon.EncryptionWorker)
@@ -6530,6 +6531,11 @@ background-repeat: no-repeat;\
 				else if (Url.indexOf("ppaction://hlinkfile") === 0) {
 					Data.Hyperlink.Value = Url.substring("ppaction://hlinkfile?file=".length);
 				}
+				else if (Url == "ppaction://noaction")
+				{
+					Data.Hyperlink.Value = "";
+					Data.Hyperlink.ToolTip = "";
+				}
 				else
 				{
 					let mask     = "ppaction://hlinksldjumpslide";
@@ -6538,6 +6544,7 @@ background-repeat: no-repeat;\
 					{
 						let slideNum = parseInt(Url.substring(mask.length));
 						Data.Hyperlink.Value = AscCommon.translateManager.getValue("Slide") + " " + (slideNum + 1);
+						Data.Hyperlink.ToolTip = Data.Hyperlink.Value;
 					}
 				}
 			}
