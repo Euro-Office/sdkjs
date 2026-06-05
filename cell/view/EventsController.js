@@ -1244,6 +1244,10 @@
 							oThis.handlers.trigger("selectRowsByRange");
 							nRetValue = keydownresult_PreventAll;
 						}
+						if (!bIsSelectColumns && !bIsSelect && oThis.canEdit() &&
+							oThis.handlers.trigger("toggleActiveCellCheckbox")) {
+							nRetValue = keydownresult_PreventAll;
+						}
 						break;
 					case 33: // PageUp
 						nDeltaRow = -0.5;
@@ -1790,7 +1794,9 @@
 						return;
 					} else if (t.targetInfo.target === c_oTargetType.FilterObject) {
 						if (0 === button) {
-							if (t.targetInfo.isDataValidation) {
+							if (t.targetInfo.isCheckbox) {
+								this.handlers.trigger("checkboxClick", t.targetInfo.col, t.targetInfo.row);
+							} else if (t.targetInfo.isDataValidation) {
 								this.handlers.trigger('onDataValidation');
 							} else if (t.targetInfo.idPivot) {
 								this.handlers.trigger("pivotFiltersClick", t.targetInfo.idPivot);
