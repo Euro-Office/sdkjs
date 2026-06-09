@@ -180,7 +180,7 @@ module.exports = function(grunt) {
 	const slide = path.join(deploy, 'slide');
 	const visio = path.join(deploy, 'visio');
 
-	const level = grunt.option('level') || 'ADVANCED';
+	const level = grunt.option('level') || 'WHITESPACE_ONLY';
 	const formatting = grunt.option('formatting') || '';
 
 	const ccPlatform = process.env.CC_PLATFORM
