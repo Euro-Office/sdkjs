@@ -25,6 +25,31 @@ The directory layout below helps developers quickly navigate and understand SDKJ
 | `visio`   | Modules related to drawing and diagram editing (Visio-like functionality). |
 | `word`    | Core logic and UI components for text document editor.                     |
 
+## 🧪 Running tests
+
+The test suites are QUnit pages run in headless Chromium via `node-qunit-puppeteer`.
+They load the SDK from a `develop` build, so build that first, then run the suite.
+The forms / oform suites need the [`sdkjs-forms`](https://github.com/Euro-Office/sdkjs-forms)
+repository checked out as a sibling of this one (`../sdkjs-forms`).
+
+```bash
+# from the sdkjs/ directory, one-time setup
+npm install grunt-cli node-qunit-puppeteer
+npm install --prefix build
+node node_modules/grunt-cli/bin/grunt --gruntfile build/Gruntfile.js develop --addon=sdkjs-forms
+
+# run the whole suite (exits non-zero on failure)
+node tests/runAll.js
+
+# run a single suite: <test.html> <timeout-ms> "<puppeteer-args>"
+node node_modules/node-qunit-puppeteer/cli.js tests/word/document-calculation/paragraph.html 30000 "--no-sandbox"
+```
+
+Concurrency defaults to 4 Chromium instances; override with `TESTS_CONCURRENCY`.
+Suites that cannot pass in the standard build yet are listed (with reasons) in
+`skippedTests` at the top of `tests/runAll.js`. CI runs these same steps via the
+`unit-tests` job in `.github/workflows/check-build.yml`.
+
 ## 📜 License
 
 **SDKJS** is licensed under the **GNU Affero General Public License (AGPL) v3.0**. For full details, refer to the [LICENSE](https://github.com/Euro-Office/sdkjs/blob/master/LICENSE.txt) file.
