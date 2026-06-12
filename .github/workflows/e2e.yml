@@ -1,0 +1,131 @@
+name: E2E (overlay on nightly)
+
+# Builds sdkjs, overlays the fresh build onto the published
+# ghcr.io/euro-office/documentserver:nightly image, and runs the DocumentServer
+# Playwright e2e suite against that image. This gives fast feedback on a sdkjs
+# change against the full stack without rebuilding core/server/web-apps.
+on:
+  push:
+    branches:
+      - fork
+      - develop
+      - 'release/**'
+      - 'hotfix/**'
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs for the same ref to save runner time.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NIGHTLY_IMAGE: ghcr.io/euro-office/documentserver:nightly
+  OVERLAY_IMAGE: euro-office/documentserver:e2e-sdkjs
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out sdkjs
+        uses: actions/checkout@v4
+        with:
+          path: sdkjs
+
+      # The shipped build bundles the sdkjs-forms addon. Prefer a matching
+      # branch, fall back to master (mirrors check-build.yml).
+      - name: Check out sdkjs-forms (current branch)
+        id: sdkjs-forms
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: Euro-Office/sdkjs-forms
+          path: sdkjs-forms
+          ref: ${{ github.ref }}
+      - name: Check out sdkjs-forms (master)
+        if: steps.sdkjs-forms.outcome != 'success'
+        uses: actions/checkout@v4
+        with:
+          repository: Euro-Office/sdkjs-forms
+          path: sdkjs-forms
+          ref: master
+
+      # The e2e suite lives in the DocumentServer repo. Prefer a same-named
+      # branch (so tests can be co-developed with the sdkjs change), else main.
+      - name: Check out DocumentServer e2e (current branch)
+        id: docserver
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: Euro-Office/DocumentServer
+          path: documentserver
+          ref: ${{ github.head_ref || github.ref_name }}
+      - name: Check out DocumentServer e2e (main)
+        if: steps.docserver.outcome != 'success'
+        uses: actions/checkout@v4
+        with:
+          repository: Euro-Office/DocumentServer
+          path: documentserver
+          ref: main
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build sdkjs
+        working-directory: sdkjs
+        run: |
+          npm install grunt-cli
+          npm install --prefix build
+          node node_modules/grunt-cli/bin/grunt --gruntfile build/Gruntfile.js --addon=sdkjs-forms
+
+      # The documentserver package is public, so the pull needs no auth.
+      - name: Pull nightly image
+        run: docker pull ${{ env.NIGHTLY_IMAGE }}
+
+      - name: Build overlay image with fresh sdkjs
+        run: |
+          set -euo pipefail
+          cat > overlay.Dockerfile <<'EOF'
+          ARG NIGHTLY_IMAGE
+          FROM ${NIGHTLY_IMAGE}
+          # deploy/sdkjs is a complete sdkjs tree (JS bundles + committed wasm).
+          COPY . /tmp/new-sdkjs/
+          # The install path is brand-derived (/var/www/<brand>/documentserver/sdkjs);
+          # locate it rather than hardcoding, then overlay the fresh build over it.
+          RUN set -eux; \
+              target="$(find /var/www -maxdepth 4 -type d -name sdkjs -path '*documentserver*' | head -n1)"; \
+              test -n "$target"; \
+              cp -a /tmp/new-sdkjs/. "$target/"; \
+              rm -rf /tmp/new-sdkjs
+          EOF
+          docker build \
+            --build-arg NIGHTLY_IMAGE=${{ env.NIGHTLY_IMAGE }} \
+            -t ${{ env.OVERLAY_IMAGE }} \
+            -f overlay.Dockerfile \
+            sdkjs/deploy/sdkjs
+
+      - name: Install e2e dependencies
+        working-directory: documentserver/e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: documentserver/e2e
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E tests
+        working-directory: documentserver/e2e
+        env:
+          E2E_IMAGE: ${{ env.OVERLAY_IMAGE }}
+        run: npm test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.sha }}
+          path: documentserver/e2e/playwright-report/
+          retention-days: 14
