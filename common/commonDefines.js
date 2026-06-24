@@ -422,7 +422,7 @@ var lcid_haLatn = 0x7c68; // Hausa, Latin
 //https://github.com/google/closure-compiler/wiki/Annotating-JavaScript-for-the-Closure-Compiler#define-type-description
 window['AscCommon'] = window.AscCommon = window['AscCommon'] || {};
 /** @define {string} */
-window.AscCommon.g_cCompanyName  = "onlyoffice";
+window.AscCommon.g_cCompanyName  = "Euro-Office";
 /** @define {string} */
 window.AscCommon.g_cProductVersion  = "0.0.0";
 /** @define {string} */
