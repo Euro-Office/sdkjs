@@ -100,6 +100,11 @@
 	var oldZoomValue = 1;
 	window['AscCommon'].correctApplicationScale = function(zoomValue)
 	{
+		// COLORPICKER ATTEMPT D: On desktop/CEF OSR, Qt already provides correctly
+		// scaled DIPs and the JS layer should not apply a second CSS zoom.
+		if (window["AscDesktopEditor"])
+			return;
+
 		if (!zoomValue.correct && Math.abs(zoomValue.zoom - oldZoomValue) < 0.0001)
 			return;
 		oldZoomValue = zoomValue.zoom;
