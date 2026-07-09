@@ -109,6 +109,8 @@
 		this.needClearBuffer = false;
 
 		this.canUseNewCopy = null;
+
+		this._nativeClipboardBuffer = null;
 	}
 
 	CClipboardBase.prototype =
@@ -505,6 +507,28 @@
 				catch (e)
 				{
 				}
+
+				// CEF's own OS clipboard integration does not work in
+				// off-screen-rendering mode under Wayland (see cefview.cpp /
+				// qcefview.cpp SetClipboardData for the full explanation), so
+				// mirror every write into a native bridge too. Harmless (and a
+				// no-op) on platforms/sessions where the browser's own
+				// clipboard already works correctly. pushData() calls setData()
+				// once per format synchronously within the same checkCopy()
+				// batch (no async pieces on this path, unlike Copy_New's image
+				// handling), so a microtask flush after that batch completes is
+				// safe here.
+				if (g_clipboardBase._isNativeClipboardAvailable())
+				{
+					var bScheduleFlush = !g_clipboardBase._nativeClipboardBuffer;
+					g_clipboardBase._nativeClipboardAccumulate(type, _data);
+					if (bScheduleFlush)
+					{
+						Promise.resolve().then(function() {
+							g_clipboardBase._nativeClipboardFlush();
+						});
+					}
+				}
 			};
 
 			if (!AscBrowser.isIE)
@@ -533,7 +557,7 @@
 				};
 				document.onpaste          = function(e)
 				{
-					return g_clipboardBase._private_onpaste(e);
+					return g_clipboardBase._dispatchPaste(e);
 				};
 				document["onbeforecopy"]  = function(e)
 				{
@@ -564,7 +588,7 @@
 				});
 				document.addEventListener("paste", function(e)
 				{
-					return g_clipboardBase._private_onpaste(e);
+					return g_clipboardBase._dispatchPaste(e);
 				});
 				document.addEventListener("beforepaste", function(e)
 				{
@@ -948,6 +972,156 @@
 			}
 		},
 
+		// --- Native clipboard bridge -------------------------------------
+		// CEF's own OS clipboard integration is broken in off-screen-rendering
+		// mode under Wayland: Chromium's clipboard needs a real wl_surface +
+		// input serial to claim ownership, which OSR mode never has (Qt owns
+		// the only real window). Copy/paste is bridged through
+		// window.AscDesktopEditor.nativeClipboardWrite (fire-and-forget,
+		// desktop-sdk/.../cefwrapper/client_renderer_wrapper.cpp) and
+		// window.cefQuery("clipboard_read") (request/response, handled by
+		// CClipboardQueryHandler in desktop-sdk/.../src/cefview.cpp) to
+		// whichever real OS clipboard the platform widget provides -- see
+		// QCefView::SetClipboardData / GetClipboardData.
+		_isNativeClipboardAvailable : function()
+		{
+			return !!(window["AscDesktopEditor"] && window["AscDesktopEditor"]["nativeClipboardWrite"] && window["cefQuery"]);
+		},
+
+		// Both copy paths (legacy pushData()/ClosureParams.setData(), and
+		// Copy_New() below) build up several formats (text/plain, text/html,
+		// text/x-custom, and -- Copy_New only -- an asynchronously-converted
+		// image/png) before the clipboard write should actually happen.
+		// Accumulate into a shared buffer; callers are responsible for calling
+		// _nativeClipboardFlush() once everything they have is in it, so an
+		// async piece (the image conversion) can't race a flush that already
+		// fired for the synchronous pieces and clobber them.
+		_nativeClipboardAccumulate : function(type, data)
+		{
+			if (!this._isNativeClipboardAvailable())
+				return;
+
+			if (!this._nativeClipboardBuffer)
+				this._nativeClipboardBuffer = {};
+
+			this._nativeClipboardBuffer[type] = data;
+		},
+
+		_nativeClipboardFlush : function()
+		{
+			var buffer = this._nativeClipboardBuffer;
+			this._nativeClipboardBuffer = null;
+			if (buffer && this._isNativeClipboardAvailable())
+				window["AscDesktopEditor"]["nativeClipboardWrite"](JSON.stringify(buffer));
+		},
+
+		// Fetches the native OS clipboard as {"text/plain":..., "text/html":...,
+		// "text/x-custom":...} (any subset, matching whatever was actually on
+		// the clipboard). Returns a Promise resolving to null on failure/timeout
+		// so callers can fall back to whatever CEF's own (likely empty/stale)
+		// clipboard read would otherwise give them.
+		_nativeClipboardRead : function()
+		{
+			if (!this._isNativeClipboardAvailable())
+				return Promise.resolve(null);
+
+			return new Promise(function(resolve) {
+				window["cefQuery"]({
+					request : "clipboard_read",
+					persistent : false,
+					onSuccess : function(response) {
+						try
+						{
+							resolve(response ? JSON.parse(response) : null);
+						}
+						catch (e)
+						{
+							resolve(null);
+						}
+					},
+					onFailure : function() {
+						resolve(null);
+					}
+				});
+			});
+		},
+
+		// Paste driven by the native bridge, mirroring _private_onpaste's
+		// format-priority chain (internal fragment -> html -> plain text) but
+		// against pre-fetched data instead of a live ClipboardEvent (the native
+		// fetch is async; DOM paste handlers are not, hence the separate
+		// function rather than threading a Promise through _private_onpaste).
+		// A pasted external image already arrives as a data-URL PNG (see
+		// QCefView::GetClipboardData), so it's wrapped as an <img> and handed
+		// to the same CommonIframe_PasteStart() path _private_onpaste already
+		// uses for raw clipboard image items, instead of duplicating that
+		// image-specific handling here.
+		NativePaste : function()
+		{
+			var t = this;
+			if (!this.Api.asc_IsFocus(true) || this.Api.isLongAction())
+				return;
+
+			this._nativeClipboardRead().then(function(data) {
+				if (!data)
+					return;
+
+				t.PasteFlag = true;
+				t.Api.incrementCounterLongAction();
+				t.pastedFrom = null;
+
+				var _internal = data["text/x-custom"];
+				if (_internal && _internal.indexOf("asc_internalData2;") === 0)
+				{
+					t.Api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Internal, _internal.substr("asc_internalData2;".length), null, data["text/plain"]);
+					t.Paste_End();
+					return;
+				}
+
+				var _html = data["text/html"];
+				if (_html)
+				{
+					var nIndex = _html.indexOf("</html>");
+					if (-1 != nIndex)
+						_html = _html.substring(0, nIndex + "</html>".length);
+					t.CommonIframe_PasteStart(_html, data["text/plain"]);
+					return;
+				}
+
+				var _image = data["image/png"];
+				if (_image)
+				{
+					t.CommonIframe_PasteStart("<html><body><img src=\"data:image/png;base64," + _image + "\"/></body></html>");
+					return;
+				}
+
+				var _text = data["text/plain"];
+				if (_text)
+				{
+					t.Api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Text, _text);
+					t.Paste_End();
+					return;
+				}
+
+				t.Paste_End();
+			});
+		},
+
+		// Shared entry point for both paste event wiring paths below: use the
+		// native bridge when available (real Wayland-safe data), otherwise
+		// fall back to the existing browser-clipboard-event based paste.
+		_dispatchPaste : function(e)
+		{
+			if (this._isNativeClipboardAvailable())
+			{
+				e.preventDefault();
+				this.NativePaste();
+				return false;
+			}
+			return this._private_onpaste(e);
+		},
+		// -------------------------------------------------------------------
+
 		pushData : function(_format, _data)
 		{
 			this.lastCopyPush(_format, _data)
@@ -1086,6 +1260,44 @@
 					if (this.isCopyOutEnabled()) {
 						const data = [new ClipboardItem(clipboardData)];
 						navigator.clipboard.write(data).then(function(){},function(){});
+
+						// This is the app's actual active copy path (isUseNewCopy() is
+						// true whenever CEF's engine version is >= 109, which this app
+						// always runs), so the native bridge is fed from here, not just
+						// the legacy ClosureParams.setData path. Unlike the browser
+						// clipboard.write() above, our own bridge has no Firefox-style
+						// restriction, so the internal fragment travels too -- see
+						// _nativeClipboardAccumulate for the shared write path.
+						if (this._isNativeClipboardAvailable())
+						{
+							if (copy_data.data[c_oAscClipboardDataFormat.Text])
+								this._nativeClipboardAccumulate("text/plain", copy_data.data[c_oAscClipboardDataFormat.Text]);
+							if (copy_data.data[c_oAscClipboardDataFormat.Html])
+								this._nativeClipboardAccumulate("text/html", copy_data.data[c_oAscClipboardDataFormat.Html]);
+							if (copy_data.data[c_oAscClipboardDataFormat.Internal])
+								this._nativeClipboardAccumulate("text/x-custom", "asc_internalData2;" + copy_data.data[c_oAscClipboardDataFormat.Internal]);
+							if (clipboardData["image/png"])
+							{
+								// Async (Blob conversion), so flush only once this
+								// resolves -- otherwise a flush for the synchronous
+								// text/html/internal pieces above would race ahead
+								// and the image would arrive in a second, separate
+								// native write that clobbers them (each write
+								// replaces the whole native clipboard contents).
+								clipboardData["image/png"].arrayBuffer().then(function(buf) {
+									let binary = "";
+									let bytes = new Uint8Array(buf);
+									for (let i = 0; i < bytes.length; ++i)
+										binary += String.fromCharCode(bytes[i]);
+									oThis._nativeClipboardAccumulate("image/png", window.btoa(binary));
+									oThis._nativeClipboardFlush();
+								});
+							}
+							else
+							{
+								this._nativeClipboardFlush();
+							}
+						}
 					}
 
 					if (isCut === true)
