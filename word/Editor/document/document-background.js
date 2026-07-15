@@ -43,19 +43,19 @@
 	};
 	DocumentBackground.prototype.draw = function(graphics, sectPr, theme, colorMap)
 	{
-		let brush = this._getBrush();
+		let brush = this._getBrush(theme, colorMap);
 		if (!brush || !brush.isVisible())
 			return;
-		
+
 		let h = sectPr.GetPageHeight();
 		let w = sectPr.GetPageWidth();
 
 		graphics.StartDrawShape();
-		
+
 		let shapeDrawer = new AscCommon.CShapeDrawer();
 		brush.check(theme, colorMap);
 		shapeDrawer.fromShape2(new AscFormat.ObjectToDraw(brush, null, w, h, null, null), graphics, null);
-		
+
 		if (brush.isSolidFill())
 		{
 			let RGBA = brush.getRGBAColor();
@@ -65,17 +65,41 @@
 
 		graphics.EndDrawShape();
 	};
-	DocumentBackground.prototype._getBrush = function()
+	DocumentBackground.prototype._getBrush = function(theme, colorMap)
 	{
-		let brush = null;
+		if (this.shape && this._isShapeBrushUsable())
+		{
+		    let brush = this.shape.brush;
+		    if (brush.isSolidFill())
+		    {
+		        // Normalize to a fresh solid fill to avoid VML-specific internal state
+		        // that causes CShapeDrawer to render incorrectly despite correct fillType/RGBA.
+		        // Resolve the color first so getRGBAColor() returns the correct values,
+		        // and use CreateSolidFillRGBA to preserve alpha.
+		        brush.check(theme, colorMap);
+		        let RGBA = brush.getRGBAColor();
+		        return AscFormat.CreateSolidFillRGBA(RGBA.R, RGBA.G, RGBA.B, RGBA.A);
+		    }
+		    return brush; // gradient / blip / pattern — pass through directly
+		}
+
+		if (this.Unifill)
+		    return this.Unifill;
+
+		if (this.Color)
+		    return AscFormat.CreateSolidFillRGB(this.Color.r, this.Color.g, this.Color.b);
+
 		if (this.shape)
-			brush = this.shape.brush;
-		else if (this.Unifill)
-			brush = this.Unifill;
-		else if (this.Color)
-			brush = AscFormat.CreateSolidFillRGB(this.Color.r, this.Color.g, this.Color.b);
-		
-		return brush;
+		    return this.shape.brush; // last resort: unusable shape brush, no Color/Unifill to fall back to
+
+		return null;
+	};
+	DocumentBackground.prototype._isShapeBrushUsable = function()
+	{
+		let brush = this.shape && this.shape.brush;
+		if (!brush)
+		    return false;
+		return !brush.isBrokenSolidFill();
 	};
 	DocumentBackground.prototype.writeToBinary = function(writer)
 	{
@@ -146,6 +170,6 @@
 		return (!this.Color || this.Color.IsEqualRGB({r : 255, g : 255, b : 255}));
 	};
 	//--------------------------------------------------------export----------------------------------------------------
-	window['AscWord'].DocumentBackground = DocumentBackground;
+	window['AscWord']['DocumentBackground'] = DocumentBackground;
 	
 })(window);
