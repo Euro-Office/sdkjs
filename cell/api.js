@@ -8695,6 +8695,21 @@ var editor;
 		this._spellCheckRestart();
   	}
   };
+  // Spreadsheets have no SpellCheckManager (cell-value spellcheck doesn't
+  // route through the shared paragraph/graphics pipeline), but shape text on
+  // a sheet does, via the shared AscCommon.CGraphics used for shape rendering.
+  // Store settings directly so CGraphics.IsSpellCheckWavyLine can read them.
+  spreadsheet_api.prototype.asc_setSpellCheckSettings = function(oSettings)
+  {
+  	this.spellCheckSettings = oSettings;
+  	this._spellCheckRestart();
+  };
+  spreadsheet_api.prototype.asc_getSpellCheckSettings = function()
+  {
+  	if (!this.spellCheckSettings)
+  		this.spellCheckSettings = new AscCommon.CSpellCheckSettings();
+  	return this.spellCheckSettings;
+  };
   spreadsheet_api.prototype.asc_ConvertEquationToMath = function(oEquation, isAll)
   {
       // TODO: Вообще здесь нужно запрашивать шрифты, которые использовались в старой формуле,
@@ -10380,6 +10395,8 @@ var editor;
   prot["asc_cancelSpellCheck"] = prot.asc_cancelSpellCheck;
   prot["asc_ignoreNumbers"] = prot.asc_ignoreNumbers;
   prot["asc_ignoreUppercase"] = prot.asc_ignoreUppercase;
+  prot["asc_setSpellCheckSettings"] = prot.asc_setSpellCheckSettings;
+  prot["asc_getSpellCheckSettings"] = prot.asc_getSpellCheckSettings;
   prot["asc_getKeyboardLanguage"] = prot.asc_getKeyboardLanguage;
   prot["asc_getInputLanguage"] = prot.asc_getInputLanguage;
 
