@@ -2141,18 +2141,11 @@
 	CGraphics.prototype.IsSpellCheckWavyLine = function()
 	{
 		let oLogicDocument = Asc.editor && Asc.editor.private_GetLogicDocument ? Asc.editor.private_GetLogicDocument() : null;
-		if (oLogicDocument && oLogicDocument.GetSpellCheckManager)
-		{
-			let oSpellCheck = oLogicDocument.GetSpellCheckManager();
-			return oSpellCheck ? oSpellCheck.GetSettings().IsWavyLine() : true;
-		}
+		if (!oLogicDocument || !oLogicDocument.GetSpellCheckManager)
+			return true;
 
-		// Editors without a SpellCheckManager-backed logic document (e.g. cell/api.js)
-		// may still expose settings directly, for shape text spellcheck rendering.
-		if (Asc.editor && Asc.editor.asc_getSpellCheckSettings)
-			return Asc.editor.asc_getSpellCheckSettings().IsWavyLine();
-
-		return true;
+		let oSpellCheck = oLogicDocument.GetSpellCheckManager();
+		return oSpellCheck ? oSpellCheck.GetSettings().IsWavyLine() : true;
 	};
 
 	CGraphics.prototype.DrawSpellingLine = function(y0, x0, x1, w)
