@@ -12150,7 +12150,7 @@ function isAllowPasteLink(pastedWb) {
 		}
 
 		let isMobileVersion = this.workbook && this.workbook.Api && this.workbook.Api.isMobileVersion;
-		var epsChangeSize = AscCommon.AscBrowser.convertToRetinaValue(3 * AscCommon.global_mouseEvent.KoefPixToMM, true);
+		var epsChangeSize = AscCommon.AscBrowser.convertToRetinaValue(5 * AscCommon.global_mouseEvent.KoefPixToMM, true);
 		if (x <= this.cellsLeft && y >= this.cellsTop && x >= this.headersLeft + this.getRightToLeftOffset()) {
 			r = this._findRowUnderCursor(y, true);
 			if (r === null) {
