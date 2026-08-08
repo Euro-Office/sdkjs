@@ -100,9 +100,15 @@
 	var oldZoomValue = 1;
 	window['AscCommon'].correctApplicationScale = function(zoomValue)
 	{
-		// COLORPICKER ATTEMPT D: On desktop/CEF OSR, Qt already provides correctly
-		// scaled DIPs and the JS layer should not apply a second CSS zoom.
-		if (window["AscDesktopEditor"])
+		// COLORPICKER ATTEMPT D: on CEF OSR (currently Wayland only), Qt
+		// already provides correctly scaled DIPs and the JS layer should
+		// not apply a second CSS zoom. This used to check for the mere
+		// presence of window.AscDesktopEditor, which disabled the
+		// correction on every desktop platform -- including windowed CEF
+		// (X11, Windows), where Qt does NOT do this and the correction is
+		// still needed. Requires window.RendererProcessVariable.isWayland
+		// explicitly instead.
+		if (window["RendererProcessVariable"] && window["RendererProcessVariable"]["isWayland"])
 			return;
 
 		if (!zoomValue.correct && Math.abs(zoomValue.zoom - oldZoomValue) < 0.0001)
