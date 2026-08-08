@@ -983,9 +983,18 @@
 		// CClipboardQueryHandler in desktop-sdk/.../src/cefview.cpp) to
 		// whichever real OS clipboard the platform widget provides -- see
 		// QCefView::SetClipboardData / GetClipboardData.
+		//
+		// Requires window.RendererProcessVariable.isWayland explicitly, not
+		// just the presence of window.AscDesktopEditor/nativeClipboardWrite/
+		// cefQuery -- those exist on every desktop platform, not just
+		// Wayland OSR. Without the explicit check this bridge activated on
+		// X11/Windows too, racing the ordinary navigator.clipboard.write()
+		// path (Copy_New below) against nativeClipboardWrite for the same
+		// OS clipboard -- whichever finished last won, nondeterministically.
 		_isNativeClipboardAvailable : function()
 		{
-			return !!(window["AscDesktopEditor"] && window["AscDesktopEditor"]["nativeClipboardWrite"] && window["cefQuery"]);
+			return !!(window["RendererProcessVariable"] && window["RendererProcessVariable"]["isWayland"] &&
+				window["AscDesktopEditor"] && window["AscDesktopEditor"]["nativeClipboardWrite"] && window["cefQuery"]);
 		},
 
 		// Both copy paths (legacy pushData()/ClosureParams.setData(), and
@@ -1026,10 +1035,21 @@
 				return Promise.resolve(null);
 
 			return new Promise(function(resolve) {
+				// resolve() is a no-op on any call after the first, so the
+				// timeout firing after onSuccess/onFailure already settled
+				// the promise is harmless -- this exists purely to bound
+				// the wait if the native side never calls back at all
+				// (previously nothing did: the doc comment above already
+				// promised "failure/timeout" but no timeout ever existed).
+				var timeoutId = setTimeout(function() {
+					resolve(null);
+				}, 2000);
+
 				window["cefQuery"]({
 					request : "clipboard_read",
 					persistent : false,
 					onSuccess : function(response) {
+						clearTimeout(timeoutId);
 						try
 						{
 							resolve(response ? JSON.parse(response) : null);
@@ -1040,6 +1060,7 @@
 						}
 					},
 					onFailure : function() {
+						clearTimeout(timeoutId);
 						resolve(null);
 					}
 				});
