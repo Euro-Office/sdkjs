@@ -211,8 +211,6 @@ module.exports = function(grunt) {
 				'device_scale.js',
 				'Drawings/Format/path-boolean-min.js',
 				'Charts/ChartStyles.js',
-				'SmartArts/SmartArtData/*',
-				'SmartArts/SmartArtDrawing/*',
 				'Images/*',
 				'Images/placeholders/*',
 				'Images/content_controls/*',

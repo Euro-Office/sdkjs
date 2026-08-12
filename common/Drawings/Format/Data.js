@@ -7699,6 +7699,21 @@ Because of this, the display is sometimes not correct.
 
 	      pReader.IsFillingSmartArt = false;
       }
+      else if (oApi)
+      {
+        this.generateDefaultStructures();
+        this.setSpPr(new AscFormat.CSpPr());
+        this.spPr.setParent(this);
+        const smXfrm = new AscFormat.CXfrm();
+        smXfrm.fillStandardSmartArtXfrm();
+        this.spPr.setXfrm(smXfrm);
+        this.setBDeleted2(false);
+        this.x = smXfrm.offX;
+        this.y = smXfrm.offY;
+        this.extX = smXfrm.extX;
+        this.extY = smXfrm.extY;
+        this.drawing.setXfrmByParent();
+      }
       return this;
     }
 
