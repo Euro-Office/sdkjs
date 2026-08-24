@@ -920,4 +920,84 @@ $(function () {
 		assert.ok(AscCommonExcel.isColorAutomatic(colorAfter),
 			'still recognized as automatic after the change, so it still gets dark-mode-corrected on the next render');
 	});
+
+	// =====================================================================
+	// Toggle idempotency (PR #70 review, recommended test 3): light -> dark ->
+	// light -> dark must produce bit-identical results each time a mode is
+	// revisited, not just "dark differs from light once." Reuses the
+	// round-trip fixture's real render path. One thing checked before writing
+	// assertions: WorksheetViewSettings.prototype.updateStyle's getCColor()
+	// (WorkbookView.js) constructs a brand-new CColor on every call - toggling
+	// back to a previously-seen mode does NOT restore the same
+	// defaultState.background/border object, only an equal-valued new one -
+	// so this compares values, not object identity, for those two fields.
+	// =====================================================================
+	QUnit.module('Toggle idempotency (light/dark must be stable across repeated toggles)');
+
+	QUnit.test('repeated light/dark toggling renders and resolves identically each time a mode is revisited', function (assert) {
+		var fx = buildDarkModeRenderFixture(assert);
+
+		function snapshotColor(c) {
+			return c ? {r: c.getR(), g: c.getG(), b: c.getB(), a: c.getA()} : null;
+		}
+
+		var origSetFillStyle = fx.drawingCtx.setFillStyle;
+		var origSetStrokeStyle = fx.drawingCtx.setStrokeStyle;
+
+		function renderAndCapture(isDark) {
+			fx.api.wb.updateDarkMode(isDark);
+
+			var fillCalls = [], strokeCalls = [];
+			fx.drawingCtx.setFillStyle = function (val) {
+				fillCalls.push(snapshotColor(val));
+				return origSetFillStyle.call(this, val);
+			};
+			fx.drawingCtx.setStrokeStyle = function (val) {
+				strokeCalls.push(snapshotColor(val));
+				return origSetStrokeStyle.call(this, val);
+			};
+
+			fx.wsView._drawCellsAndBorders(fx.drawingCtx, fx.range, 0, 0);
+
+			fx.drawingCtx.setFillStyle = origSetFillStyle;
+			fx.drawingCtx.setStrokeStyle = origSetStrokeStyle;
+
+			return {
+				fillCalls: fillCalls,
+				strokeCalls: strokeCalls,
+				defaultBackground: snapshotColor(fx.wsView.settings.cells.defaultState.background),
+				defaultBorder: snapshotColor(fx.wsView.settings.cells.defaultState.border)
+			};
+		}
+
+		var light1 = renderAndCapture(false);
+		var dark1 = renderAndCapture(true);
+		var light2 = renderAndCapture(false);
+		var dark2 = renderAndCapture(true);
+
+		// fixture sanity: toggling actually does something - light and dark aren't
+		// vacuously identical to begin with
+		assert.notDeepEqual(dark1.defaultBackground, light1.defaultBackground,
+			'fixture sanity: dark and light defaultState.background actually differ');
+		assert.ok(light1.fillCalls.length > 0 && dark1.fillCalls.length > 0,
+			'fixture sanity: both passes actually issued fill calls to compare');
+
+		assert.deepEqual(light2.defaultBackground, light1.defaultBackground,
+			'defaultState.background returns to the same value on the second light pass');
+		assert.deepEqual(light2.defaultBorder, light1.defaultBorder,
+			'defaultState.border returns to the same value on the second light pass');
+		assert.deepEqual(dark2.defaultBackground, dark1.defaultBackground,
+			'defaultState.background returns to the same value on the second dark pass');
+		assert.deepEqual(dark2.defaultBorder, dark1.defaultBorder,
+			'defaultState.border returns to the same value on the second dark pass');
+
+		assert.deepEqual(light2.fillCalls, light1.fillCalls,
+			'fill colors rendered on the second light pass match the first exactly');
+		assert.deepEqual(light2.strokeCalls, light1.strokeCalls,
+			'stroke colors rendered on the second light pass match the first exactly');
+		assert.deepEqual(dark2.fillCalls, dark1.fillCalls,
+			'fill colors rendered on the second dark pass match the first exactly');
+		assert.deepEqual(dark2.strokeCalls, dark1.strokeCalls,
+			'stroke colors rendered on the second dark pass match the first exactly');
+	});
 });
