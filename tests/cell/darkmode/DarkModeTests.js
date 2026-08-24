@@ -864,4 +864,60 @@ $(function () {
 		var autoBorderStroke = light.strokeCalls.filter(function (c) { return 0 === c.r && 0 === c.g && 0 === c.b; });
 		assert.ok(autoBorderStroke.length > 0, 'case 5 automatic border color (0,0,0) reaches the print renderer unmodified, not dark-mode-corrected');
 	});
+
+	// =====================================================================
+	// ThemeColor identity under a real theme-change lifecycle (PR #70 review,
+	// Medium risk): isColorAutomatic's ThemeColor branch relies on
+	// g_oDefaultFormat.Font.c reference identity, which is only safe if a real
+	// theme/color-scheme change never replaces that instance. Traced the actual
+	// mechanism: Workbook.prototype.changeColorScheme -> rebuildColors ->
+	// ColorManager.prototype.rebuildColors -> ThemeColor.prototype.rebuild, and
+	// rebuild() ends with `this.rgb = nRes` - it mutates the cached instance's
+	// rgb in place, it never constructs a new ThemeColor. ColorManager.
+	// getThemeColor() caches by (theme, tint), so the same instance is reused
+	// for the lifetime of the color manager. This drives that real mechanism
+	// (not a hand-swapped defaultFormat.Font like the isColorAutomatic module's
+	// existing test) and confirms identity survives a real rebuild.
+	// =====================================================================
+	QUnit.module('ThemeColor identity survives a real theme-change lifecycle');
+
+	QUnit.test('a real theme rebuild through the actual model API keeps automatic-color identity intact', function (assert) {
+		var fx = buildDarkModeRenderFixture(assert);
+
+		var colorBefore = fx.cellRefs.noFillAutoFont.getFont().getColor();
+		assert.ok(colorBefore instanceof AscCommonExcel.ThemeColor, 'fixture sanity: case 2\'s font color is a ThemeColor instance');
+		assert.ok(AscCommonExcel.isColorAutomatic(colorBefore), 'fixture sanity: case 2 font color is automatic before the change');
+		var rgbBefore = colorBefore.getRgb();
+
+		// Drive the exact real mechanism a live theme/color-scheme change goes
+		// through: Workbook.prototype.rebuildColors -> ColorManager.prototype.
+		// rebuildColors -> ThemeColor.prototype.rebuild. Checked every standard
+		// built-in scheme (Aspect, Blue Green, ...) first - all of them keep the
+		// default-text slot (the array index map_themeExcel_to_themePresentation
+		// maps g_nColorTextDefault to) black by convention, so picking a
+		// different named scheme via changeColorScheme() would never actually
+		// change this specific slot's value - it would prove nothing either way.
+		// Mutating the theme's stored color at that exact slot directly, then
+		// calling the same rebuildColors() a real scheme change calls, exercises
+		// the identical production mechanism with a guaranteed, meaningful value
+		// change - the input is controlled, the rebuild machinery is not.
+		var mappedIdx = AscCommonExcel.map_themeExcel_to_themePresentation[colorBefore.theme];
+		var themeColorEntry = fx.api.wbModel.theme.themeElements.clrScheme.colors[mappedIdx];
+		assert.ok(themeColorEntry && themeColorEntry.color, 'fixture sanity: the mapped theme color slot exists');
+		themeColorEntry.color.RGBA.R = 120;
+		themeColorEntry.color.RGBA.G = 45;
+		themeColorEntry.color.RGBA.B = 200;
+
+		fx.api.wbModel.rebuildColors();
+
+		var colorAfter = fx.cellRefs.noFillAutoFont.getFont().getColor();
+		var rgbAfter = colorAfter.getRgb();
+
+		assert.notStrictEqual(rgbAfter, rgbBefore,
+			'fixture sanity: the theme color actually changed - not a vacuous no-op');
+		assert.strictEqual(colorAfter, colorBefore,
+			'the cell\'s automatic font color keeps the exact same object identity across a real theme rebuild');
+		assert.ok(AscCommonExcel.isColorAutomatic(colorAfter),
+			'still recognized as automatic after the change, so it still gets dark-mode-corrected on the next render');
+	});
 });
