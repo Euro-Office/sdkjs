@@ -6112,6 +6112,10 @@ function isAllowPasteLink(pastedWb) {
 			offsetX * asc_getcvt(0, 3, this._getPPIX()), offsetY * asc_getcvt(0, 3, this._getPPIX()));
     };
 
+	WorksheetView.prototype._isFindResultHighlighted = function (row, col) {
+		return this.handlers.trigger('selectSearchingResults') && undefined !== this.workbook.inFindResults(this, row, col);
+	};
+
     /** Draws the background of cells in a row (translated from original Russian comment) */
     WorksheetView.prototype._drawRowBG = function (drawingCtx, row, colStart, colEnd, offsetX, offsetY, mergedCells, mc, cfIterator) {
 		var height = this._getRowHeight(row);
@@ -6124,6 +6128,7 @@ function isAllowPasteLink(pastedWb) {
 		var top = this._getRowTop(row);
 		var ctx = drawingCtx || this.drawingCtx;
 		var graphics = drawingCtx ? ctx.DocumentRenderer : this.handlers.trigger('getMainGraphics');
+		var isPrint = this.usePrintScale;
 		for (var col = colStart; col <= colEnd; ++col) {
 			var width = this._getColumnWidth(col);
 			if (0 === width && mergedCells) {
@@ -6133,7 +6138,7 @@ function isAllowPasteLink(pastedWb) {
 			// ToDo подумать, может стоит не брать ячейку из модели (а брать из кеш-а)
 			var c = this._getVisibleCell(col, row);
 			//***searchEngine
-			var findFillColor = this.handlers.trigger('selectSearchingResults') && undefined !== this.workbook.inFindResults(this, row, col)/*this.model.inFindResults(row, col)*/ ? this.settings.findFillColor : null;
+			var findFillColor = this._isFindResultHighlighted(row, col) ? this.settings.findFillColor : null;
 			var fill = c.getFill();
 			var hasFill = fill.hasFill();
 			var mwidth = 0, mheight = 0;
@@ -6176,7 +6181,7 @@ function isAllowPasteLink(pastedWb) {
 				var isFillRecolorable = !!findFillColor && !isPageBreakBorderFill;
 				// print/print-preview must use the always-light printState.background, not
 				// the document's dark-mode-resolved defaultState.background
-				findFillColor = findFillColor || (!hasFill && mc && (this.usePrintScale ? this.settings.cells.printState.background : this.settings.cells.defaultState.background));
+				findFillColor = findFillColor || (!hasFill && mc && (isPrint ? this.settings.cells.printState.background : this.settings.cells.defaultState.background));
 
 				var x = this._getColLeft(col) - (fillGrid ? 1 : 0) + this.getRightToLeftOffset();
 				var y = top - (fillGrid ? 1 : 0);
@@ -6493,7 +6498,7 @@ function isAllowPasteLink(pastedWb) {
 	// below. The grid's real draw path (_drawCellText) never passes it, since there the
 	// pattern/gradient genuinely is rendered and its per-pixel contrast is genuinely unknown.
 	WorksheetView.prototype._getKeepsAutomaticTextColorAsIs = function (c, row, col, resolvedFallbackBg) {
-		var isFindResult = this.handlers.trigger('selectSearchingResults') && undefined !== this.workbook.inFindResults(this, row, col);
+		var isFindResult = this._isFindResultHighlighted(row, col);
 		if (isFindResult) {
 			var findColor = this.settings.findFillColor;
 			return !AscCommon.isColorDark(findColor.getR(), findColor.getG(), findColor.getB());
