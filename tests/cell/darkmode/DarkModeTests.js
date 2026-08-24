@@ -904,6 +904,12 @@ $(function () {
 		var mappedIdx = AscCommonExcel.map_themeExcel_to_themePresentation[colorBefore.theme];
 		var themeColorEntry = fx.api.wbModel.theme.themeElements.clrScheme.colors[mappedIdx];
 		assert.ok(themeColorEntry && themeColorEntry.color, 'fixture sanity: the mapped theme color slot exists');
+		// Captured so this test can restore the shared fixture's theme to what it found -
+		// this fixture is memoized/shared across every test in this file, and mutating it
+		// permanently here would leak into whatever automatic-color value a later test sees.
+		var originalR = themeColorEntry.color.RGBA.R;
+		var originalG = themeColorEntry.color.RGBA.G;
+		var originalB = themeColorEntry.color.RGBA.B;
 		themeColorEntry.color.RGBA.R = 120;
 		themeColorEntry.color.RGBA.G = 45;
 		themeColorEntry.color.RGBA.B = 200;
@@ -919,6 +925,13 @@ $(function () {
 			'the cell\'s automatic font color keeps the exact same object identity across a real theme rebuild');
 		assert.ok(AscCommonExcel.isColorAutomatic(colorAfter),
 			'still recognized as automatic after the change, so it still gets dark-mode-corrected on the next render');
+
+		themeColorEntry.color.RGBA.R = originalR;
+		themeColorEntry.color.RGBA.G = originalG;
+		themeColorEntry.color.RGBA.B = originalB;
+		fx.api.wbModel.rebuildColors();
+		assert.strictEqual(fx.cellRefs.noFillAutoFont.getFont().getColor().getRgb(), rgbBefore,
+			'restores the shared fixture theme color to what it found, so later tests are not affected');
 	});
 
 	// =====================================================================
