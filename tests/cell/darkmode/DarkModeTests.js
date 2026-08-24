@@ -1000,4 +1000,91 @@ $(function () {
 		assert.deepEqual(dark2.strokeCalls, dark1.strokeCalls,
 			'stroke colors rendered on the second dark pass match the first exactly');
 	});
+
+	// =====================================================================
+	// Multi-worksheet consistency (PR #70 review, recommended test 4): a
+	// single updateDarkMode() call on the WorkbookView must reach every
+	// worksheet, not just the active one. WorkbookView.prototype.updateDarkMode
+	// (WorkbookView.js:5352-5363) loops `this.wsViews.forEach(...)` to clear
+	// each worksheet's text-metrics cache - the one genuinely per-worksheet
+	// step in that method (the color state itself - defaults.worksheetView's
+	// settings, the shared drawing contexts - lives at the workbook level, so
+	// it's shared by construction, not something that could diverge per sheet).
+	// Adds a second real worksheet via Workbook.prototype.createWorksheet,
+	// which WorkbookView.prototype.getWorksheet (WorkbookView.js:2537-2547)
+	// lazily builds a matching WorksheetView for on first access.
+	//
+	// Compares the actual decision-making functions directly
+	// (_getKeepsAutomaticTextColorAsIs, getDarkModeCorrectedColor) rather than
+	// capturing a real render pass's draw calls - tried that first, and a
+	// narrow single-row range silently made _drawCellText no-op on a
+	// text-metrics-cache miss (WorksheetView.js:6524-6527), which only proved
+	// explicit (never dark-mode-corrected) fill colors matched - a vacuous
+	// check for this specific claim. Comparing the real per-worksheet-instance
+	// method call directly avoids that whole class of fragility, and needs
+	// none of the rendering geometry (buffers/stringRender/objectRender/cols/
+	// rows/etc.) a real render pass would.
+	// =====================================================================
+	QUnit.module('Multi-worksheet consistency (one dark-mode toggle must apply to every worksheet)');
+
+	QUnit.test('a single dark-mode toggle resolves automatic-color decisions identically on a second worksheet', function (assert) {
+		var fx = buildDarkModeRenderFixture(assert);
+
+		var ws2Model = fx.api.wbModel.createWorksheet(null, 'Sheet2', null);
+		var wsView2 = fx.api.wb.getWorksheet(ws2Model.getIndex());
+		assert.ok(wsView2 && wsView2 !== fx.wsView, 'fixture sanity: a second, distinct WorksheetView was created');
+		// _getKeepsAutomaticTextColorAsIs -> _isFindResultHighlighted reads this.handlers;
+		// _init is stubbed globally in this harness (see buildDarkModeRenderFixture), so a
+		// lazily-created WorksheetView needs this wired by hand, same as worksheet 0 did.
+		// this.workbook is set by the real (unstubbed) constructor, not touched here.
+		wsView2.handlers = fx.api.handlers;
+
+		// Mirrors case 3 (darkFillAutoFont) on the shared fixture's own sheet exactly -
+		// explicit dark fill, automatic font color left untouched. GetActiveSheet()
+		// (cell/apiBuilder.js:833-836) reads wbModel.getActive(), so switch to sheet 2 to
+		// target it via the same builder API the shared fixture used for sheet 1, then
+		// switch back afterward.
+		var activeBefore = fx.api.wbModel.getActive();
+		fx.api.wbModel.setActive(ws2Model.getIndex());
+		var jsApi2 = {};
+		jsApi2.GetActiveSheet = AscBuilder.Cell.Api.GetActiveSheet.bind(jsApi2);
+		jsApi2.CreateColorFromRGB = AscBuilder.Cell.Api.CreateColorFromRGB.bind(jsApi2);
+		var wsApi2 = jsApi2.GetActiveSheet();
+		wsApi2.GetRange("A1").SetValue(333);
+		wsApi2.GetRange("A1").SetFillColor(jsApi2.CreateColorFromRGB(10, 10, 10));
+		fx.api.wbModel.setActive(activeBefore);
+
+		var cellSheet1 = fx.cellRefs.darkFillAutoFont;
+		var cellSheet2 = ws2Model.getCell3(0, 0);
+		assert.ok(cellSheet2.getFill().hasFill(), 'fixture sanity: sheet 2\'s mirrored cell has an explicit fill');
+		assert.ok(AscCommonExcel.isColorAutomatic(cellSheet2.getFont().getColor()),
+			'fixture sanity: sheet 2\'s mirrored cell font color is automatic');
+
+		// One toggle, on the WorkbookView - the same call a real dark-mode-button click
+		// makes, not something applied per-worksheet.
+		fx.api.wb.updateDarkMode(true);
+
+		var keeps1 = fx.wsView._getKeepsAutomaticTextColorAsIs(cellSheet1, 2, 0);
+		var keeps2 = wsView2._getKeepsAutomaticTextColorAsIs(cellSheet2, 0, 0);
+		assert.notOk(keeps1, 'fixture sanity: a dark explicit fill genuinely triggers text-color flipping (keeps=false), not a vacuous match');
+		assert.strictEqual(keeps2, keeps1,
+			'_getKeepsAutomaticTextColorAsIs resolves identically on both worksheets for an equivalent dark-filled automatic-text cell');
+
+		var color1 = cellSheet1.getFont().getColor();
+		var color2 = cellSheet2.getFont().getColor();
+		assert.ok(AscCommonExcel.isColorAutomatic(color1) && AscCommonExcel.isColorAutomatic(color2),
+			'fixture sanity: both cells\' font colors are still automatic at comparison time');
+
+		// getDarkModeCorrectedColor's shuttle is a single shared mutable object (see its
+		// own JSDoc) - extract into a plain snapshot immediately after each call, before
+		// the next call overwrites it.
+		var corrected1 = fx.drawingCtx.getDarkModeCorrectedColor(color1.getR(), color1.getG(), color1.getB(), 1);
+		var corrected1Snapshot = {r: corrected1.getR(), g: corrected1.getG(), b: corrected1.getB()};
+		var corrected2 = fx.drawingCtx.getDarkModeCorrectedColor(color2.getR(), color2.getG(), color2.getB(), 1);
+		var corrected2Snapshot = {r: corrected2.getR(), g: corrected2.getG(), b: corrected2.getB()};
+		assert.notDeepEqual(corrected1Snapshot, {r: color1.getR(), g: color1.getG(), b: color1.getB()},
+			'fixture sanity: getDarkModeCorrectedColor actually changed the value - not a no-op pass-through');
+		assert.deepEqual(corrected2Snapshot, corrected1Snapshot,
+			'getDarkModeCorrectedColor resolves the same corrected value for both worksheets\' automatic color');
+	});
 });
