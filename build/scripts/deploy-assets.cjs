@@ -89,7 +89,20 @@ async function deployJsFile(srcPath, destPath) {
     const result  = await minify(source, {
         compress: false,
         mangle:   false,
-        format:   { comments: false },
+        format:   {
+            comments: false,
+            // Same invariant as the sdk-all bundles in webpack.sdk.factory.mjs:
+            // several of the files deployed here (Native/*.js, and the
+            // libfont/engine/fonts_*.js that doctrenderer concatenates into the
+            // script it compiles) are executed by a V8 built with
+            // v8_enable_i18n_support=false, which rejects supplementary-plane
+            // characters used as identifiers. These inputs happen to be
+            // ASCII-clean today, so this is prophylactic rather than a fix --
+            // but nothing else stops the next non-ASCII string landing in one of
+            // them and reproducing issue #80 outside the bundle scan's reach.
+            ascii_only: true,
+            quote_keys: true,
+        },
     });
     const content = licenseText + '\n' + (result.code != null ? result.code : source);
     fs.mkdirSync(path.dirname(destPath), { recursive: true });

@@ -145,6 +145,22 @@ jobs:
           npm ci --prefix build
           npm run --prefix build build
 
+      # doctrenderer/x2t execute these bundles on a V8 built with
+      # v8_enable_i18n_support=false, whose reduced Unicode tables reject
+      # supplementary-plane characters used as identifiers. Terser emitted the
+      # LaTeX symbol table's astral keys bare, and that V8 then failed the whole
+      # bundle with "SyntaxError: Invalid or unexpected token", aborting x2t on
+      # first start (issue #80). Every JS gate in this workflow runs on Node and
+      # headless Chromium -- both full-ICU -- so none of them can catch it.
+      #
+      # The check is a script rather than a grep because the residual failure
+      # mode is pure ASCII: with format.ascii_only but no format.quote_keys,
+      # Terser emits `\u{1d552}:"\\doublea"`, which no byte-range test flags.
+      - name: Assert built bundles are ASCII-only with no bare astral keys (#80)
+        run: |
+          cd sdkjs
+          node build/scripts/check-bundle-ascii.cjs
+
       - name: Install QUnit runner dependencies
         run: |
           sudo apt-get update

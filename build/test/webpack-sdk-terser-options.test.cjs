@@ -21,6 +21,10 @@ const assert = require('node:assert/strict');
 const path   = require('node:path');
 const url    = require('node:url');
 
+// Share one definition of "bare astral key" with the CI bundle scan so the two
+// cannot drift apart.
+const { BARE_ASTRAL_RAW, BARE_ASTRAL_ESC } = require('../scripts/check-bundle-ascii.cjs');
+
 async function loadSdkConfig() {
     const mod = await import(url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs')));
     return mod.sdkConfig;
@@ -103,4 +107,69 @@ test('sdkConfig: DROP_CONSOLE is opt-in, not the default, for non-desktop/mobile
             process.env.DROP_CONSOLE = prevDropConsole;
         }
     }
+});
+
+// --- Regression coverage for issue #80 ---------------------------------------
+// doctrenderer/x2t execute these bundles on a V8 built with
+// v8_enable_i18n_support=false, whose reduced Unicode tables do not accept
+// supplementary-plane ("astral") characters as identifiers. The webpack
+// pipeline emitted the LaTeX symbol table's astral keys as bare identifiers
+// (the reverse map in word/Math/NamesOfLiterals.js), and that V8 rejected the
+// whole bundle with "SyntaxError: Invalid or unexpected token" -- aborting x2t
+// on first start and making Euro-Office 9.3.4 unusable. ASCII-only output is
+// the invariant the previous Closure Compiler build provided implicitly.
+
+for (const platform of ['', 'desktop', 'mobile']) {
+    test(`sdkConfig: Terser is configured for ASCII-only output on platform '${platform || 'web'}' (#80)`, async () => {
+        const sdkConfig = await loadSdkConfig();
+        const terserOptions = withPlatform(platform, () => terserOptionsOf(sdkConfig('word')));
+
+        assert.equal(terserOptions.format.ascii_only, true);
+        assert.equal(terserOptions.format.quote_keys, true);
+    });
+}
+
+// terser-webpack-plugin derives an `ecma` from webpack's target and injects it
+// into terserOptions; Terser's own default (ecma unset) is conservative and
+// quotes astral keys regardless. Calling terser.minify() without ecma therefore
+// exercises a code path the real build never takes -- and would pass even with
+// quote_keys deleted. Pin it so these assertions test the shipped behaviour.
+const PIPELINE_ECMA = 2020;
+
+// Shape lifted from word/Math/NamesOfLiterals.js's reverse symbol table:
+// U+2219 (BMP) plus U+1D552 / U+1D538 (astral) used as object keys.
+const SYMBOL_TABLE_SRC = 'var Reverse={"\u2219":"\\bullet","\u{1d552}":"\\doublea","\u{1d538}":"\\doubleA"};';
+
+test('sdkConfig: Terser escapes astral object keys rather than emitting them bare (#80)', async () => {
+    const terser        = require('terser');
+    const sdkConfig     = await loadSdkConfig();
+    const terserOptions = withPlatform('', () => terserOptionsOf(sdkConfig('word')));
+
+    const { code } = await terser.minify(SYMBOL_TABLE_SRC, { ...terserOptions, ecma: PIPELINE_ECMA });
+
+    assert.ok(!/[^\x00-\x7F]/.test(code),
+        `Terser emitted non-ASCII output, which doctrenderer's no-ICU V8 rejects: ${code}`);
+    assert.equal(BARE_ASTRAL_RAW.test(code), false,
+        `Terser emitted a raw bare astral object key: ${code}`);
+    assert.equal(BARE_ASTRAL_ESC.test(code), false,
+        `Terser emitted an escaped bare astral object key, which is still a bare astral identifier to a no-ICU V8: ${code}`);
+});
+
+// Guards the guard: without quote_keys the same input must produce exactly the
+// failure this PR fixes. If this ever stops failing, the assertions above have
+// gone blind and the ones in the test before it prove nothing.
+test('sdkConfig: dropping quote_keys reintroduces the bare astral key (#80)', async () => {
+    const terser        = require('terser');
+    const sdkConfig     = await loadSdkConfig();
+    const terserOptions = withPlatform('', () => terserOptionsOf(sdkConfig('word')));
+
+    const withoutQuoteKeys = {
+        ...terserOptions,
+        ecma:   PIPELINE_ECMA,
+        format: { ...terserOptions.format, quote_keys: false },
+    };
+    const { code } = await terser.minify(SYMBOL_TABLE_SRC, withoutQuoteKeys);
+
+    assert.equal(BARE_ASTRAL_ESC.test(code), true,
+        `Expected a bare escaped astral key without quote_keys, got: ${code}`);
 });
