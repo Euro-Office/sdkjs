@@ -297,27 +297,36 @@ export function sdkConfig(moduleName) {
                                 // all ~400+ concatenated source files.
                                 comments: /@@license-banner@@/,
 
-                                // Emit pure ASCII, escaping every non-ASCII character as
-                                // \uXXXX. doctrenderer/x2t run these bundles on a V8 built
-                                // with v8_enable_i18n_support=false, whose reduced Unicode
-                                // tables do not classify supplementary-plane characters as
-                                // ID_Start. Without this the LaTeX symbol table's astral
-                                // keys stay raw UTF-8 and Terser also unquotes them (see
-                                // quote_keys below), so that V8 rejects the whole bundle
-                                // with "SyntaxError: Invalid or unexpected token" and x2t
-                                // aborts. The Closure build this replaced emitted
-                                // ASCII-only output, which is why the breakage only
-                                // appeared after the webpack migration. Covered by
-                                // build/test/webpack-sdk-terser-options.test.cjs. See #80.
+                                // BOTH of the options below are required; neither is
+                                // sufficient alone. doctrenderer/x2t run these bundles on a
+                                // V8 built with v8_enable_i18n_support=false, whose reduced
+                                // Unicode tables do not classify supplementary-plane
+                                // ("astral") characters as ID_Start. The LaTeX symbol table
+                                // in word/Math/NamesOfLiterals.js keys an object on such
+                                // characters, and this pipeline emits them unquoted.
+                                //
+                                // ascii_only escapes non-ASCII *characters*, but an escaped
+                                // bare key is still a bare astral identifier: with
+                                // ascii_only alone this build emits 131 keys of the form
+                                //     \u{1d552}:"\\doublea"
+                                // which is pure ASCII text yet still resolves to U+1D552 for
+                                // ID_Start classification, so that V8 rejects it exactly as
+                                // it rejects the raw UTF-8 form. Measured: with ascii_only
+                                // alone, `x2t -create-js-cache` still aborts and writes a
+                                // 0-byte sdk-all.cache.
+                                //
+                                // quote_keys is therefore the load-bearing option -- it
+                                // turns the key into a string literal, which ascii_only then
+                                // escapes into `"\u{1d552}"`. ascii_only remains necessary
+                                // in its own right so no raw non-ASCII byte reaches the
+                                // bundle at all.
+                                //
+                                // quote_keys must live inside `format`; Terser rejects a
+                                // top-level one with "`quote_keys` is not a supported
+                                // option". Covered by
+                                // build/test/webpack-sdk-terser-options.test.cjs and by the
+                                // bundle scan in check-build.yml. See #80.
                                 ascii_only: true,
-
-                                // Keep object keys quoted. ascii_only alone already forces
-                                // the astral keys to be quoted and escaped (Terser will not
-                                // emit a bare identifier it cannot spell in ASCII), but this
-                                // pins the behaviour so a future Terser bump cannot quietly
-                                // reintroduce bare non-ASCII keys. Must live inside `format`
-                                // — Terser rejects a top-level `quote_keys` outright with
-                                // "`quote_keys` is not a supported option". See #80.
                                 quote_keys: true,
                             },
                             compress: (platform === 'desktop' || platform === 'mobile')

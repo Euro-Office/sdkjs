@@ -21,6 +21,10 @@ const assert = require('node:assert/strict');
 const path   = require('node:path');
 const url    = require('node:url');
 
+// Share one definition of "bare astral key" with the CI bundle scan so the two
+// cannot drift apart.
+const { BARE_ASTRAL_RAW, BARE_ASTRAL_ESC } = require('../scripts/check-bundle-ascii.cjs');
+
 async function loadSdkConfig() {
     const mod = await import(url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs')));
     return mod.sdkConfig;
@@ -125,18 +129,47 @@ for (const platform of ['', 'desktop', 'mobile']) {
     });
 }
 
+// terser-webpack-plugin derives an `ecma` from webpack's target and injects it
+// into terserOptions; Terser's own default (ecma unset) is conservative and
+// quotes astral keys regardless. Calling terser.minify() without ecma therefore
+// exercises a code path the real build never takes -- and would pass even with
+// quote_keys deleted. Pin it so these assertions test the shipped behaviour.
+const PIPELINE_ECMA = 2020;
+
+// Shape lifted from word/Math/NamesOfLiterals.js's reverse symbol table:
+// U+2219 (BMP) plus U+1D552 / U+1D538 (astral) used as object keys.
+const SYMBOL_TABLE_SRC = 'var Reverse={"\u2219":"\\bullet","\u{1d552}":"\\doublea","\u{1d538}":"\\doubleA"};';
+
 test('sdkConfig: Terser escapes astral object keys rather than emitting them bare (#80)', async () => {
-    const terser     = require('terser');
-    const sdkConfig  = await loadSdkConfig();
+    const terser        = require('terser');
+    const sdkConfig     = await loadSdkConfig();
     const terserOptions = withPlatform('', () => terserOptionsOf(sdkConfig('word')));
 
-    // Shape lifted from word/Math/NamesOfLiterals.js's reverse symbol table:
-    // U+2219 (BMP) plus U+1D552 / U+1D538 (astral) used as object keys.
-    const src = 'var Reverse={"∙":"\\\\bullet","𝕒":"\\\\doublea","𝔸":"\\\\doubleA"};';
-    const { code } = await terser.minify(src, terserOptions);
+    const { code } = await terser.minify(SYMBOL_TABLE_SRC, { ...terserOptions, ecma: PIPELINE_ECMA });
 
     assert.ok(!/[^\x00-\x7F]/.test(code),
-        `Terser emitted non-ASCII output, which doctrenderer's no-ICU V8 may reject: ${code}`);
-    assert.equal(/[{,]\s*[\u{10000}-\u{10FFFF}]/u.test(code), false,
-        `Terser emitted a bare astral object key, which doctrenderer's no-ICU V8 rejects: ${code}`);
+        `Terser emitted non-ASCII output, which doctrenderer's no-ICU V8 rejects: ${code}`);
+    assert.equal(BARE_ASTRAL_RAW.test(code), false,
+        `Terser emitted a raw bare astral object key: ${code}`);
+    assert.equal(BARE_ASTRAL_ESC.test(code), false,
+        `Terser emitted an escaped bare astral object key, which is still a bare astral identifier to a no-ICU V8: ${code}`);
+});
+
+// Guards the guard: without quote_keys the same input must produce exactly the
+// failure this PR fixes. If this ever stops failing, the assertions above have
+// gone blind and the ones in the test before it prove nothing.
+test('sdkConfig: dropping quote_keys reintroduces the bare astral key (#80)', async () => {
+    const terser        = require('terser');
+    const sdkConfig     = await loadSdkConfig();
+    const terserOptions = withPlatform('', () => terserOptionsOf(sdkConfig('word')));
+
+    const withoutQuoteKeys = {
+        ...terserOptions,
+        ecma:   PIPELINE_ECMA,
+        format: { ...terserOptions.format, quote_keys: false },
+    };
+    const { code } = await terser.minify(SYMBOL_TABLE_SRC, withoutQuoteKeys);
+
+    assert.equal(BARE_ASTRAL_ESC.test(code), true,
+        `Expected a bare escaped astral key without quote_keys, got: ${code}`);
 });

@@ -152,23 +152,14 @@ jobs:
       # bundle with "SyntaxError: Invalid or unexpected token", aborting x2t on
       # first start (issue #80). Every JS gate in this workflow runs on Node and
       # headless Chromium -- both full-ICU -- so none of them can catch it.
-      # ASCII-only output is the invariant the previous Closure build provided
-      # implicitly; assert it directly on the emitted bundles.
-      - name: Assert built bundles are ASCII-only (#80)
+      #
+      # The check is a script rather than a grep because the residual failure
+      # mode is pure ASCII: with format.ascii_only but no format.quote_keys,
+      # Terser emits `\u{1d552}:"\\doublea"`, which no byte-range test flags.
+      - name: Assert built bundles are ASCII-only with no bare astral keys (#80)
         run: |
           cd sdkjs
-          status=0
-          for f in deploy/sdkjs/*/sdk-all.js deploy/sdkjs/*/sdk-all-min.js; do
-            [ -e "$f" ] || continue
-            if LC_ALL=C grep -qP '[^\x00-\x7F]' "$f"; then
-              echo "::error file=$f::non-ASCII bytes in built bundle; Terser format.ascii_only must stay enabled (see issue #80)"
-              LC_ALL=C grep -oP '[^\x00-\x7F]+' "$f" | sort -u | head -5
-              status=1
-            else
-              echo "ok: $f is ASCII-only"
-            fi
-          done
-          exit $status
+          node build/scripts/check-bundle-ascii.cjs
 
       - name: Install QUnit runner dependencies
         run: |
