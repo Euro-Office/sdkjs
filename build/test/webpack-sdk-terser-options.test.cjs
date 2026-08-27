@@ -104,3 +104,39 @@ test('sdkConfig: DROP_CONSOLE is opt-in, not the default, for non-desktop/mobile
         }
     }
 });
+
+// --- Regression coverage for issue #80 ---------------------------------------
+// doctrenderer/x2t execute these bundles on a V8 built with
+// v8_enable_i18n_support=false, whose reduced Unicode tables do not accept
+// supplementary-plane ("astral") characters as identifiers. The webpack
+// pipeline emitted the LaTeX symbol table's astral keys as bare identifiers
+// (the reverse map in word/Math/NamesOfLiterals.js), and that V8 rejected the
+// whole bundle with "SyntaxError: Invalid or unexpected token" -- aborting x2t
+// on first start and making Euro-Office 9.3.4 unusable. ASCII-only output is
+// the invariant the previous Closure Compiler build provided implicitly.
+
+for (const platform of ['', 'desktop', 'mobile']) {
+    test(`sdkConfig: Terser is configured for ASCII-only output on platform '${platform || 'web'}' (#80)`, async () => {
+        const sdkConfig = await loadSdkConfig();
+        const terserOptions = withPlatform(platform, () => terserOptionsOf(sdkConfig('word')));
+
+        assert.equal(terserOptions.format.ascii_only, true);
+        assert.equal(terserOptions.format.quote_keys, true);
+    });
+}
+
+test('sdkConfig: Terser escapes astral object keys rather than emitting them bare (#80)', async () => {
+    const terser     = require('terser');
+    const sdkConfig  = await loadSdkConfig();
+    const terserOptions = withPlatform('', () => terserOptionsOf(sdkConfig('word')));
+
+    // Shape lifted from word/Math/NamesOfLiterals.js's reverse symbol table:
+    // U+2219 (BMP) plus U+1D552 / U+1D538 (astral) used as object keys.
+    const src = 'var Reverse={"∙":"\\\\bullet","𝕒":"\\\\doublea","𝔸":"\\\\doubleA"};';
+    const { code } = await terser.minify(src, terserOptions);
+
+    assert.ok(!/[^\x00-\x7F]/.test(code),
+        `Terser emitted non-ASCII output, which doctrenderer's no-ICU V8 may reject: ${code}`);
+    assert.equal(/[{,]\s*[\u{10000}-\u{10FFFF}]/u.test(code), false,
+        `Terser emitted a bare astral object key, which doctrenderer's no-ICU V8 rejects: ${code}`);
+});
