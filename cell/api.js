@@ -6560,6 +6560,14 @@ var editor;
     this.wb.restoreFocus();
   };
 
+  spreadsheet_api.prototype.asc_insertCheckbox = function () {
+    if (this.collaborativeEditing.getGlobalLock() || !this.canEdit()) {
+      return;
+    }
+    this.wb.getWorksheet().setSelectionInfo("checkbox", true);
+    this.wb.restoreFocus();
+  };
+
 	spreadsheet_api.prototype.asc_checkProtectedRange = function () {
 		var ws = this.wbModel.getActiveWs();
 		/*if (!ws.isLockedActiveCell()) {
@@ -10397,6 +10405,7 @@ var editor;
   prot["asc_setCellFontName"] = prot.asc_setCellFontName;
   prot["asc_setCellFontSize"] = prot.asc_setCellFontSize;
   prot["asc_setCellBold"] = prot.asc_setCellBold;
+  prot["asc_insertCheckbox"] = prot.asc_insertCheckbox;
   prot["asc_setCellItalic"] = prot.asc_setCellItalic;
   prot["asc_setCellUnderline"] = prot.asc_setCellUnderline;
   prot["asc_setCellStrikeout"] = prot.asc_setCellStrikeout;

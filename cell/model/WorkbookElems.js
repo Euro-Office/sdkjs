@@ -4510,7 +4510,8 @@ var g_oFontProperties = {
         PivotButton: 7,
 		applyProtection: 8,
 		hidden: 9,
-		locked: 10
+		locked: 10,
+		checkbox: 11
     };
 
     /** @constructor */
@@ -4527,6 +4528,7 @@ var g_oFontProperties = {
         this.applyProtection = null;
         this.locked = null;
         this.hidden = null;
+        this.checkbox = null;
 
         //inner
         this._hash;
@@ -4548,6 +4550,7 @@ var g_oFontProperties = {
             this._hash += this.applyProtection + '|';
             this._hash += this.locked + '|';
             this._hash += this.hidden + '|';
+            this._hash += this.checkbox + '|';
         }
         return this._hash;
     };
@@ -4631,6 +4634,7 @@ var g_oFontProperties = {
             cache.applyProtection = this._mergeProperty(null, xfs.applyProtection, this.applyProtection);
             cache.locked = this._mergeProperty(null, xfs.locked, this.locked);
             cache.hidden = this._mergeProperty(null, xfs.hidden, this.hidden);
+            cache.checkbox = this._mergeProperty(null, xfs.checkbox, this.checkbox);
             cache = g_StyleCache.addXf(cache);
             this.setOperationCache("merge", xfIndexNumber, cache);
         }
@@ -4655,6 +4659,7 @@ var g_oFontProperties = {
         res.applyProtection = this.applyProtection;
         res.locked = this.locked;
         res.hidden = this.hidden;
+        res.checkbox = this.checkbox;
 
         return res;
     };
@@ -4662,7 +4667,7 @@ var g_oFontProperties = {
 		return this.font === xfs.font && this.fill === xfs.fill && this.border === xfs.border && this.num === xfs.num &&
 			this.align === xfs.align && this.QuotePrefix === xfs.QuotePrefix && this.PivotButton === xfs.PivotButton &&
 			this.XfId === xfs.XfId && this.applyProtection === xfs.applyProtection && this.locked === xfs.locked &&
-			this.hidden === xfs.hidden;
+			this.hidden === xfs.hidden && this.checkbox === xfs.checkbox;
     };
     CellXfs.prototype.getType = function () {
         return UndoRedoDataTypes.StyleXfs;
@@ -4694,6 +4699,8 @@ var g_oFontProperties = {
                 return this.locked;
             case this.Properties.hidden:
                 return this.hidden;
+            case this.Properties.checkbox:
+                return this.checkbox;
         }
     };
     CellXfs.prototype.setProperty = function (nType, value) {
@@ -4730,6 +4737,9 @@ var g_oFontProperties = {
                 break;
             case this.Properties.hidden:
                 this.hidden = value;
+                break;
+            case this.Properties.checkbox:
+                this.checkbox = value;
                 break;
         }
     };
@@ -4826,6 +4836,12 @@ var g_oFontProperties = {
     };
     CellXfs.prototype.setPivotButton = function (val) {
         this.PivotButton = val;
+    };
+    CellXfs.prototype.getCheckbox = function () {
+        return this.checkbox;
+    };
+    CellXfs.prototype.setCheckbox = function (val) {
+        this.checkbox = val;
     };
     CellXfs.prototype.getXfId = function () {
         return this.XfId;
@@ -5621,6 +5637,10 @@ StyleManager.prototype =
 	setPivotButton : function(oItemWithXfs, val)
 	{
 		return this._setProperty(oItemWithXfs, val, "pivotButton", CellXfs.prototype.getPivotButton, CellXfs.prototype.setPivotButton);
+	},
+	setCheckbox : function(oItemWithXfs, val)
+	{
+		return this._setProperty(oItemWithXfs, val, "checkbox", CellXfs.prototype.getCheckbox, CellXfs.prototype.setCheckbox);
 	},
 	setFontname : function(oItemWithXfs, val)
 	{
@@ -6655,6 +6675,13 @@ StyleManager.prototype =
 				this._getUpdateRange(), new UndoRedoData_IndexSimpleProp(this.index, true, oRes.oldVal, oRes.newVal));
 		}
 	};
+	Col.prototype.setCheckbox = function (val) {
+		var oRes = this.ws.workbook.oStyleManager.setCheckbox(this, val);
+		if (AscCommon.History.Is_On() && oRes.oldVal != oRes.newVal) {
+			AscCommon.History.Add(AscCommonExcel.g_oUndoRedoCol, AscCH.historyitem_RowCol_Checkbox, this.ws.getId(),
+				this._getUpdateRange(), new UndoRedoData_IndexSimpleProp(this.index, false, oRes.oldVal, oRes.newVal));
+		}
+	};
 	Col.prototype.setHidden = function (val) {
 		if (this.index >= 0 && (!this.hd !== !val)) {
 			this.ws.hiddenManager.addHidden(false, this.index);
@@ -7061,6 +7088,13 @@ StyleManager.prototype =
 		var oRes = this.ws.workbook.oStyleManager.setHiddenFormulas(this, val);
 		if (AscCommon.History.Is_On() && oRes.oldVal != oRes.newVal) {
 			AscCommon.History.Add(AscCommonExcel.g_oUndoRedoRow, AscCH.historyitem_RowCol_HiddenFormulas, this.ws.getId(),
+				this._getUpdateRange(), new UndoRedoData_IndexSimpleProp(this.index, true, oRes.oldVal, oRes.newVal));
+		}
+	};
+	Row.prototype.setCheckbox = function (val) {
+		var oRes = this.ws.workbook.oStyleManager.setCheckbox(this, val);
+		if (AscCommon.History.Is_On() && oRes.oldVal != oRes.newVal) {
+			AscCommon.History.Add(AscCommonExcel.g_oUndoRedoRow, AscCH.historyitem_RowCol_Checkbox, this.ws.getId(),
 				this._getUpdateRange(), new UndoRedoData_IndexSimpleProp(this.index, true, oRes.oldVal, oRes.newVal));
 		}
 	};
