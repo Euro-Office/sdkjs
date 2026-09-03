@@ -2000,7 +2000,7 @@
 
     function ParsePDFDate(sDate) {
         // Регулярное выражение для извлечения компонентов даты
-        let regex = /D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})([Z\+\-]?)(\d{2})?'?(\d{2})?/;
+        let regex = /D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})([Z\+\-=]?)(\d{2})?'?(\d{2})?/;
 
         // Используем регулярное выражение для извлечения компонентов даты
         let match = sDate.match(regex);
@@ -2021,8 +2021,8 @@
             let date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
 
             // Учитываем смещение времени
-            if (timeZoneSign === 'Z') {
-                // Если указано "Z", это означает UTC
+            if (timeZoneSign === 'Z' || timeZoneSign === '=' || !timeZoneSign) {
+                // Если указано "Z" или "=", это означает UTC
             } else if (timeZoneSign === '+') {
                 date.setHours(date.getHours() - timeZoneOffsetHours);
                 date.setMinutes(date.getMinutes() - timeZoneOffsetMinutes);
@@ -2071,15 +2071,12 @@
         // Calculate timezone offset
         let timezoneOffsetMinutes = date.getTimezoneOffset();
         
-        let timezoneOffsetSign;
-        if (timezoneOffsetMinutes < 0)
-            timezoneOffsetSign = '+';
-        else if (timezoneOffsetMinutes > 0)
-            timezoneOffsetSign = '-';
-        else if (timezoneOffsetMinutes == 0)
-            timezoneOffsetSign = '=';
+        if (timezoneOffsetMinutes === 0)
+            return 'D:' + year + month + day + hours + minutes + seconds + 'Z';
 
-        
+        let timezoneOffsetSign = timezoneOffsetMinutes < 0 ? '+' : '-';
+
+
         let timezoneOffsetHours = Math.abs(Math.floor(timezoneOffsetMinutes / 60)) >> 0;
         if (timezoneOffsetHours < 10)
             timezoneOffsetHours = '0' + timezoneOffsetHours.toString();
