@@ -1773,7 +1773,8 @@
         // modification date
         if (Flags & (1 << 5)) {
             let sModDate = memory.GetString();
-            this.SetModDate(sModDate);
+            let oModDate = ParsePDFDate(sModDate);
+            this.SetModDate(oModDate ? oModDate.getTime().toString() : sModDate);
         }
     
         // user ID
@@ -1945,7 +1946,8 @@
             let CrDate = null;
             if (memory.annotFlags & (1 << 4)) {
                 CrDate = memory.GetString();
-                this.SetCreationDate(CrDate);
+                let oCrDate = ParsePDFDate(CrDate);
+                this.SetCreationDate(oCrDate ? oCrDate.getTime().toString() : CrDate);
             }
     
             let oRefTo = null;
