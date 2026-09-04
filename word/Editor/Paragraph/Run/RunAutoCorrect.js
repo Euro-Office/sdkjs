@@ -382,7 +382,7 @@
 		return true;
 	};
 	/**
-	 * Производим автозамену для умных кавычек
+	 * Perform auto-replacement for typographer's quotation marks (Smart quotes)
 	 * @returns {boolean}
 	 */
 	CRunAutoCorrect.prototype.private_ProcessSmartQuotesAutoCorrect = function()
@@ -465,7 +465,6 @@
 					this.Run.AddToContent(this.Pos, new AscWord.CRunText(isOpenQuote ? 0x201E : 0x201D));
 					break;
 				}
-				case 1030:
 				case 1035:
 				case 1053:
 				{
@@ -479,6 +478,7 @@
 					this.Run.AddToContent(this.Pos, new AscWord.CRunText(isOpenQuote ? 0x00AB : 0x00BB));
 					break;
 				}
+				case 1030:
 				case 1060:
 				{
 					// »text«
