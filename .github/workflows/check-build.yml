@@ -33,6 +33,18 @@ jobs:
       - name: execute check styles
         run: python tests/code-style/check.py
 
+      - name: setup node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      # Scoped to common/Native on purpose - see the overrides block in
+      # .eslintrc.yaml. Those shims are the one part of the tree that no test
+      # ever executes, so no-undef is the only thing standing between an
+      # undeclared identifier and a converter that aborts on every logged error.
+      - name: lint native shims
+        run: npx --yes eslint@8.57.1 'common/Native/*.js'
+
   unit-tests:
     runs-on: ubuntu-latest
     steps:
