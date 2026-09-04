@@ -1090,6 +1090,9 @@ CPage.prototype.Draw = function (context, xDst, yDst, wDst, hDst, api)
 		strokeColor = api.getPageStrokeColor();
 	}
 
+	if (api && api.WordControl && api.WordControl.isPagelessMode)
+		strokeColor = undefined;
+
 	if (strokeColor)
 	{
 		let lineW = Math.round(AscCommon.AscBrowser.retinaPixelRatio);
