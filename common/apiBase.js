@@ -1182,12 +1182,19 @@
 			let oImageData = oController.getImageDataForSaving(true, sImageFormat);
 			if(oImageData)
 			{
-				let a = document.createElement("a");
 				let sSrc = oImageData.src;
-				a.href = sSrc;
 				let sExt = sSrc.substring("data:image/".length, sSrc.indexOf(";base64"));
+				let sMime = sSrc.split(',')[0].split(':')[1].split(';')[0];
+				let sBinary = atob(sSrc.split(',')[1]);
+				let aBytes = new Uint8Array(sBinary.length);
+				for (let i = 0; i < sBinary.length; i++)
+					aBytes[i] = sBinary.charCodeAt(i);
+				let oBlobUrl = URL.createObjectURL(new Blob([aBytes], {type: sMime}));
+				let a = document.createElement("a");
+				a.href = oBlobUrl;
 				a.download = AscCommon.translateManager.getValue("Picture") + "." + sExt;
 				a.click();
+				setTimeout(function() { URL.revokeObjectURL(oBlobUrl); }, 10000);
 			}
 		}
 	};
