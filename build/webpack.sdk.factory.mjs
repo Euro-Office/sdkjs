@@ -29,6 +29,9 @@
  *   SDK_SOURCE_MAPS   '1' to emit source maps for a production build too
  *                      (development builds always get them regardless)
  *   WEBPACK_CACHE_DIR override filesystem cache location; defaults to build/.webpack-cache
+ *   WATCH_AGGREGATE_TIMEOUT
+ *                      override watch-mode debounce (ms); defaults to 500,
+ *                      only takes effect under `--watch`
  */
 
 import webpack    from 'webpack';
@@ -133,6 +136,20 @@ export class StripBundlePostprocessPlugin {
     }
 }
 
+// `Number(x) || 500` would silently treat WATCH_AGGREGATE_TIMEOUT=0 (a valid,
+// if unusual, "no debounce" choice) the same as an unset/typo'd value, and a
+// non-numeric typo would silently fall back to the default instead of
+// surfacing the mistake. Exported for the unit test below.
+export function resolveWatchAggregateTimeout(rawValue, fallback = 500) {
+    if (rawValue === undefined || rawValue === '') return fallback;
+
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+        throw new Error(`WATCH_AGGREGATE_TIMEOUT must be a non-negative number, got: ${JSON.stringify(rawValue)}`);
+    }
+    return parsed;
+}
+
 /**
  * @param {string} moduleName  'word' | 'cell' | 'slide' | 'visio'
  * @returns {object[]}  Two webpack compiler configs: [sdk-all-min, sdk-all]
@@ -166,6 +183,22 @@ export function sdkConfig(moduleName) {
     // buildLicenseHeader()'s own copy of the same strings (used for the banner).
     const appCopyright = process.env.APP_COPYRIGHT || defaultAppCopyright();
     const publisherUrl = process.env.PUBLISHER_URL || DEFAULT_PUBLISHER_URL;
+
+    // watchOptions is a documented no-op for one-shot builds (see chunkConfig()
+    // below), but sdkConfig() has no way to know at this point whether the
+    // caller is about to run under `--watch` or not — so a bad
+    // WATCH_AGGREGATE_TIMEOUT must never hard-fail a plain `npm run build`
+    // over a setting that build doesn't even use. Warn and fall back instead
+    // of propagating resolveWatchAggregateTimeout()'s throw (which stays a
+    // throw for its own unit tests, where the bad-input contract is exactly
+    // what's being verified).
+    let watchAggregateTimeout;
+    try {
+        watchAggregateTimeout = resolveWatchAggregateTimeout(process.env.WATCH_AGGREGATE_TIMEOUT);
+    } catch (err) {
+        console.warn(`sdkConfig: ${err.message} — falling back to the default (500ms)`);
+        watchAggregateTimeout = 500;
+    }
 
     // Sentinel deliberately kept in (stripSentinel: false, the default) — Terser's
     // format.comments regex below matches on it, and StripBundlePostprocessPlugin
@@ -413,6 +446,31 @@ export function sdkConfig(moduleName) {
             },
 
             devtool: emitSourceMaps ? 'source-map' : false,
+
+            // Only takes effect under `--watch` (npm run watch:*); ignored for
+            // one-shot builds. webpack 5's default aggregateTimeout is 20ms
+            // (see Watching.js) — too short for an editor's save to fully land
+            // on disk before the loader re-reads it. VS Code (and other
+            // editors) can flush a single save as more than one MODIFY event,
+            // especially over a 9p/WSL2 filesystem boundary; the first event
+            // triggers a rebuild while sdk-concat-loader is re-concatenating
+            // ~400+ source files, and it can catch this file's write
+            // mid-flight, truncated. That produces the intermittent tiny
+            // sdk-all.js / parse-error rebuild described in issue #78, always
+            // followed by a second, correct rebuild once the write settles.
+            //
+            // This only debounces the *trigger* — sdk-concat.cjs still does a
+            // plain readFile with no size/mtime stability check once the
+            // timeout fires, so it reduces the race window (20ms -> 500ms of
+            // required quiescence) rather than closing it structurally. A
+            // write that's still landing after 500ms of silence (slow disk,
+            // network mount) could still be read mid-flight. Overridable via
+            // WATCH_AGGREGATE_TIMEOUT, matching this file's other env-tunable
+            // knobs, in case 500ms proves insufficient on a given machine/CI
+            // watcher.
+            watchOptions: {
+                aggregateTimeout: watchAggregateTimeout,
+            },
         };
     }
 

@@ -175,6 +175,126 @@ test('StripBundlePostprocessPlugin: strips webpack\'s bootstrap "use strict" fro
     }
 });
 
+test('resolveWatchAggregateTimeout: falls back to the default when unset', async () => {
+    const { resolveWatchAggregateTimeout } = await import(
+        url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
+    );
+    assert.equal(resolveWatchAggregateTimeout(undefined), 500);
+    assert.equal(resolveWatchAggregateTimeout(''), 500);
+});
+
+test('resolveWatchAggregateTimeout: honors an explicit 0 (no debounce) instead of treating it as unset', async () => {
+    const { resolveWatchAggregateTimeout } = await import(
+        url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
+    );
+    // `Number(x) || 500` would wrongly collapse "0" back to the default since
+    // 0 is falsy — this is the regression the helper guards against.
+    assert.equal(resolveWatchAggregateTimeout('0'), 0);
+});
+
+test('resolveWatchAggregateTimeout: rejects a non-numeric override instead of silently falling back', async () => {
+    const { resolveWatchAggregateTimeout } = await import(
+        url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
+    );
+    assert.throws(() => resolveWatchAggregateTimeout('not-a-number'), /must be a non-negative number/);
+    assert.throws(() => resolveWatchAggregateTimeout('-100'), /must be a non-negative number/);
+});
+
+test('sdkConfig: never throws on a bad WATCH_AGGREGATE_TIMEOUT — one-shot builds must not fail over a watch-only setting', async () => {
+    const { sdkConfig } = await import(
+        url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
+    );
+
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-watch-options-bad-env-test-'));
+    const prevBuildRoot = process.env.BUILD_ROOT;
+    const prevCacheDir  = process.env.WEBPACK_CACHE_DIR;
+    const prevTimeout   = process.env.WATCH_AGGREGATE_TIMEOUT;
+    const prevWarn      = console.warn;
+    process.env.BUILD_ROOT              = tmpRoot;
+    process.env.WEBPACK_CACHE_DIR       = path.join(tmpRoot, '.webpack-cache');
+    process.env.WATCH_AGGREGATE_TIMEOUT = 'not-a-number';
+    let warned = false;
+    console.warn = () => { warned = true; };
+
+    try {
+        // sdkConfig() is called for plain `npm run build` too, where
+        // watchOptions is inert — a stray/typo'd env var must never crash
+        // that path (see resolveWatchAggregateTimeout's own throwing tests
+        // above for the input-validation contract itself).
+        const [minConfig, allConfig] = sdkConfig('word');
+        for (const config of [minConfig, allConfig]) {
+            assert.equal(config.watchOptions.aggregateTimeout, 500, `${config.name}: should fall back to the default on invalid input`);
+        }
+        assert.equal(warned, true, 'expected a console.warn about the invalid value');
+    } finally {
+        console.warn = prevWarn;
+        if (prevBuildRoot === undefined) delete process.env.BUILD_ROOT; else process.env.BUILD_ROOT = prevBuildRoot;
+        if (prevCacheDir  === undefined) delete process.env.WEBPACK_CACHE_DIR; else process.env.WEBPACK_CACHE_DIR = prevCacheDir;
+        if (prevTimeout   === undefined) delete process.env.WATCH_AGGREGATE_TIMEOUT; else process.env.WATCH_AGGREGATE_TIMEOUT = prevTimeout;
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+});
+
+test('sdkConfig: sets a watchOptions.aggregateTimeout above webpack\'s 20ms default on every chunk config', async () => {
+    const { sdkConfig } = await import(
+        url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
+    );
+
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-watch-options-test-'));
+    const prevBuildRoot = process.env.BUILD_ROOT;
+    const prevCacheDir  = process.env.WEBPACK_CACHE_DIR;
+    process.env.BUILD_ROOT        = tmpRoot;
+    process.env.WEBPACK_CACHE_DIR = path.join(tmpRoot, '.webpack-cache');
+
+    try {
+        const [minConfig, allConfig] = sdkConfig('word');
+
+        // webpack 5's own default (see node_modules/webpack/lib/Watching.js) is
+        // 20ms — a race window too short to survive a multi-event editor save
+        // (see issue #78). Both chunk configs must opt into a longer debounce;
+        // watchOptions is a no-op for one-shot (non --watch) builds, so setting
+        // it unconditionally is safe for production/CI builds too.
+        for (const config of [minConfig, allConfig]) {
+            assert.ok(config.watchOptions, `${config.name}: missing watchOptions`);
+            assert.equal(config.watchOptions.aggregateTimeout, 500, `${config.name}: default aggregateTimeout should be 500`);
+            assert.ok(
+                config.watchOptions.aggregateTimeout > 20,
+                `${config.name}: aggregateTimeout (${config.watchOptions.aggregateTimeout}) must exceed webpack's 20ms default`
+            );
+        }
+    } finally {
+        if (prevBuildRoot === undefined) delete process.env.BUILD_ROOT; else process.env.BUILD_ROOT = prevBuildRoot;
+        if (prevCacheDir  === undefined) delete process.env.WEBPACK_CACHE_DIR; else process.env.WEBPACK_CACHE_DIR = prevCacheDir;
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+});
+
+test('sdkConfig: WATCH_AGGREGATE_TIMEOUT overrides the default watch debounce', async () => {
+    const { sdkConfig } = await import(
+        url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
+    );
+
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-watch-options-override-test-'));
+    const prevBuildRoot = process.env.BUILD_ROOT;
+    const prevCacheDir  = process.env.WEBPACK_CACHE_DIR;
+    const prevTimeout   = process.env.WATCH_AGGREGATE_TIMEOUT;
+    process.env.BUILD_ROOT             = tmpRoot;
+    process.env.WEBPACK_CACHE_DIR      = path.join(tmpRoot, '.webpack-cache');
+    process.env.WATCH_AGGREGATE_TIMEOUT = '1200';
+
+    try {
+        const [minConfig, allConfig] = sdkConfig('word');
+        for (const config of [minConfig, allConfig]) {
+            assert.equal(config.watchOptions.aggregateTimeout, 1200, `${config.name}: WATCH_AGGREGATE_TIMEOUT override not applied`);
+        }
+    } finally {
+        if (prevBuildRoot === undefined) delete process.env.BUILD_ROOT; else process.env.BUILD_ROOT = prevBuildRoot;
+        if (prevCacheDir  === undefined) delete process.env.WEBPACK_CACHE_DIR; else process.env.WEBPACK_CACHE_DIR = prevCacheDir;
+        if (prevTimeout   === undefined) delete process.env.WATCH_AGGREGATE_TIMEOUT; else process.env.WATCH_AGGREGATE_TIMEOUT = prevTimeout;
+        fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+});
+
 test('StripBundlePostprocessPlugin: strips the @@license-banner@@ sentinel after Terser has used it to keep the banner', async () => {
     const { StripBundlePostprocessPlugin } = await import(
         url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
