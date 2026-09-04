@@ -2538,13 +2538,21 @@
 			}
 		}
 
-		function drawFillCell(ctx, graphics, fill, rect) {
+		// bIsFillRecolorable is opt-in, matching isBorderRecolorable's naming further down in
+		// WorksheetView.js: a caller that omits it draws its fill color unmodified, instead of
+		// an explicit color (e.g. a style-thumbnail swatch) silently getting recolored.
+		function drawFillCell(ctx, graphics, fill, rect, bIsFillRecolorable) {
 			if (!fill.hasFill()) {
 				return;
 			}
 
 			var solid = fill.getSolidFill();
 			if (solid) {
+				if (ctx.isDarkMode) {
+					if (bIsFillRecolorable) {
+						solid = ctx.getDarkModeCorrectedColor(solid.getR(), solid.getG(), solid.getB(), solid.getA());
+					}
+				}
 				ctx.setFillStyle(solid).fillRect(rect._x, rect._y, rect._width, rect._height);
 				return;
 			}

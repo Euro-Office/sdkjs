@@ -1633,7 +1633,9 @@ function (window, undefined) {
 		}
 
 		if (opt.fragments && opt.fragments.length > 0) {
-			t.textRender.render(undefined, t._getContentLeft(), dy || 0, t._getContentWidth(), opt.font.getColor());
+			// keepsAutomaticTextColorAsIs reaches beginFragment's and handleBidiFlow's own
+			// lighting mode correction checks
+			t.textRender.render(undefined, t._getContentLeft(), dy || 0, t._getContentWidth(), opt.font.getColor(), opt.keepsAutomaticTextColorAsIs);
 		}
 	};
 
