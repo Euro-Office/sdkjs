@@ -11,7 +11,7 @@ ARG PRODUCT_VERSION
 ARG BUILD_ROOT
 
 #### BASE ####
-FROM ubuntu:24.04 AS web-base
+FROM ubuntu:26.04 AS web-base
     RUN apt-get update && \
         apt-get install -y ca-certificates curl gnupg wget zip brotli bzip2 && \
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
