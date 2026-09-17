@@ -1182,12 +1182,19 @@
 			let oImageData = oController.getImageDataForSaving(true, sImageFormat);
 			if(oImageData)
 			{
-				let a = document.createElement("a");
 				let sSrc = oImageData.src;
-				a.href = sSrc;
-				let sExt = sSrc.substring("data:image/".length, sSrc.indexOf(";base64"));
-				a.download = AscCommon.translateManager.getValue("Picture") + "." + sExt;
-				a.click();
+				if (sSrc && sSrc.startsWith("data:image/") && sSrc.indexOf(";base64,") !== -1) {
+					let sExt = sSrc.substring("data:image/".length, sSrc.indexOf(";base64"));
+					let sName = AscCommon.translateManager.getValue("Picture") + "." + sExt;
+					let u8arr = AscCommon.Base64.decode(sSrc.split(",")[1]);
+					AscCommon.DownloadFileFromBytes(u8arr, sName, sImageFormat);
+				} else if (sSrc) {
+					let sDefaultExt = sImageFormat === "image/jpeg" ? "jpg" : "png";
+					let a = document.createElement("a");
+					a.href = sSrc;
+					a.download = AscCommon.translateManager.getValue("Picture") + "." + sDefaultExt;
+					a.click();
+				}
 			}
 		}
 	};
