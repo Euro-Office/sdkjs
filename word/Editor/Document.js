@@ -5333,7 +5333,7 @@ CDocument.prototype.Draw                                     = function(nPageInd
     // Определим секцию
     var SectPr = this.Pages[nPageIndex].GetFirstSectPr();
 
-	this.Background.draw(pGraphics, SectPr, this.GetTheme(), this.GetColorMap());
+	this.Background.draw(pGraphics, SectPr, this.GetTheme(), this.GetColorMap(), nPageIndex);
 
 	// Рисуем границы вокруг страницы (если границы надо рисовать под текстом)
 	if (section_borders_ZOrderBack === SectPr.Get_Borders_ZOrder())

@@ -33,16 +33,21 @@
 	 */
 	function DocumentBackground(color, unifill, shape)
 	{
-		this.Color   = color ? color : null;
-		this.Unifill = unifill ? unifill : null;
-		this.shape   = shape ? shape : null;
+		this.Color         = color ? color : null;
+		this.Unifill       = unifill ? unifill : null;
+		this.shape         = shape ? shape : null;
+		this.firstPageOnly = false;
 	}
 	DocumentBackground.prototype.copy = function()
 	{
-		return new DocumentBackground(this.Color, this.Unifill, this.shape);
+		let copy = new DocumentBackground(this.Color, this.Unifill, this.shape);
+		copy.firstPageOnly = this.firstPageOnly;
+		return copy;
 	};
-	DocumentBackground.prototype.draw = function(graphics, sectPr, theme, colorMap)
+	DocumentBackground.prototype.draw = function(graphics, sectPr, theme, colorMap, pageIndex)
 	{
+		if (this.firstPageOnly && (pageIndex || 0) > 0)
+			return;
 		let brush = this._getBrush(theme, colorMap);
 		if (!brush || !brush.isVisible())
 			return;
