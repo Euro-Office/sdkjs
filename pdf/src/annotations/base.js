@@ -1324,6 +1324,7 @@
         return this._contents;
     };
     CAnnotationBase.prototype.SetModDate = function(timeStamp) {
+        timeStamp = normalizeAnnotDate(timeStamp);
         if (timeStamp == this._modDate) {
             return;
         }
@@ -1343,6 +1344,7 @@
         return this._modDate;
     };
     CAnnotationBase.prototype.SetCreationDate = function(timeStamp) {
+        timeStamp = normalizeAnnotDate(timeStamp);
         if (timeStamp == this._creationDate) {
             return;
         }
@@ -1773,8 +1775,7 @@
         // modification date
         if (Flags & (1 << 5)) {
             let sModDate = memory.GetString();
-            let oModDate = ParsePDFDate(sModDate);
-            this.SetModDate(oModDate ? oModDate.getTime().toString() : sModDate);
+            this.SetModDate(sModDate);
         }
     
         // user ID
@@ -1946,8 +1947,7 @@
             let CrDate = null;
             if (memory.annotFlags & (1 << 4)) {
                 CrDate = memory.GetString();
-                let oCrDate = ParsePDFDate(CrDate);
-                this.SetCreationDate(oCrDate ? oCrDate.getTime().toString() : CrDate);
+                this.SetCreationDate(CrDate);
             }
     
             let oRefTo = null;
@@ -2035,6 +2035,23 @@
         }
 
         return null;
+    }
+
+    // Normalize date to the epoch-string form.
+    function normalizeAnnotDate(value) {
+        if (value === undefined || value === null) {
+            return value;
+        }
+
+        let sValue = String(value);
+        if (sValue.indexOf('D:') === 0) {
+            let oDate = ParsePDFDate(sValue);
+            if (oDate) {
+                return oDate.getTime().toString();
+            }
+        }
+
+        return sValue;
     }
 
     // переопределение методов cshape
