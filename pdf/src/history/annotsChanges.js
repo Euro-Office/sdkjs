@@ -1110,13 +1110,13 @@ CChangesPDFAnnotContents.prototype.private_SetValue = function(Value)
 
 /**
  * @constructor
- * @extends {AscDFH.CChangesBaseLongProperty}
+ * @extends {AscDFH.CChangesBaseStringProperty}
  */
 function CChangesPDFAnnotCreationDate(Class, Old, New, Color)
 {
-	AscDFH.CChangesBaseLongProperty.call(this, Class, Old, New, Color);
+	AscDFH.CChangesBaseStringProperty.call(this, Class, Old, New, Color);
 }
-CChangesPDFAnnotCreationDate.prototype = Object.create(AscDFH.CChangesBaseLongProperty.prototype);
+CChangesPDFAnnotCreationDate.prototype = Object.create(AscDFH.CChangesBaseStringProperty.prototype);
 CChangesPDFAnnotCreationDate.prototype.constructor = CChangesPDFAnnotCreationDate;
 CChangesPDFAnnotCreationDate.prototype.Type = AscDFH.historyitem_Pdf_Annot_Creation_Date;
 CChangesPDFAnnotCreationDate.prototype.private_SetValue = function(Value)
@@ -1127,13 +1127,13 @@ CChangesPDFAnnotCreationDate.prototype.private_SetValue = function(Value)
 
 /**
  * @constructor
- * @extends {AscDFH.CChangesBaseLongProperty}
+ * @extends {AscDFH.CChangesBaseStringProperty}
  */
 function CChangesPDFAnnotModDate(Class, Old, New, Color)
 {
-	AscDFH.CChangesBaseLongProperty.call(this, Class, Old, New, Color);
+	AscDFH.CChangesBaseStringProperty.call(this, Class, Old, New, Color);
 }
-CChangesPDFAnnotModDate.prototype = Object.create(AscDFH.CChangesBaseLongProperty.prototype);
+CChangesPDFAnnotModDate.prototype = Object.create(AscDFH.CChangesBaseStringProperty.prototype);
 CChangesPDFAnnotModDate.prototype.constructor = CChangesPDFAnnotModDate;
 CChangesPDFAnnotModDate.prototype.Type = AscDFH.historyitem_Pdf_Annot_Mod_Date;
 CChangesPDFAnnotModDate.prototype.private_SetValue = function(Value)
