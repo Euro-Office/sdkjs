@@ -4063,6 +4063,20 @@ CDocument.prototype.Recalculate_PageColumn                   = function()
             _bStart     = false;
 
 			let currPageSection = this.Pages[_PageIndex].Sections[_SectionIndex];
+
+			// Init() rebuilds every column of this section from scratch, discarding any
+			// already-computed column content. Therefore the recalculation has to restart
+			// from the section's first column; otherwise the columns before the resume
+			// point (_ColumnIndex) are left empty. This is what made column 0 of a
+			// continuous multi-column section that starts mid-page go blank while its text
+			// is still selectable (the "invisible first column" bug, ONLYOFFICE #73801).
+			// We capture the first column's start element before Init() wipes it.
+			if (currPageSection.Columns.length > 1 && _ColumnIndex > 0)
+			{
+				_ColumnIndex = 0;
+				_StartIndex  = currPageSection.Columns[0].Pos;
+			}
+
 			currPageSection.Init(_PageIndex, _sectPr, this.Layout.GetSectionIndex(_sectPr));
 			if (_SectionIndex > 0)
 			{
