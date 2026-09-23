@@ -1149,7 +1149,7 @@
 				ifr.style.overflow = 'hidden';
 				ifr.style.zIndex   = -1000;
 				ifr.setAttribute("frameBorder", "0");
-				ifr.setAttribute("allow", "autoplay");
+				ifr.setAttribute("allow", "autoplay; local-network-access; loopback-network");
 				document.body.appendChild(ifr);
 
 				if (runObject.startData.getAttribute("resize") !== true)
