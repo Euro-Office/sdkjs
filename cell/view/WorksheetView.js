@@ -5706,7 +5706,9 @@ function isAllowPasteLink(pastedWb) {
 		//рисуем текст для преварительного просмотра
 		//this._drawPageBreakPreviewText(drawingCtx, range, leftFieldInPx, topFieldInPx, width, height);
 
-		ctx.setStrokeStyle(this.settings.cells.defaultState.border)
+		// Printed gridlines must always be the light theme's, not whatever content dark mode
+		// is currently active on screen.
+		ctx.setStrokeStyle(isPrint ? this.settings.cells.printState.border : this.settings.cells.defaultState.border)
 			.setLineWidth(1).beginPath();
 
 		let i, d, l;
@@ -5735,7 +5737,7 @@ function isAllowPasteLink(pastedWb) {
 
 		// Clear grid for pivot tables with classic and outline layout
 		let clearRange, pivotRange, clearRanges = this.model.getPivotTablesClearRanges(range);
-		ctx.setFillStyle(this.settings.cells.defaultState.background);
+		ctx.setFillStyle(isPrint ? this.settings.cells.printState.background : this.settings.cells.defaultState.background);
 		for (i = 0; i < clearRanges.length; i += 2) {
 			clearRange = clearRanges[i];
 			pivotRange = clearRanges[i + 1];
@@ -6110,7 +6112,11 @@ function isAllowPasteLink(pastedWb) {
 			offsetX * asc_getcvt(0, 3, this._getPPIX()), offsetY * asc_getcvt(0, 3, this._getPPIX()));
     };
 
-    /** Рисует фон ячеек в строке */
+	WorksheetView.prototype._isFindResultHighlighted = function (row, col) {
+		return this.handlers.trigger('selectSearchingResults') && undefined !== this.workbook.inFindResults(this, row, col);
+	};
+
+    /** Draws the background of cells in a row (translated from original Russian comment) */
     WorksheetView.prototype._drawRowBG = function (drawingCtx, row, colStart, colEnd, offsetX, offsetY, mergedCells, mc, cfIterator) {
 		var height = this._getRowHeight(row);
 		if (0 === height && mergedCells) {
@@ -6122,6 +6128,7 @@ function isAllowPasteLink(pastedWb) {
 		var top = this._getRowTop(row);
 		var ctx = drawingCtx || this.drawingCtx;
 		var graphics = drawingCtx ? ctx.DocumentRenderer : this.handlers.trigger('getMainGraphics');
+		var isPrint = this.usePrintScale;
 		for (var col = colStart; col <= colEnd; ++col) {
 			var width = this._getColumnWidth(col);
 			if (0 === width && mergedCells) {
@@ -6131,7 +6138,7 @@ function isAllowPasteLink(pastedWb) {
 			// ToDo подумать, может стоит не брать ячейку из модели (а брать из кеш-а)
 			var c = this._getVisibleCell(col, row);
 			//***searchEngine
-			var findFillColor = this.handlers.trigger('selectSearchingResults') && undefined !== this.workbook.inFindResults(this, row, col)/*this.model.inFindResults(row, col)*/ ? this.settings.findFillColor : null;
+			var findFillColor = this._isFindResultHighlighted(row, col) ? this.settings.findFillColor : null;
 			var fill = c.getFill();
 			var hasFill = fill.hasFill();
 			var mwidth = 0, mheight = 0;
@@ -6156,15 +6163,25 @@ function isAllowPasteLink(pastedWb) {
 			}
 
 			//without merged -> merged after, because part of merged can
-			if (this.isPageBreakPreview(true) && !mc && this.pagesModeDataContains(col, row) === false) {
+			// isPageBreakBorderFill: this cell's fill is about to become the page-break-preview
+			// border overlay, already theme-resolved (not a raw color needing correction)
+			var isPageBreakBorderFill = this.isPageBreakPreview(true) && !mc && this.pagesModeDataContains(col, row) === false;
+			if (isPageBreakBorderFill) {
 				findFillColor = this.settings.cells.defaultState.border;
 			}
 
 			if (findFillColor || hasFill || mc) {
-				// ToDo не отрисовываем заливку границ от ячеек c заливкой, которые находятся правее и ниже
-				//  отрисовываемого диапазона. Но по факту проблем быть не должно.
+				// ToDo (translated from original Russian comment): we don't draw the fill of
+				// cell borders for filled cells that are located to the right and below the
+				// range being drawn. But in practice there shouldn't be any problems.
 				var fillGrid = findFillColor || hasFill;
-				findFillColor = findFillColor || (!hasFill && mc && this.settings.cells.defaultState.background);
+				// only the search-highlight override (findFillColor, read here before it's
+				// reassigned below) is recolorable; the cell's own fill and the merge's
+				// default background set below are already correct
+				var isFillRecolorable = !!findFillColor && !isPageBreakBorderFill;
+				// print/print-preview must use the always-light printState.background, not
+				// the document's dark-mode-resolved defaultState.background
+				findFillColor = findFillColor || (!hasFill && mc && (isPrint ? this.settings.cells.printState.background : this.settings.cells.defaultState.background));
 
 				var x = this._getColLeft(col) - (fillGrid ? 1 : 0) + this.getRightToLeftOffset();
 				var y = top - (fillGrid ? 1 : 0);
@@ -6175,7 +6192,7 @@ function isAllowPasteLink(pastedWb) {
                     fill = new AscCommonExcel.Fill();
 					fill.fromColor(findFillColor);
                 }
-                AscCommonExcel.drawFillCell(ctx, graphics, fill, new AscCommon.asc_CRect((this.getRightToLeft() ? (this.getCtxWidth(ctx) - x - w + offsetX) : x - offsetX), y - offsetY, w, h));
+                AscCommonExcel.drawFillCell(ctx, graphics, fill, new AscCommon.asc_CRect((this.getRightToLeft() ? (this.getCtxWidth(ctx) - x - w + offsetX) : x - offsetX), y - offsetY, w, h), isFillRecolorable);
 			}
 
 			if (this.isPageBreakPreview(true) && mc) {
@@ -6192,7 +6209,8 @@ function isAllowPasteLink(pastedWb) {
 
 							let _fill = new AscCommonExcel.Fill();
 							_fill.fromColor(this.settings.cells.defaultState.border);
-							AscCommonExcel.drawFillCell(ctx, graphics, _fill, new AscCommon.asc_CRect((this.getRightToLeft() ? (this.getCtxWidth(ctx) - _x - w + offsetX) : _x - offsetX), _y - offsetY, _w, _h));
+							// defaultState.border is already theme-resolved, same as isPageBreakBorderFill above, so not recolorable
+							AscCommonExcel.drawFillCell(ctx, graphics, _fill, new AscCommon.asc_CRect((this.getRightToLeft() ? (this.getCtxWidth(ctx) - _x - w + offsetX) : _x - offsetX), _y - offsetY, _w, _h), false);
 						}
 					}
 				}
@@ -6365,7 +6383,8 @@ function isAllowPasteLink(pastedWb) {
 			} else {
 				fill.fromColor(color);
 			}
-			AscCommonExcel.drawFillCell(ctx, graphics, fill, new AscCommon.asc_CRect((this.getRightToLeft() ? (this.getCtxWidth(ctx) - x - dataBarLength) : x), top, dataBarLength, height - 3));
+			// data bar color is explicit conditional-formatting config, not recolorable
+			AscCommonExcel.drawFillCell(ctx, graphics, fill, new AscCommon.asc_CRect((this.getRightToLeft() ? (this.getCtxWidth(ctx) - x - dataBarLength) : x), top, dataBarLength, height - 3), false);
 
 			var color = (isPositive || oRuleElement.NegativeBarBorderColorSameAsPositive) ? oRuleElement.BorderColor : oRuleElement.NegativeBorderColor;
 			if (color) {
@@ -6467,6 +6486,39 @@ function isAllowPasteLink(pastedWb) {
 		return oRuleElement.ShowValue;
 	};
 
+	// Decides whether default/automatic text drawn on this cell should keep its color as-is
+	// rather than get dark-mode corrected. A cell's own fill (or the fixed search-highlight
+	// color) only earns that when the background is itself light enough for black text to stay
+	// readable on it - a dark fill still needs the correction, same as no fill at all (where
+	// the dark canvas shows through and always needs it).
+	// resolvedFallbackBg: only passed by the cell editor (openCellEditor). There, a pattern/
+	// gradient fill is never actually drawn - the editor paints cells.defaultState.background
+	// (already dark-mode-corrected) behind the text instead, so that color is fully known and
+	// this can check it directly instead of falling back to the "unknown contrast" exemption
+	// below. The grid's real draw path (_drawCellText) never passes it, since there the
+	// pattern/gradient genuinely is rendered and its per-pixel contrast is genuinely unknown.
+	WorksheetView.prototype._getKeepsAutomaticTextColorAsIs = function (c, row, col, resolvedFallbackBg) {
+		var isFindResult = this._isFindResultHighlighted(row, col);
+		if (isFindResult) {
+			var findColor = this.settings.findFillColor;
+			return !AscCommon.isColorDark(findColor.getR(), findColor.getG(), findColor.getB());
+		}
+		var fill = c.getFill();
+		if (!fill.hasFill()) {
+			return false;
+		}
+		var solidFill = fill.getSolidFill();
+		if (!solidFill) {
+			if (resolvedFallbackBg) {
+				return !AscCommon.isColorDark(resolvedFallbackBg.getR(), resolvedFallbackBg.getG(), resolvedFallbackBg.getB());
+			}
+			// pattern/gradient fill: no single background color to check against, keep the
+			// pre-existing conservative behavior of exempting default text from correction
+			return true;
+		}
+		return !AscCommon.isColorDark(solidFill.getR(), solidFill.getG(), solidFill.getB());
+	};
+
 	/** Рисует текст ячейки */
 	WorksheetView.prototype._drawCellText = function (drawingCtx, cfIterator, col, row, colStart, colEnd, offsetX, offsetY) {
 		var ct = this._getCellTextCache(col, row);
@@ -6488,13 +6540,19 @@ function isAllowPasteLink(pastedWb) {
 		var color = font.getColor();
 		var isMerged = ct.flags.isMerged(), range, isWrapped = ct.flags.wrapText;
 		var ctx = drawingCtx || this.drawingCtx;
-
 		if (isMerged) {
 			range = ct.flags.merged;
 			if (col !== range.c1 || row !== range.r1) {
 				return null;
 			}
 		}
+
+		// see _getKeepsAutomaticTextColorAsIs: only a light fill (or the fixed yellow
+		// search highlight) exempts default text from dark-mode inversion; a dark fill still needs it.
+		// Only consulted when this draw target is in dark mode, so skip computing it otherwise.
+		//computed at cell level to avoid per character at the cost of passing in parameter
+		//computed only fordarkmode for now -> = on darkbackground invert text color
+		var keepsAutomaticTextColorAsIs = ctx.isDarkMode ? this._getKeepsAutomaticTextColorAsIs(c, row, col) : true;
 
 		var colL = isMerged ? range.c1 : Math.max(colStart, col - ct.sideL);
 		var colR = isMerged ? Math.min(range.c2, this.nColsCount - 1) : Math.min(colEnd, col + ct.sideR);
@@ -6659,7 +6717,7 @@ function isAllowPasteLink(pastedWb) {
 				}
 			}
 
-			this._drawText(this.stringRender, drawingCtx, 0, 0, textW, color, true);
+			this._drawText(this.stringRender, drawingCtx, 0, 0, textW, color, true, keepsAutomaticTextColorAsIs);
 			this.stringRender.resetTransform(isPrintPreview ? null : drawingCtx);
 
 			if (transformMatrix) {
@@ -6713,7 +6771,7 @@ function isAllowPasteLink(pastedWb) {
 				}
 			}
 
-			this._drawText(this.stringRender.restoreInternalState(ct.state), ctx, textX, textY, textW, color);
+			this._drawText(this.stringRender.restoreInternalState(ct.state), ctx, textX, textY, textW, color, false, keepsAutomaticTextColorAsIs);
 			this._RemoveClipRect(ctx);
 		}
 
@@ -7404,7 +7462,9 @@ function isAllowPasteLink(pastedWb) {
 		let rtlKf = this.getRightToLeft() ? -1 : 1;
         var nextCell = -1;
         var ctx = drawingCtx || this.drawingCtx;
-        ctx.setFillStyle( this.settings.cells.defaultState.background );
+        // Printed fill must always be the light theme's, not whatever content dark mode
+        // is currently active on screen.
+        ctx.setFillStyle( this.usePrintScale ? this.settings.cells.printState.background : this.settings.cells.defaultState.background );
         for ( var col = colBeg; col < colEnd; ++col ) {
             var c = -1 !== nextCell ? nextCell : this._getCell( col, row );
             var bg = null !== c ? c.getFillColor() : null;
@@ -7466,7 +7526,17 @@ function isAllowPasteLink(pastedWb) {
 
 			if (isNewColor) {
 				bc = border.getColorOrDefault();
-				ctx.setStrokeStyle(bc);
+				// bc itself must stay the raw color
+				var colorToDraw = bc;
+
+				if (ctx.isDarkMode) {
+					var isBorderRecolorable = AscCommonExcel.isColorAutomatic(bc);
+					if (isBorderRecolorable) {
+						//don't have explicit border colors -> modify it
+						colorToDraw = ctx.getDarkModeCorrectedColor(bc.getR(), bc.getG(), bc.getB(), bc.getA());
+					}
+				}
+				ctx.setStrokeStyle(colorToDraw);
 			}
 			if (isNewStyle) {
 				bs = border.s;
@@ -19536,12 +19606,22 @@ function isAllowPasteLink(pastedWb) {
 		this.model.workbook.handlers.trigger("cleanCutData", true, true);
 		this.model.workbook.handlers.trigger("cleanCopyData", true);
 
+		var resolvedBg = bg || this.settings.cells.defaultState.background;
 		editor.open({
 			enterOptions: enterOptions,
 			fragments: fragments,
 			flags: fl,
 			font: font,
-			background: bg || this.settings.cells.defaultState.background,
+			background: resolvedBg,
+			// same rule StringRender uses for the grid, see _getKeepsAutomaticTextColorAsIs:
+			// a cell's own fill only earns this when that fill is light enough for black
+			// text to stay readable on it. Only consulted in dark mode, so skip computing it otherwise.
+			// bg is non-null for a genuine pattern fill too (its foreground color, see
+			// Fill.prototype.bg), and that's exactly what gets painted raw as the background
+			// above - pass the same value through so contrast is checked against what's actually
+			// rendered, not the grid's "unknown contrast" exemption (that exemption is for the
+			// grid's real per-pixel pattern rendering, which this editor never does).
+			keepsAutomaticTextColorAsIs: this.drawingCtx.isDarkMode ? this._getKeepsAutomaticTextColorAsIs(c, row, col, resolvedBg) : true,
 			zoom: this.getZoom(),
 			isAddPersentFormat: enterOptions.quickInput && Asc.c_oAscNumFormatType.Percent === c.getNumFormatType(),
 			autoComplete: arrAutoComplete,
@@ -27848,8 +27928,8 @@ function isAllowPasteLink(pastedWb) {
 		ctx.clearRectByX(this.getRightToLeft() ? (this.getCtxWidth(ctx) - x - w) : x, y, w, h);
 		return ctx;
 	};
-	WorksheetView.prototype._drawText = function (stringRender, ctx, textX, textY, textW, color, skipRtl) {
-		stringRender.render(ctx, this.getRightToLeft() && !skipRtl ? (this.getCtxWidth(ctx) - textX - textW) : textX, textY, textW, color);
+	WorksheetView.prototype._drawText = function (stringRender, ctx, textX, textY, textW, color, skipRtl, bKeepsAutomaticTextColorAsIs) {
+		stringRender.render(ctx, this.getRightToLeft() && !skipRtl ? (this.getCtxWidth(ctx) - textX - textW) : textX, textY, textW, color, bKeepsAutomaticTextColorAsIs);
 		return stringRender;
 	};
 	WorksheetView.prototype._fillText = function (ctx, text, x, y, maxWidth, charWidths, angle) {

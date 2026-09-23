@@ -139,6 +139,8 @@ var g_oRgbColorProperties = {
 function RgbColor(rgb)
 {
 	this.rgb = rgb;
+	// true only for g_oDefaultFormat.ColorAuto, the "no color set" default
+	this.isAutoColor = false;
 
 	this._hash;
 }
@@ -153,7 +155,9 @@ RgbColor.prototype =
 	},
 	clone : function()
 	{
-		return new RgbColor(this.rgb);
+		var oColor = new RgbColor(this.rgb);
+		oColor.isAutoColor = this.isAutoColor; // stored on the color itself, survives cloning: true = still default, false = explicit (e.g. font color set by user/template)
+		return oColor;
 	},
 	getType : function()
 	{
@@ -473,6 +477,28 @@ g_oColorManager = new ColorManager();
 
 		xfs: new CellXfs()
 	};
+	// Marks this instance as the "no explicit color set" default, as opposed to a user
+	// explicitly choosing literal black (a different RgbColor(0) instance). Identity alone
+	// doesn't survive .clone(), so callers like dark-mode text-color correction check this
+	// flag instead.
+	g_oDefaultFormat.ColorAuto.isAutoColor = true;
+
+	// Is this color still Automatic, as opposed to something a user or template picked?
+	// Works for any color (font, border, ...): color.isAutoColor covers ColorAuto and its
+	// clones, and the identity check covers the one extra case that applies to font color
+	// once a workbook loads: g_oDefaultFormat.Font.c is then populated with the theme's
+	// default-text ThemeColor (see getBinaryOtherTableGVar in Serialize.js), and
+	// ThemeColor.clone() returns `this`, so that identity survives charProperties cloning.
+	function isColorAutomatic(color) {
+		if (!color) {
+			return true;
+		}
+		if (color.isAutoColor) {
+			return true;
+		}
+		return !!(g_oDefaultFormat.Font) && color === g_oDefaultFormat.Font.c;
+	}
+	window['AscCommonExcel'].isColorAutomatic = isColorAutomatic;
 
 	/** @constructor */
 	function Fragment(val) {
