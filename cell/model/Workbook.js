@@ -16058,6 +16058,14 @@
 		if(AscCommon.History.Is_On() && oRes.oldVal != oRes.newVal)
 			AscCommon.History.Add(AscCommonExcel.g_oUndoRedoCell, AscCH.historyitem_Cell_SetPivotButton, this.ws.getId(), new Asc.Range(this.nCol, this.nRow, this.nCol, this.nRow), new UndoRedoData_CellSimpleData(this.nRow, this.nCol, oRes.oldVal, oRes.newVal));
 	};
+	Cell.prototype.setCheckbox=function(val){
+		var oRes = this.ws.workbook.oStyleManager.setCheckbox(this, val);
+		if(AscCommon.History.Is_On() && oRes.oldVal != oRes.newVal)
+			AscCommon.History.Add(AscCommonExcel.g_oUndoRedoCell, AscCH.historyitem_Cell_SetCheckbox, this.ws.getId(), new Asc.Range(this.nCol, this.nRow, this.nCol, this.nRow), new UndoRedoData_CellSimpleData(this.nRow, this.nCol, oRes.oldVal, oRes.newVal));
+	};
+	Cell.prototype.getCheckbox=function(){
+		return !!(this.xfs && this.xfs.getCheckbox());
+	};
 	Cell.prototype.setStyle=function(xfs){
 		var oldVal = this.xfs;
 		this.setStyleInternal(xfs);
@@ -19744,6 +19752,34 @@
 		}, function (cell) {
 			cell.setHiddenFormulas(val);
 		});
+	};
+	Range.prototype.setCheckbox = function (val) {
+		AscCommon.History.Create_NewPoint();
+		this.createCellOnRowColCross();
+		var fSetProperty = this._setProperty;
+		var nRangeType = this._getRangeType();
+		if (c_oRangeType.All == nRangeType) {
+			this.worksheet.getAllCol().setCheckbox(val);
+			fSetProperty = this._setPropertyNoEmpty;
+		}
+		fSetProperty.call(this, function (row) {
+			if (c_oRangeType.All == nRangeType && null == row.xfs) {
+				return;
+			}
+			row.setCheckbox(val);
+		}, function (col) {
+			col.setCheckbox(val);
+		}, function (cell) {
+			cell.setCheckbox(val);
+		});
+	};
+	Range.prototype.getCheckbox = function () {
+		let res = false;
+		this.worksheet._getCellNoEmpty(this.bbox.r1, this.bbox.c1, function(cell) {
+			if (null != cell && cell.getCheckbox())
+				res = true;
+		});
+		return res;
 	};
 	Range.prototype.setType=function(type){
 		AscCommon.History.Create_NewPoint();
