@@ -33,16 +33,21 @@
 	 */
 	function DocumentBackground(color, unifill, shape)
 	{
-		this.Color   = color ? color : null;
-		this.Unifill = unifill ? unifill : null;
-		this.shape   = shape ? shape : null;
+		this.Color         = color ? color : null;
+		this.Unifill       = unifill ? unifill : null;
+		this.shape         = shape ? shape : null;
+		this.firstPageOnly = false;
 	}
 	DocumentBackground.prototype.copy = function()
 	{
-		return new DocumentBackground(this.Color, this.Unifill, this.shape);
+		let copy = new DocumentBackground(this.Color, this.Unifill, this.shape);
+		copy.firstPageOnly = this.firstPageOnly;
+		return copy;
 	};
-	DocumentBackground.prototype.draw = function(graphics, sectPr, theme, colorMap)
+	DocumentBackground.prototype.draw = function(graphics, sectPr, theme, colorMap, pageIndex)
 	{
+		if (this.firstPageOnly && (pageIndex || 0) > 0)
+			return;
 		let brush = this._getBrush(theme, colorMap);
 		if (!brush || !brush.isVisible())
 			return;
@@ -124,7 +129,10 @@
 			flags |= 4;
 			writer.WriteString2(this.shape.GetId());
 		}
-		
+
+		if (this.firstPageOnly)
+			flags |= 8;
+
 		let endPos = writer.GetCurPosition();
 		writer.Seek(startPos);
 		writer.WriteLong(flags);
@@ -151,6 +159,8 @@
 			let shapeId = reader.GetString2();
 			this.shape = AscCommon.g_oTableId.GetById(shapeId);
 		}
+
+		this.firstPageOnly = !!(flags & 8);
 	};
 	DocumentBackground.prototype.getAscColor = function()
 	{
@@ -164,9 +174,9 @@
 	};
 	DocumentBackground.prototype.isDefault = function()
 	{
-		if (this.Unifill || this.shape)
+		if (this.Unifill || this.shape || this.firstPageOnly)
 			return false;
-		
+
 		return (!this.Color || this.Color.IsEqualRGB({r : 255, g : 255, b : 255}));
 	};
 	//--------------------------------------------------------export----------------------------------------------------
