@@ -359,4 +359,164 @@ $(function () {
 		assert.strictEqual(logicDocument.GetSelectedText(), "bc", "Add math with text 'abcd' and partially select the text");
 		
 	});
+
+	function CreateParagraphWithText(text)
+	{
+		let p = AscTest.CreateParagraph();
+		AscTest.AddTextToParagraph(p, text);
+		return p;
+	}
+
+	function GetDocumentTotal()
+	{
+		return AscBuilder.Word.Api.GetDocument.call(AscTest.Editor).GetStatistics();
+	}
+
+	function CheckStatistics(assert, expected, message)
+	{
+		let stats = logicDocument.GetSelectionStatistics();
+		assert.strictEqual(stats.WordsCount, expected.WordsCount, message + ": words");
+		assert.strictEqual(stats.ParagraphCount, expected.ParagraphCount, message + ": paragraphs");
+		assert.strictEqual(stats.SymbolsCount, expected.SymbolsCount, message + ": symbols");
+		assert.strictEqual(stats.SymbolsWSCount, expected.SymbolsWSCount, message + ": symbols with spaces");
+	}
+
+	QUnit.module("Test selection statistics");
+
+	QUnit.test("No selection", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p = CreateParagraphWithText("The quick brown fox");
+		logicDocument.AddToContent(0, p);
+		AscTest.MoveCursorToParagraph(p, true);
+
+		assert.strictEqual(logicDocument.GetSelectionStatistics(), null, "Collapsed cursor returns null");
+	});
+
+	QUnit.test("Part of a paragraph", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p = CreateParagraphWithText("The quick brown fox");
+		logicDocument.AddToContent(0, p);
+		AscTest.SelectParagraphRange(p, 4, 15);
+		assert.strictEqual(logicDocument.GetSelectedText(), "quick brown", "Selected text");
+
+		CheckStatistics(assert, {
+			WordsCount     : 2,
+			ParagraphCount : 1,
+			SymbolsCount   : 10,
+			SymbolsWSCount : 11
+		}, "Partial paragraph");
+	});
+
+	QUnit.test("Several paragraphs", function (assert)
+	{
+		AscTest.ClearDocument();
+		logicDocument.AddToContent(0, CreateParagraphWithText("Hello world"));
+		logicDocument.AddToContent(1, CreateParagraphWithText("Second paragraph here"));
+		logicDocument.AddToContent(2, CreateParagraphWithText("Not selected"));
+		AscTest.SelectDocumentRange(0, 1);
+
+		CheckStatistics(assert, {
+			WordsCount     : 5,
+			ParagraphCount : 2,
+			SymbolsCount   : 29,
+			SymbolsWSCount : 32
+		}, "Two of three paragraphs");
+	});
+
+	QUnit.test("Table cells", function (assert)
+	{
+		AscTest.ClearDocument();
+		let table = AscTest.CreateTable(2, 2);
+		logicDocument.AddToContent(0, table);
+		AscTest.AddTextToParagraph(table.GetRow(0).GetCell(0).GetContent().GetElement(0), "a b");
+		AscTest.AddTextToParagraph(table.GetRow(0).GetCell(1).GetContent().GetElement(0), "c");
+		AscTest.AddTextToParagraph(table.GetRow(1).GetCell(0).GetContent().GetElement(0), "d e f");
+		AscTest.AddTextToParagraph(table.GetRow(1).GetCell(1).GetContent().GetElement(0), "g");
+		AscTest.SelectTableCells(table, 0, 0, 1, 0);
+
+		CheckStatistics(assert, {
+			WordsCount     : 3,
+			ParagraphCount : 2,
+			SymbolsCount   : 3,
+			SymbolsWSCount : 4
+		}, "First table row");
+	});
+
+	QUnit.test("Select all matches the document total", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("Numbered item");
+		let p2 = CreateParagraphWithText("Plain paragraph with nbsp");
+		let table = AscTest.CreateTable(1, 2);
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		logicDocument.AddToContent(2, table);
+		AscTest.AddTextToParagraph(table.GetRow(0).GetCell(0).GetContent().GetElement(0), "cell one");
+		AscTest.AddTextToParagraph(table.GetRow(0).GetCell(1).GetContent().GetElement(0), "cell two");
+		AscTest.SelectParagraph(p1);
+		AscTest.AddNumbering(1, 1);
+
+		let total = GetDocumentTotal();
+		assert.strictEqual(total.WordsCount, 11, "Document total includes the list number as a word");
+		logicDocument.SelectAll();
+
+		CheckStatistics(assert, total, "Select all");
+	});
+
+	QUnit.test("Pages spanned by the selection", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("First page");
+		let p2 = CreateParagraphWithText("Second page");
+		let p3 = CreateParagraphWithText("Third page");
+		p2.Set_PageBreakBefore(true);
+		p3.Set_PageBreakBefore(true);
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		logicDocument.AddToContent(2, p3);
+		AscTest.Recalculate();
+		assert.strictEqual(logicDocument.GetPagesCount(), 3, "Document has three pages");
+
+		AscTest.SelectParagraphRange(p1, 0, 5);
+		assert.strictEqual(logicDocument.GetSelectionStatistics().PageCount, 1, "Part of one page");
+
+		AscTest.SelectDocumentRange(0, 1);
+		assert.strictEqual(logicDocument.GetSelectionStatistics().PageCount, 2, "First two pages");
+
+		logicDocument.SelectAll();
+		assert.strictEqual(logicDocument.GetSelectionStatistics().PageCount, 3, "Select all");
+	});
+
+	QUnit.test("Selection in a header has no page count", function (assert)
+	{
+		AscTest.ClearDocument();
+		logicDocument.AddToContent(0, CreateParagraphWithText("Body"));
+		let header = AscTest.CreateDefaultHeader(logicDocument.GetFinalSectPr());
+		let p = header.GetElement(0);
+		AscTest.AddTextToParagraph(p, "Header text");
+		AscTest.Recalculate();
+		AscTest.SelectParagraph(p);
+
+		let stats = logicDocument.GetSelectionStatistics();
+		assert.strictEqual(stats.WordsCount, 2, "Header words are counted");
+		assert.strictEqual(stats.PageCount, -1, "Pages are not counted");
+	});
+
+	QUnit.test("asc_GetSelectionDocInfo", function (assert)
+	{
+		let getSelectionDocInfo = Asc.asc_docs_api.prototype.asc_GetSelectionDocInfo;
+
+		AscTest.ClearDocument();
+		let p = CreateParagraphWithText("The quick brown fox");
+		logicDocument.AddToContent(0, p);
+		AscTest.MoveCursorToParagraph(p, true);
+		assert.strictEqual(getSelectionDocInfo.call(AscTest.Editor), null, "No selection returns null");
+
+		AscTest.SelectParagraphRange(p, 4, 15);
+		let info  = getSelectionDocInfo.call(AscTest.Editor);
+		let stats = logicDocument.GetSelectionStatistics();
+		assert.deepEqual(Object.assign({}, info), stats, "Returns the selection statistics");
+	});
 });
