@@ -271,18 +271,19 @@ CStatistics.prototype.Check_Stop = function()
 		this.Api.sync_GetDocInfoEndCallback();
 	}
 };
-CStatistics.prototype.Send = function()
+CStatistics.prototype.GetInfo = function()
 {
-	var Stats =
-	{
+	return {
 		PageCount      : this.Pages,
 		WordsCount     : this.Words,
 		ParagraphCount : this.Paragraphs,
 		SymbolsCount   : this.SymbolsWOSpaces,
 		SymbolsWSCount : this.SymbolsWhSpaces
 	};
-
-	this.Api.sync_DocInfoCallback(Stats);
+};
+CStatistics.prototype.Send = function()
+{
+	this.Api.sync_DocInfoCallback(this.GetInfo());
 };
 CStatistics.prototype.Add_Paragraph = function (Count)
 {
@@ -17596,6 +17597,28 @@ CDocument.prototype.Statistics_GetPagesInfo = function()
 CDocument.prototype.Statistics_Stop = function()
 {
 	this.Statistics.Stop();
+};
+/**
+ * Counts pages, words, paragraphs and symbols in the current selection with the same rules as the document total.
+ * Returns null when nothing is selected.
+ * @returns {?{PageCount: number, WordsCount: number, ParagraphCount: number, SymbolsCount: number, SymbolsWSCount: number}}
+ */
+CDocument.prototype.GetSelectionStatistics = function()
+{
+	if (!this.IsSelectionUse() || this.IsSelectionEmpty())
+		return null;
+
+	let stats           = new CStatistics(this);
+	let selectedContent = this.GetSelectedContent(false);
+	for (let i = 0, count = selectedContent.Elements.length; i < count; ++i)
+	{
+		selectedContent.Elements[i].Element.CollectDocumentStatistics(stats);
+	}
+
+	// Pages spanned by the selection; a header or footer repeats on every page, so it has no page count
+	let bounds = docpostype_HdrFtr !== this.GetDocPosType() ? this.GetSelectionBounds() : null;
+	stats.Update_Pages(bounds && bounds.Start && bounds.End ? bounds.End.Page - bounds.Start.Page + 1 : -1);
+	return stats.GetInfo();
 };
 //----------------------------------------------------------------------------------------------------------------------
 // Функции для работы с MailMerge
