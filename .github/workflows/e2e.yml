@@ -35,7 +35,7 @@ jobs:
           path: sdkjs
 
       # The shipped build bundles the sdkjs-forms addon. Prefer a matching
-      # branch, fall back to master (mirrors check-build.yml).
+      # branch, fall back to main.
       - name: Check out sdkjs-forms (current branch)
         id: sdkjs-forms
         uses: actions/checkout@v4
@@ -44,13 +44,13 @@ jobs:
           repository: Euro-Office/sdkjs-forms
           path: sdkjs-forms
           ref: ${{ github.ref }}
-      - name: Check out sdkjs-forms (master)
+      - name: Check out sdkjs-forms (main)
         if: steps.sdkjs-forms.outcome != 'success'
         uses: actions/checkout@v4
         with:
           repository: Euro-Office/sdkjs-forms
           path: sdkjs-forms
-          ref: master
+          ref: main
 
       # The e2e suite lives in the DocumentServer repo. Prefer a same-named
       # branch (so tests can be co-developed with the sdkjs change), else main.
@@ -77,10 +77,12 @@ jobs:
 
       - name: Build sdkjs
         working-directory: sdkjs
+        env:
+          SDK_ADDONS: ../../sdkjs-forms
+          SKIP_DEVELOP: '1'
         run: |
-          npm install grunt-cli
-          npm install --prefix build
-          node node_modules/grunt-cli/bin/grunt --gruntfile build/Gruntfile.js --addon=sdkjs-forms
+          npm ci --prefix build
+          npm run --prefix build build
 
       # The documentserver package is public, so the pull needs no auth.
       - name: Pull nightly image
