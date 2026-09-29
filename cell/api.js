@@ -3411,6 +3411,12 @@ var editor;
 		this.wb = new AscCommonExcel.WorkbookView(this.wbModel, this.controller, this.handlers, this.HtmlElement,
 			this.topLineEditorElement, this, this.collaborativeEditing, this.fontRenderingMode);
 
+		// Needed here for its scrollbar color sync, stringRender reset, and initial draw.
+		// Its wb.updateSkin() call recomputes the worksheet style the constructor above
+		// already set via updateDarkMode, a harmless one-time duplication rather than
+		// something this call is relied on to fix.
+		this.updateSkin();
+
 		this.registerCustomFunctionsLibrary(undefined, true);
 
 		if (this.isCopyOutEnabled && this.topLineEditorElement) {
@@ -8628,11 +8634,28 @@ var editor;
 
     if (this.wb) {
       this.wb.updateSkin();
+      if (this.wb.stringRender) {
+        this.wb.stringRender._reset();
+      }
       var ws = this.wb.getWorksheet();
       if (ws) {
           this.controller.updateScrollSettings();
 		  ws.draw();
       }
+    }
+  };
+
+  spreadsheet_api.prototype.updateDarkMode = function () {
+    if (this.wb) {
+      this.wb.updateDarkMode(this.isDarkMode);
+      var ws = this.wb.getWorksheet();
+      if (ws) {
+        ws.draw();
+      }
+      // TODO: a cell actively being edited doesn't refresh to the new theme until editing
+      // ends (pre-existing limitation, not specific to dark mode). Fixing it live needs
+      // WorksheetView to re-derive the edited cell's own fill; we're accepting this small,
+      // self-correcting gap for now rather than adding that for a narrow, transient case.
     }
   };
 
