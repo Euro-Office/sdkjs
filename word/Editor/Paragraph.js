@@ -3340,7 +3340,7 @@ Paragraph.prototype.drawRunContentLines = function(CurPage, pGraphics, drawState
 				if(drawingDocument)
 				{
 					pGraphics.p_color(255, 0, 0, 255);
-					let SpellingW = drawingDocument.GetMMPerDot(1);
+					let SpellingW = drawingDocument.GetMMPerDot(3);
 					Element       = aSpelling.Get_Next();
 					while (null != Element)
 					{

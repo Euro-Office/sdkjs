@@ -2138,20 +2138,35 @@
 			this.SetIntegerGrid(false);
 	};
 
+	CGraphics.prototype.IsSpellCheckWavyLine = function()
+	{
+		let oLogicDocument = Asc.editor && Asc.editor.private_GetLogicDocument ? Asc.editor.private_GetLogicDocument() : null;
+		if (!oLogicDocument || !oLogicDocument.GetSpellCheckManager)
+			return true;
+
+		let oSpellCheck = oLogicDocument.GetSpellCheckManager();
+		return oSpellCheck ? oSpellCheck.GetSettings().IsWavyLine() : true;
+	};
+
 	CGraphics.prototype.DrawSpellingLine = function(y0, x0, x1, w)
 	{
-		if (!Asc.editor.isViewMode)
+		if (Asc.editor.isViewMode)
+			return;
+
+		if (this.IsSpellCheckWavyLine())
+			this.drawWavyLine(y0, x0, x1, w);
+		else
 			this.drawHorLine(0, y0, x0, x1, w );
 	};
-	
+
 	CGraphics.prototype.drawCustomRange = function(handlerId, rangeId, x0, y0, w, h, baseLine)
 	{
 		if (Asc.editor.isViewMode)
 			return;
-		
+
 		let color = AscCommon.getUserColorById(handlerId, null, false);
 		let underlineY = 0.1 * (baseLine - y0) + baseLine;
-		
+
 		if (-1 !== handlerId.indexOf("spelling"))
 		{
 			color = new AscCommon.CColor(239, 68, 68, 255);
@@ -2161,10 +2176,54 @@
 			color = new AscCommon.CColor(59, 130, 246, 255);
 			underlineY = 0.2 * (baseLine - y0) + baseLine;
 		}
-		
+
 		this.p_color(color.r, color.g, color.b, 255);
 		this.p_width(0.25 * 1000);
-		this.drawHorLine(0, underlineY, x0, x0 + w, 0.25 );
+
+		if (-1 !== handlerId.indexOf("spelling") && this.IsSpellCheckWavyLine())
+			this.drawWavyLine(underlineY, x0, x0 + w, 0.25);
+		else
+			this.drawHorLine(0, underlineY, x0, x0 + w, 0.25 );
+	};
+
+	// Wavy underline used for misspelled-word markers (replaces the straight
+	// dashed line when CSpellCheckSettings.IsWavyLine() is true). Approximates
+	// a sinusoid with alternating-amplitude cubic bezier segments, matching the
+	// straight-line variant's coordinate/transform handling in drawHorLine.
+	CGraphics.prototype.drawWavyLine = function(y, x, r, penW)
+	{
+		var _check_transform = global_MatrixTransformer.IsIdentity2(this.m_oTransform);
+		if (!this.m_bIntegerGrid || !_check_transform)
+		{
+			if (_check_transform)
+			{
+				this.SetIntegerGrid(true);
+				this.drawWavyLine(y, x, r, penW);
+				this.SetIntegerGrid(false);
+				return;
+			}
+		}
+
+		this.p_width(penW * 1000);
+
+		var amplitude = 0.5;
+		var half_period = 1.5;
+		var segments = Math.max(1, Math.round((r - x) / half_period));
+		var dx = (r - x) / segments;
+
+		this._s();
+		this._m(x, y);
+		for (var i = 0; i < segments; i++)
+		{
+			var a = (i % 2 === 0) ? -amplitude : amplitude;
+			var cx1 = x + i * dx + dx / 3.0;
+			var cy1 = y + a;
+			var cx2 = x + i * dx + 2.0 * dx / 3.0;
+			var cy2 = y + a;
+			var px = x + (i + 1) * dx;
+			this._c(cx1, cy1, cx2, cy2, px, y);
+		}
+		this.ds();
 	};
 
 	// smart methods for horizontal / vertical lines
