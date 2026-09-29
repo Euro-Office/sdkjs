@@ -3088,6 +3088,15 @@ background-repeat: no-repeat;\
 		if (this.WordControl.m_oLogicDocument)
 			this.WordControl.m_oLogicDocument.Statistics_Stop();
 	};
+	asc_docs_api.prototype.asc_GetSelectionDocInfo      = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		if (!logicDocument)
+			return null;
+
+		let stats = logicDocument.GetSelectionStatistics();
+		return stats ? new CDocInfoProp(stats) : null;
+	};
 	asc_docs_api.prototype.sync_DocInfoCallback         = function(obj)
 	{
 		this.sendEvent("asc_onDocInfo", new CDocInfoProp(obj));
@@ -15093,6 +15102,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['SetFontRenderingMode']                      = asc_docs_api.prototype.SetFontRenderingMode;
 	asc_docs_api.prototype['startGetDocInfo']                           = asc_docs_api.prototype.startGetDocInfo;
 	asc_docs_api.prototype['stopGetDocInfo']                            = asc_docs_api.prototype.stopGetDocInfo;
+	asc_docs_api.prototype['asc_GetSelectionDocInfo']                   = asc_docs_api.prototype.asc_GetSelectionDocInfo;
 	asc_docs_api.prototype['sync_DocInfoCallback']                      = asc_docs_api.prototype.sync_DocInfoCallback;
 	asc_docs_api.prototype['sync_GetDocInfoStartCallback']              = asc_docs_api.prototype.sync_GetDocInfoStartCallback;
 	asc_docs_api.prototype['sync_GetDocInfoStopCallback']               = asc_docs_api.prototype.sync_GetDocInfoStopCallback;
