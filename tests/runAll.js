@@ -82,6 +82,7 @@ const allTests = [
 	'word/api/api.html',
 	'word/api/cross-ref.html',
 	'word/api/textInput.html',
+	'word/pageless/pageless.html',
 	'word/styles/displayStyle.html',
 	'word/styles/paraPr.html',
 	'word/styles/styleApplicator.html',

@@ -144,6 +144,10 @@ function CEditorPage(api)
 
 	this.viewBetweenPagesHor = 20;
 	this.viewBetweenPagesVer = 20;
+	this.isPagelessMode = false;
+
+	this.getPageGapVer = function() { return this.isPagelessMode ? 0 : this.viewBetweenPagesVer; };
+	this.getPageGapHor = function() { return this.isPagelessMode ? 0 : this.viewBetweenPagesHor; };
 
 	// текущий зум после резайза. чтобы например после zoomToWidth и zoomIn/Out можно было вернуться на значение меньше меньшего/больше большего
 	this.m_nZoomValueMin = -1;
@@ -3104,7 +3108,7 @@ function CEditorPage(api)
 				if (_pageWidth > this.m_dDocumentWidth)
 					this.m_dDocumentWidth = _pageWidth;
 
-				this.m_dDocumentHeight += this.viewBetweenPagesVer;
+				this.m_dDocumentHeight += this.getPageGapVer();
 				this.m_dDocumentHeight += _pageHeight;
 			}
 		}
@@ -3120,7 +3124,7 @@ function CEditorPage(api)
 				if (currentBlockW > _this.m_dDocumentWidth)
 					_this.m_dDocumentWidth = currentBlockW;
 
-				_this.m_dDocumentHeight += _this.viewBetweenPagesVer;
+				_this.m_dDocumentHeight += _this.getPageGapVer();
 				_this.m_dDocumentHeight += currentBlockH;
 			};
 
@@ -3144,7 +3148,7 @@ function CEditorPage(api)
 					continue;
 				}
 
-				let testW = currentBlockW + this.viewBetweenPagesHor + _pageWidth;
+				let testW = currentBlockW + this.getPageGapHor() + _pageWidth;
 				if (testW > editorWidth)
 				{
 					_checkBlock(this);
@@ -3165,7 +3169,7 @@ function CEditorPage(api)
 				_checkBlock(this);
 		}
 
-		this.m_dDocumentHeight += this.viewBetweenPagesVer;
+		this.m_dDocumentHeight += this.getPageGapVer();
 
 		// теперь увеличим ширину документа, чтобы он не был плотно к краям
 		if (!this.m_oApi.isMobileVersion)
@@ -3249,12 +3253,12 @@ function CEditorPage(api)
 				let drawRect = this.m_oDrawingDocument.m_arrPages[i].drawingPage;
 
 				drawRect.left = hor_pos_median - (pageWidth >> 1);
-				drawRect.top = lStart + this.viewBetweenPagesVer - lCurrentTopInDoc;
+				drawRect.top = lStart + this.getPageGapVer() - lCurrentTopInDoc;
 				drawRect.right = drawRect.left + pageWidth;
 				drawRect.bottom = drawRect.top + pageHeight;
 				drawRect.pageIndex = i;
 
-				lStart += (this.viewBetweenPagesVer + pageHeight);
+				lStart += (this.getPageGapVer() + pageHeight);
 
 				if (false === bIsFoundFirst && drawRect.bottom > 0)
 				{
@@ -3281,7 +3285,7 @@ function CEditorPage(api)
 			let _checkBlock = function(_this) {
 
 				let left = hor_pos_median - (currentBlockW >> 1);
-				let top = lStart + _this.viewBetweenPagesVer - lCurrentTopInDoc;
+				let top = lStart + _this.getPageGapVer() - lCurrentTopInDoc;
 
 				for (let i = 0, len = currentBlockPages.length; i < len; i++)
 				{
@@ -3298,7 +3302,7 @@ function CEditorPage(api)
 					drawRect.bottom = drawRect.top + pageHeight;
 					drawRect.pageIndex = ind;
 
-					left = drawRect.right + _this.viewBetweenPagesHor;
+					left = drawRect.right + _this.getPageGapHor();
 
 					if (false === bIsFoundFirst && drawRect.bottom > 0)
 					{
@@ -3313,7 +3317,7 @@ function CEditorPage(api)
 					}
 				}
 
-				lStart += (_this.viewBetweenPagesVer + currentBlockH);
+				lStart += (_this.getPageGapVer() + currentBlockH);
 				currentBlockPages = [];
 			};
 
@@ -3330,7 +3334,7 @@ function CEditorPage(api)
 					continue;
 				}
 
-				let testW = currentBlockW + this.viewBetweenPagesHor + _pageWidth;
+				let testW = currentBlockW + this.getPageGapHor() + _pageWidth;
 				if (testW > editorWidth)
 				{
 					_checkBlock(this);
