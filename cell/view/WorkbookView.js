@@ -1853,8 +1853,10 @@
   WorkbookView.prototype._onResizeElement = function(target, x, y) {
     var arrMouseMoveObjects = [];
     if (target.target === c_oTargetType.ColumnResize) {
+      this._onUpdateCursor("ew-resize");
       arrMouseMoveObjects.push(this.getWorksheet().drawColumnGuides(target.col, x, y, target.mouseX));
     } else if (target.target === c_oTargetType.RowResize) {
+      this._onUpdateCursor("ns-resize");
       arrMouseMoveObjects.push(this.getWorksheet().drawRowGuides(target.row, x, y, target.mouseY));
     }
 
