@@ -8,7 +8,7 @@
     "node": ">=18.13.0"
   },
   "dependencies": {
-    "glob": "^8.1.0",
+    "glob": "^13.0.0",
     "source-map-js": "^1.2.1",
     "terser": "^5.20.0",
     "terser-webpack-plugin": "^5.3.11",
