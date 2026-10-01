@@ -3382,6 +3382,8 @@ function (window, undefined) {
 				cell.setLocked(Val);
 			} else if (AscCH.historyitem_Cell_SetHidden == Type) {
 				cell.setHiddenFormulas(Val);
+			} else if (AscCH.historyitem_Cell_SetCheckbox == Type) {
+				cell.setCheckbox(Val);
 			}
 		});
 	};
@@ -4819,6 +4821,8 @@ function (window, undefined) {
 				row.setLocked(Val);
 			} else if (AscCH.historyitem_RowCol_HiddenFormulas == Type) {
 				row.setHiddenFormulas(Val);
+			} else if (AscCH.historyitem_RowCol_Checkbox == Type) {
+				row.setCheckbox(Val);
 			}
 		}
 

@@ -6674,6 +6674,10 @@ function isAllowPasteLink(pastedWb) {
 			if (clipUse) {
 				this._RemoveClipRect(ctx);
 			}
+		} else if (this._isCheckboxCell(c)) {
+			this._AddClipRect(ctx, x1, y1, w, h);
+			this._drawCellCheckbox(ctx, col, row, offsetX, offsetY);
+			this._RemoveClipRect(ctx);
 		} else {
 			this._AddClipRect(ctx, x1, y1, w, h);
 			if (this._getCellCF(cfIterator, c, row, col, Asc.ECfType.iconSet) /*&& AscCommon.align_Left === ct.cellHA*/) {
@@ -6730,6 +6734,132 @@ function isAllowPasteLink(pastedWb) {
 		}
 
 		return null;
+	};
+
+	WorksheetView.prototype._isCheckboxCell = function (c) {
+		// c comes from _getVisibleCell (getCell3 -> getRange3), i.e. a Range, not a Cell:
+		// use the Range compiled-style accessor (getXfs(true)), not Cell.getCompiledStyle.
+		if (!c || CellValueType.Bool !== c.getType()) {
+			return false;
+		}
+		var xfs = c.getXfs(true);
+		return !!(xfs && xfs.checkbox);
+	};
+
+	WorksheetView.prototype._getCheckboxRect = function (col, row, offsetX, offsetY) {
+		var ct = this._getCellTextCache(col, row);
+		if (!ct || ct.angle) {
+			return null;
+		}
+
+		var isMerged = ct.flags.isMerged(), range;
+		var rowB = row, colR = col;
+		if (isMerged) {
+			range = ct.flags.merged;
+			if (col !== range.c1 || row !== range.r1) {
+				return null;
+			}
+			colR = Math.min(range.c2, this.nColsCount - 1);
+			rowB = Math.min(range.r2, this.nRowsCount - 1);
+		}
+
+		var y1 = this._getRowTop(row) - offsetY;
+		var h = this._getRowTop(rowB + 1) - offsetY - y1;
+		var bl = y1 + h - Asc.round(
+			(isMerged ? (ct.metrics.height - ct.metrics.baseline) : this._getRowDescender(rowB)) * this.getZoom());
+		var x1ct = this._getColLeft(col) - offsetX;
+		var x2ct = isMerged ? (this._getColLeft(colR + 1) - offsetX - gridlineSize) :
+			(x1ct + this._getColumnWidth(col) - gridlineSize);
+
+		var textH = ct.metrics.height * this.getZoom();
+		var side = Math.max(5, Math.min(Asc.round(textH * 0.7), h - 2));
+		var bx = this._calcTextHorizPos(x1ct, x2ct, {width: side}, ct.cellHA, true);
+		var by = this._calcTextVertPos(y1, h, bl, ct.metrics, ct.cellVA) + Asc.round((textH - side) / 2);
+
+		return {x: bx, y: by, side: side};
+	};
+
+	WorksheetView.prototype._drawCellCheckbox = function (ctx, col, row, offsetX, offsetY) {
+		var rect = this._getCheckboxRect(col, row, offsetX, offsetY);
+		if (!rect) {
+			return;
+		}
+
+		var c = this._getVisibleCell(col, row);
+		var checked = 1 === c.getNumberValue();
+		var lineW = Math.max(1, Asc.round(rect.side / 9));
+
+		if (checked) {
+			ctx.setFillStyle(new CColor(33, 115, 70));
+			this._fillRect(ctx, rect.x, rect.y, rect.side, rect.side);
+
+			ctx.beginPath();
+			ctx.setLineWidth(lineW);
+			ctx.setStrokeStyle(new CColor(255, 255, 255));
+			this._moveTo(ctx, rect.x + 0.22 * rect.side, rect.y + 0.55 * rect.side);
+			this._lineTo(ctx, rect.x + 0.42 * rect.side, rect.y + 0.74 * rect.side);
+			this._lineTo(ctx, rect.x + 0.78 * rect.side, rect.y + 0.3 * rect.side);
+			ctx.stroke();
+		} else {
+			ctx.beginPath();
+			ctx.setLineWidth(lineW);
+			ctx.setStrokeStyle(this.settings.cells.defaultState.border);
+			this._strokeRect(ctx, rect.x + 0.5, rect.y + 0.5, rect.side - 1, rect.side - 1);
+		}
+	};
+
+	WorksheetView.prototype._hitCheckboxCell = function (x, y, col, row) {
+		var merged = this.model.getMergedByCell(row, col);
+		if (merged) {
+			col = merged.c1;
+			row = merged.r1;
+		}
+		var c = this._getVisibleCell(col, row);
+		if (!this._isCheckboxCell(c) || c.isFormula()) {
+			return false;
+		}
+		var rect = this._getCheckboxRect(col, row, 0, 0);
+		return !!rect && x >= rect.x && x <= rect.x + rect.side && y >= rect.y && y <= rect.y + rect.side;
+	};
+
+	WorksheetView.prototype.toggleCheckbox = function (col, row) {
+		var t = this;
+		if (!this.workbook.canEdit()) {
+			return false;
+		}
+		var merged = this.model.getMergedByCell(row, col);
+		if (merged) {
+			col = merged.c1;
+			row = merged.r1;
+		}
+		var c = this._getVisibleCell(col, row);
+		if (!this._isCheckboxCell(c) || c.isFormula()) {
+			return false;
+		}
+		var checked = 1 === c.getNumberValue();
+		var range = merged || new asc_Range(col, row, col, row);
+		this._isLockedCells(range, null, function (success) {
+			if (!success) {
+				return;
+			}
+			var oCellValue = new AscCommonExcel.CCellValue();
+			oCellValue.type = CellValueType.Bool;
+			oCellValue.number = checked ? 0 : 1;
+			t.model.getRange3(row, col, row, col).setValueData(
+				new AscCommonExcel.UndoRedoData_CellValueData(null, oCellValue));
+			t._updateRange(range);
+			t.draw();
+		});
+		return true;
+	};
+
+	WorksheetView.prototype.toggleActiveCellCheckbox = function () {
+		var activeCell = this.model.getSelection().activeCell;
+		var c = this._getVisibleCell(activeCell.col, activeCell.row);
+		if (!this._isCheckboxCell(c) || c.isFormula()) {
+			return false;
+		}
+		return this.toggleCheckbox(activeCell.col, activeCell.row);
 	};
 
 	WorksheetView.prototype._drawPageBreakPreviewLines = function () {
@@ -12412,6 +12542,10 @@ function isAllowPasteLink(pastedWb) {
 					if (_vr.contains(c.col, r.row)) {
 						_offsetX += x;
 						_offsetY += y;
+						if (this._hitCheckboxCell(_offsetX, _offsetY, c.col, r.row)) {
+							res = {cursor: kCurHyperlink, target: c_oTargetType.FilterObject, col: c.col, row: r.row, isCheckbox: true};
+							return false;
+						}
 						if (isDataValidation) {
 							var merged = this.model.getMergedByCell(row, col);
 							if (merged) {
@@ -16494,6 +16628,31 @@ function isAllowPasteLink(pastedWb) {
 						break;
 					case "hiddenFormulas":
 						range.setHiddenFormulas(val);
+						break;
+					case "checkbox":
+						range.setCheckbox(val);
+						if (val) {
+							//like Excel: blank cells in the selection become unchecked checkboxes
+							var emptyValue = new AscCommonExcel.CCellValue();
+							emptyValue.type = CellValueType.Bool;
+							emptyValue.number = 0;
+							var emptyData = new AscCommonExcel.UndoRedoData_CellValueData(null, emptyValue);
+							//clamp huge (full row/col) selections to the used area
+							var fillR2 = range.bbox.r2, fillC2 = range.bbox.c2;
+							if (isLargeRange) {
+								fillR2 = Math.min(fillR2, t.model.getRowsCount() - 1);
+								fillC2 = Math.min(fillC2, t.model.getColsCount() - 1);
+							}
+							for (var checkboxRow = range.bbox.r1; checkboxRow <= fillR2; ++checkboxRow) {
+								for (var checkboxCol = range.bbox.c1; checkboxCol <= fillC2; ++checkboxCol) {
+									t.model._getCell(checkboxRow, checkboxCol, function (checkboxCell) {
+										if (checkboxCell.isNullTextString() && !checkboxCell.isFormula()) {
+											checkboxCell.setValueData(emptyData);
+										}
+									});
+								}
+							}
+						}
 						break;
                     case "rh":
                         range.removeHyperlink(null, true);

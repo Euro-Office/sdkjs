@@ -215,7 +215,8 @@
         QuotePrefix: 11,
         XfId: 12,
         Aligment: 13,
-        Protection: 14
+        Protection: 14,
+        Checkbox: 15
     };
 	var c_oSerProtectionTypes =
     {
@@ -2112,6 +2113,7 @@
 		this.applyProtection = null;
 		this.locked = null;
 		this.hidden = null;
+		this.checkbox = null;
 	}
 
 	function ReadColorSpreadsheet2(bcr, length) {
@@ -3449,6 +3451,12 @@
 					this.memory.WriteByte(c_oSerPropLenType.Variable);
 					this.bs.WriteItemWithLength(function(){oThis.WriteProtection(xf);});
                 }
+				if(null != xf.checkbox)
+				{
+					this.memory.WriteByte(c_oSerXfsTypes.Checkbox);
+					this.memory.WriteByte(c_oSerPropLenType.Byte);
+					this.memory.WriteBool(xf.checkbox);
+				}
             }
         };
 		this.WriteProtection = function(xf)
@@ -9124,6 +9132,8 @@
 					return oThis.ReadProtection(t,l,oXfs);
 				});
 			}
+			else if ( c_oSerXfsTypes.Checkbox == type )
+				oXfs.checkbox = this.stream.GetBool();
             else
                 res = c_oSerConstants.ReadUnknown;
             return res;
@@ -14600,6 +14610,9 @@
 					newXf.locked = oStyleObject.xfs.locked;
                 if(null != oStyleObject.xfs.applyProtection)
                     newXf.applyProtection = oStyleObject.xfs.applyProtection;
+				// checkbox
+				if(null != oStyleObject.xfs.checkbox)
+					newXf.checkbox = oStyleObject.xfs.checkbox;
                 // align
                 if(null != oStyleObject.xfs.align)
 					newXf.align = g_StyleCache.addAlign(oStyleObject.xfs.align);
@@ -15210,6 +15223,9 @@
                 newXf.locked = oCellStyleXfs.locked;
             if(null != oCellStyleXfs.applyProtection)
                 newXf.applyProtection = oCellStyleXfs.applyProtection;
+            // checkbox
+            if(null != oCellStyleXfs.checkbox)
+                newXf.checkbox = oCellStyleXfs.checkbox;
             // align
             if(null != oCellStyleXfs.align)
                 newXf.align = oCellStyleXfs.align;
@@ -15290,6 +15306,9 @@
                 newXf.locked = xfs.locked;
             if(null != xfs.applyProtection)
                 newXf.applyProtection = xfs.applyProtection;
+            // checkbox
+            if(null != xfs.checkbox)
+                newXf.checkbox = xfs.checkbox;
             if(null != xfs.align)
                 newXf.align = xfs.align;
             if (null !== xfs.XfId) {
