@@ -8632,14 +8632,25 @@ background-repeat: no-repeat;\
 		if (window["IS_NATIVE_EDITOR"])
 			return window["native"]["GetDrawingEndPage"]();
 
-		var lPage1 = this.WordControl.m_oDrawingDocument.m_lDrawingFirst;
-		var lPage2 = lPage1 + 1;
+		var drDoc  = this.WordControl.m_oDrawingDocument;
+		var lPage1 = drDoc.m_lDrawingFirst;
 
-		if (lPage2 > this.WordControl.m_oDrawingDocument.m_lDrawingEnd)
+		if (lPage1 < 0 || !drDoc.m_arrPages[lPage1])
+			return -1;
+
+		// In multi-page view, pages are laid out side-by-side in rows.
+		// The topmost visible row's leader (m_lDrawingFirst) is the answer.
+		if (this.WordControl.isUseMultiPageView && this.WordControl.isUseMultiPageView())
 			return lPage1;
 
-		var lWindHeight = this.WordControl.m_oEditor.HtmlElement.height;
-		var arPages     = this.WordControl.m_oDrawingDocument.m_arrPages;
+		var lPage2 = lPage1 + 1;
+
+		if (lPage2 > drDoc.m_lDrawingEnd)
+			return lPage1;
+
+		// Normalize canvas height from device px to CSS px to match drawingPage coordinates.
+		var lWindHeight = AscCommon.AscBrowser.convertToRetinaValue(this.WordControl.m_oEditor.HtmlElement.height);
+		var arPages     = drDoc.m_arrPages;
 
 		var dist1 = arPages[lPage1].drawingPage.bottom;
 		var dist2 = lWindHeight - arPages[lPage2].drawingPage.top;
