@@ -55,6 +55,19 @@
 		AscFormat.CColorModifiers.prototype.HSL2RGB(oHSL, oRGB, true);
 		return oRGB;
 	};
+	// Is this color dark enough that light (rather than black) text/decoration is needed on
+	// top of it? Uses HSL lightness (RGB2HSL's L, 0-255) rather than a weighted-luma formula
+	// (e.g. ITU-R BT.601) to stay consistent with darkModeCorrectColor2 just above, which
+	// already treats HSL L as this codebase's definition of "how light is this color" for
+	// dark-mode purposes - a color classified "dark" here should be exactly the kind of color
+	// darkModeCorrectColor2 would brighten.
+	AscCommon.isColorDark = function(r, g, b)
+	{
+		var oHSL = {};
+		AscFormat.CColorModifiers.prototype.RGB2HSL(r, g, b, oHSL);
+		//arbitrary choosen 100 by experience instead of theorical 128;
+		return oHSL.L < 100;
+	};
 
 	AscCommon.RendererType = {
 		Base          : 0,
