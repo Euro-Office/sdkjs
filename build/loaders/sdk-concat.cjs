@@ -202,7 +202,12 @@ module.exports = function sdkConcatLoader() {
                 gen.setSourceContent(files[i], content);
             }
 
-            result += content;
+            // Leading ';' terminates the previous file's last statement (several
+            // files end in `})(window)` without a semicolon) and keeps a file's
+            // own top-level `"use strict";` from becoming the directive prologue
+            // of the sdk-all wrapper, which would make the whole bundle strict.
+            // Same line count, so per-file line mappings stay exact.
+            result += ';' + content;
 
             if (hasTrail) {
                 // Trailing \n already provides the inter-file separator.
