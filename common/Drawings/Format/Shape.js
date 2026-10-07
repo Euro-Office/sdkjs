@@ -4318,7 +4318,7 @@
 			return oGeometry.isInk();
 		};
 
-		var aScales = [25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000, 90000, 95000, 10000];
+		var aScales = [25000, 30000, 35000, 40000, 45000, 50000, 55000, 60000, 65000, 70000, 75000, 80000, 85000, 90000, 95000, 100000];
 
 
 		CShape.prototype.recalculateContentWitCompiledPr = function () {
@@ -5061,50 +5061,51 @@
 						}
 
 
+						// PowerPoint saves up to 20% line spacing reduction with any font scale
+						// (e.g. fontScale="77500" lnSpcReduction="20000"). Search the font scale with
+						// that maximum applied, then use the smallest reduction that still fits,
+						// so a box from PowerPoint does not shrink further than the file had it.
 						var dReductionScale = 0.2;
-
-						var nCurIndex = aScales.length - 1;
-						var nCurShift = -((aScales.length) / 2);
-						while (true) {
-							nCurIndex += nCurShift;
-							if (nCurIndex - 1 >= 0) {
-								this.tmpFontScale = aScales[nCurIndex - 1];
-								this.tmpLnSpcReduction = dReductionScale * (100000 - this.tmpFontScale) >> 0;
-								this.recalculateContentWitCompiledPr();
-
-
-								if (this.contentHeight <= this.clipRect.h) {
-									this.tmpFontScale = aScales[nCurIndex];
-									this.tmpLnSpcReduction = dReductionScale * (100000 - this.tmpFontScale) >> 0;
-									this.recalculateContentWitCompiledPr();
-									if (this.contentHeight >= this.clipRect.h) {
-										this.tmpFontScale = aScales[nCurIndex - 1];
-										this.tmpLnSpcReduction = dReductionScale * (100000 - this.tmpFontScale) >> 0;
-										break;
-									} else {
-										nCurShift = Math.abs(nCurShift) / 2;
-									}
-								} else {
-									nCurShift = -Math.abs(nCurShift) / 2;
+						var nMaxLnSpcReduction = 20000;
+						var oShape = this;
+						var fFits = function (nFontScale, nLnSpcReduction) {
+							oShape.tmpFontScale = nFontScale;
+							oShape.tmpLnSpcReduction = nLnSpcReduction;
+							oShape.recalculateContentWitCompiledPr();
+							return oShape.contentHeight <= oShape.clipRect.h;
+						};
+						var fGetLnSpcReduction = function (nFontScale) {
+							var nMinReduction = dReductionScale * (100000 - nFontScale) >> 0;
+							var aReductions = [nMinReduction, 10000, nMaxLnSpcReduction];
+							for (var i = 0; i < aReductions.length; ++i) {
+								if ((i === 0 || aReductions[i] > nMinReduction) && fFits(nFontScale, aReductions[i])) {
+									return aReductions[i];
 								}
-								if (Math.abs(nCurShift) < 1) {
-									break;
-								}
+							}
+							return nMaxLnSpcReduction;
+						};
+
+						var nFitIndex = 0;
+						var nLow = 1;
+						var nHigh = aScales.length - 1;
+						while (nLow <= nHigh) {
+							var nMid = (nLow + nHigh) >> 1;
+							if (fFits(aScales[nMid], nMaxLnSpcReduction)) {
+								nFitIndex = nMid;
+								nLow = nMid + 1;
 							} else {
-								this.tmpFontScale = aScales[0];
-								this.tmpLnSpcReduction = dReductionScale * (100000 - this.tmpFontScale) >> 0;
-								break;
+								nHigh = nMid - 1;
 							}
 						}
-						if (AscFormat.isRealNumber(this.tmpFontScale) && this.tmpFontScale < 90000) {
-							if (this.isPlaceholder()) {
-								var nType = this.getPlaceholderType();
-								if (nType === AscFormat.phType_title || nType === AscFormat.phType_ctrTitle) {
-									this.tmpFontScale = 90000;
-									this.tmpLnSpcReduction = dReductionScale * (100000 - this.tmpFontScale) >> 0;
-								}
+						var nFontScale = aScales[nFitIndex];
+						if (nFontScale < 90000 && this.isPlaceholder()) {
+							var nType = this.getPlaceholderType();
+							if (nType === AscFormat.phType_title || nType === AscFormat.phType_ctrTitle) {
+								nFontScale = 90000;
 							}
 						}
+						this.tmpLnSpcReduction = fGetLnSpcReduction(nFontScale);
+						this.tmpFontScale = nFontScale;
 
 						if (oBodyPr.textFit.lnSpcReduction !== this.tmpLnSpcReduction
 							|| oBodyPr.textFit.fontScale !== this.tmpFontScale) {
