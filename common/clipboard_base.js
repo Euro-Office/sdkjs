@@ -1045,10 +1045,12 @@
 					resolve(null);
 				}, 2000);
 
+				// Quoted keys: this object is read by CEF's native cefQuery, so
+				// Closure ADVANCED must not rename its properties.
 				window["cefQuery"]({
-					request : "clipboard_read",
-					persistent : false,
-					onSuccess : function(response) {
+					"request" : "clipboard_read",
+					"persistent" : false,
+					"onSuccess" : function(response) {
 						clearTimeout(timeoutId);
 						try
 						{
@@ -1059,7 +1061,7 @@
 							resolve(null);
 						}
 					},
-					onFailure : function() {
+					"onFailure" : function() {
 						clearTimeout(timeoutId);
 						resolve(null);
 					}
@@ -1133,7 +1135,10 @@
 		// fall back to the existing browser-clipboard-event based paste.
 		_dispatchPaste : function(e)
 		{
-			if (this._isNativeClipboardAvailable())
+			// Same early-out as _private_onpaste: when the editor doesn't have
+			// focus (comment box, search field, dialog inputs) leave the event
+			// alone so the default paste into that element still happens.
+			if (this._isNativeClipboardAvailable() && this.Api.asc_IsFocus(true))
 			{
 				e.preventDefault();
 				this.NativePaste();

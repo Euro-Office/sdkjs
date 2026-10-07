@@ -237,9 +237,6 @@ function CDrawingDocument()
 
     this.SetCursorType = function(sType, Data)
     {
-        if ("" === this.m_sLockedCursorType && Asc.editor && Asc.editor.wb) {
-            Asc.editor.wb._onUpdateCursor(sType);
-        }
     };
 
     this.LockCursorType    = function(sType)
