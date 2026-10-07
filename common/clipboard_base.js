@@ -535,6 +535,7 @@
 			{
 				document.oncopy           = function(e)
 				{
+					g_clipboardBase._nativeFieldCopy(e);
 					if (g_clipboardBase.isUseNewCopy()) {
 						if (g_clipboardBase.Api.asc_IsFocus(true) && !g_clipboardBase._isUseMobileNewCopy()) {
 							e.preventDefault();
@@ -546,6 +547,7 @@
 				};
 				document.oncut            = function(e)
 				{
+					g_clipboardBase._nativeFieldCopy(e);
 					if (g_clipboardBase.isUseNewCopy()) {
 						if (g_clipboardBase.Api.asc_IsFocus(true) && !g_clipboardBase._isUseMobileNewCopy()) {
 							e.preventDefault();
@@ -580,10 +582,12 @@
 			{
 				document.addEventListener("copy", function(e)
 				{
+					g_clipboardBase._nativeFieldCopy(e);
 					return g_clipboardBase._private_oncopy(e);
 				});
 				document.addEventListener("cut", function(e)
 				{
+					g_clipboardBase._nativeFieldCopy(e);
 					return g_clipboardBase._private_oncut(e);
 				});
 				document.addEventListener("paste", function(e)
@@ -1045,10 +1049,12 @@
 					resolve(null);
 				}, 2000);
 
+				// Quoted keys: this object is read by CEF's native cefQuery, so
+				// Closure ADVANCED must not rename its properties.
 				window["cefQuery"]({
-					request : "clipboard_read",
-					persistent : false,
-					onSuccess : function(response) {
+					"request" : "clipboard_read",
+					"persistent" : false,
+					"onSuccess" : function(response) {
 						clearTimeout(timeoutId);
 						try
 						{
@@ -1059,7 +1065,7 @@
 							resolve(null);
 						}
 					},
-					onFailure : function() {
+					"onFailure" : function() {
 						clearTimeout(timeoutId);
 						resolve(null);
 					}
@@ -1133,13 +1139,87 @@
 		// fall back to the existing browser-clipboard-event based paste.
 		_dispatchPaste : function(e)
 		{
+			// Same early-out as _private_onpaste: when the editor doesn't have
+			// focus (comment box, search field, dialog inputs) leave the event
+			// alone so the default paste into that element still happens.
 			if (this._isNativeClipboardAvailable())
 			{
-				e.preventDefault();
-				this.NativePaste();
-				return false;
+				if (this.Api.asc_IsFocus(true))
+				{
+					e.preventDefault();
+					this.NativePaste();
+					return false;
+				}
+				// A text field outside the document (comment box, search,
+				// dialog inputs). Chromium's own clipboard is empty here, so
+				// insert the native clipboard's plain text ourselves.
+				if (this._isEditableField(e.target))
+				{
+					e.preventDefault();
+					this._nativePasteIntoField(e.target);
+					return false;
+				}
 			}
 			return this._private_onpaste(e);
+		},
+		_isEditableField : function(el)
+		{
+			if (!el)
+				return false;
+			if (el.isContentEditable)
+				return !el.closest || !el.closest("[readonly]");
+			var tag = el.tagName ? el.tagName.toLowerCase() : "";
+			if (tag === "textarea")
+				return !el.readOnly && !el.disabled;
+			if (tag === "input")
+			{
+				var t = (el.type || "text").toLowerCase();
+				return !el.readOnly && !el.disabled &&
+					(t === "text" || t === "search" || t === "email" || t === "url" || t === "tel" || t === "password" || t === "number");
+			}
+			return false;
+		},
+
+		_nativePasteIntoField : function(el)
+		{
+			this._nativeClipboardRead().then(function(data) {
+				var text = data && data["text/plain"];
+				if (!text)
+					return;
+				if (document.activeElement !== el && el.focus)
+					el.focus();
+				// execCommand keeps the field's undo stack and fires "input",
+				// so web-apps sees the change like a normal paste.
+				if (!document.execCommand("insertText", false, text) && "value" in el)
+				{
+					var s0 = el.selectionStart, s1 = el.selectionEnd;
+					el.value = el.value.substring(0, s0) + text + el.value.substring(s1);
+					el.selectionStart = el.selectionEnd = s0 + text.length;
+					el.dispatchEvent(new Event("input", {bubbles : true}));
+				}
+			});
+		},
+
+		// Copy/cut from a text field outside the document: Chromium writes only
+		// to its own (Wayland-detached) clipboard, so mirror the selection to
+		// the native one. The default action still runs.
+		_nativeFieldCopy : function(e)
+		{
+			if (!this._isNativeClipboardAvailable() || this.Api.asc_IsFocus(true))
+				return;
+			var el = e.target, text = "";
+			if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA"))
+			{
+				if (el.type === "password")
+					return;
+				text = el.value.substring(el.selectionStart, el.selectionEnd);
+			}
+			else if (window.getSelection)
+			{
+				text = window.getSelection().toString();
+			}
+			if (text)
+				window["AscDesktopEditor"]["nativeClipboardWrite"](JSON.stringify({"text/plain" : text}));
 		},
 		// -------------------------------------------------------------------
 
