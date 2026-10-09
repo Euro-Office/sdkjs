@@ -4317,11 +4317,7 @@ function CThumbnailsManager(editorPage)
 
 		control.onmouseout = this.onMouseLeave;
 
-		control.onmousewheel = this.onMouseWhell;
-		if (control.addEventListener)
-		{
-			control.addEventListener("DOMMouseScroll", this.onMouseWhell, false);
-		}
+		control.addEventListener("wheel", this.onMouseWhell, false);
 	};
 
 	this.GetPageByPos = function(oPos)
@@ -6913,11 +6909,7 @@ function CNotesDrawer(page)
 		_elemOverlay.HtmlElement.onmousemove = this.onMouseMove;
 		_elemOverlay.HtmlElement.onmouseup = this.onMouseUp;
 
-		this.HtmlPage.m_oNotesContainer.HtmlElement.onmousewheel = this.onMouseWhell;
-		if (this.HtmlPage.m_oNotesContainer.HtmlElement.addEventListener)
-		{
-			this.HtmlPage.m_oNotesContainer.HtmlElement.addEventListener("DOMMouseScroll", this.onMouseWhell, false);
-		}
+		this.HtmlPage.m_oNotesContainer.HtmlElement.addEventListener("wheel", this.onMouseWhell, false);
 	};
 
 	// paint
@@ -7694,11 +7686,7 @@ function CAnimPaneListDrawer(page, htmlElement, parentDrawer)
 		if(oThis.parentDrawer)
 		{
 			var oHtmlElem = oThis.parentDrawer.GetHtmlElement();
-			oHtmlElem.onmousewheel = oThis.onMouseWhell;
-			if (oHtmlElem.addEventListener)
-			{
-				oHtmlElem.addEventListener("DOMMouseScroll", oThis.onMouseWhell, false);
-			}
+			oHtmlElem.addEventListener("wheel", oThis.onMouseWhell, false);
 		}
 	};
 

@@ -3140,9 +3140,7 @@ function CDemonstrationManager(htmlpage)
 
         this.wrapKeyboard();
 
-        this.Canvas.onmousewheel = this.onMouseWhell;
-        if (this.Canvas.addEventListener)
-            this.Canvas.addEventListener("DOMMouseScroll", this.onMouseWhell, false);
+        this.Canvas.addEventListener("wheel", this.onMouseWhell, false);
 
         this.DemonstrationDiv.appendChild(this.Canvas);
         this.IsPlayMode = true;
@@ -3193,9 +3191,7 @@ function CDemonstrationManager(htmlpage)
                 AscCommon.addMouseEvent(this.DivEndPresentation, "down", oThis.onMouseDown);
                 AscCommon.addMouseEvent(this.DivEndPresentation, "up", oThis.onMouseUp);
 
-                oThis.DivEndPresentation.onmousewheel = oThis.onMouseWhell;
-                if (oThis.DivEndPresentation.addEventListener)
-                    oThis.DivEndPresentation.addEventListener("DOMMouseScroll", oThis.onMouseWhell, false);
+                oThis.DivEndPresentation.addEventListener("wheel", oThis.onMouseWhell, false);
 
                 oThis.DemonstrationDiv.appendChild(oThis.DivEndPresentation);
             }
@@ -3386,9 +3382,7 @@ function CDemonstrationManager(htmlpage)
             AscCommon.addMouseEvent(oThis.Overlay, "up", oThis.onMouseUp);
 			oThis.Overlay.onmouseleave = oThis.onMouseLeave;
 
-            oThis.Overlay.onmousewheel = oThis.onMouseWhell;
-            if (oThis.Overlay.addEventListener)
-                oThis.Overlay.addEventListener("DOMMouseScroll", oThis.onMouseWhell, false);
+            oThis.Overlay.addEventListener("wheel", oThis.onMouseWhell, false);
 
             this.DemonstrationDiv.appendChild(oThis.Overlay);
         }
