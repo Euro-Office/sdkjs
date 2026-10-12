@@ -158,6 +158,16 @@
 					this.spTree[i].getAllDocContents(aDocContents);
 			}
 		};
+		CGroupShape.prototype.GetAllTables = function (oProps, arrTables) {
+			if (!arrTables)
+				arrTables = [];
+
+			for (let i = 0; i < this.spTree.length; ++i) {
+				if (this.spTree[i].GetAllTables)
+					this.spTree[i].GetAllTables(oProps, arrTables);
+			}
+			return arrTables;
+		};
 		CGroupShape.prototype.checkRunContent = function (fCallback) {
 			let aGraphics = this.getArrGraphicObjects();
 			for (let nIdx = 0; nIdx < aGraphics.length; ++nIdx) {
