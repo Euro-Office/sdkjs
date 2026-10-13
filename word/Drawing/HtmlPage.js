@@ -3362,16 +3362,20 @@ function CEditorPage(api)
 			this.SetCurrentPage();
 		}
 
-		// отправляем евент о текущей странице. только в мобильной версии
-		if ((this.m_oApi.isMobileVersion || this.m_oApi.isViewMode) && (!window["NATIVE_EDITOR_ENJINE"]))
+		if (!window["NATIVE_EDITOR_ENJINE"])
 		{
 			var lPage = this.m_oApi.GetCurrentVisiblePage();
-			this.m_oApi.sendEvent("asc_onCurrentVisiblePage", this.m_oApi.GetCurrentVisiblePage());
-
-			if (null != this.m_oDrawingDocument.m_oDocumentRenderer)
+			if (lPage >= 0 && lPage !== this._lastVisiblePage)
 			{
-				this.m_oDrawingDocument.m_lCurrentPage = lPage;
-				this.m_oApi.sendEvent("asc_onCurrentPage", lPage);
+				this._lastVisiblePage = lPage;
+				this.m_oApi.sendEvent("asc_onCurrentVisiblePage", lPage);
+
+				if ((this.m_oApi.isMobileVersion || this.m_oApi.isViewMode)
+					&& null != this.m_oDrawingDocument.m_oDocumentRenderer)
+				{
+					this.m_oDrawingDocument.m_lCurrentPage = lPage;
+					this.m_oApi.sendEvent("asc_onCurrentPage", lPage);
+				}
 			}
 		}
 
