@@ -98,12 +98,34 @@
 			var rgb = parseInt(_color.split('#')[1], 16);
 			return new CColor((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
 		};
-		this.updateStyle = function () {
+		this.updateStyle = function (isContentDarkMode) {
 			this.header.style = this._generateStyle();
 			this.header.groupDataBorder = this.getCColor(AscCommon.GlobalSkin.GroupDataBorder);
 			this.header.editorBorder = this.getCColor(AscCommon.GlobalSkin.EditorBorder);
 			this.header.cornerColor = this.getCColor(AscCommon.GlobalSkin.SelectAllIcon);
 			this.header.cornerColorSheetView = this.getCColor(AscCommon.GlobalSkin.SheetViewSelectAllIcon);
+			
+			// Cell background/grid follow the "Dark Document" (content) theme, not the
+			// interface theme's GlobalSkin. The two are independent: light UI with a dark
+			// document, and vice versa, must both be possible.
+			var cellSkin = AscCommon.EditorSkins[isContentDarkMode ? "theme-dark" : "theme-light"];
+			this.cells.defaultState.background = this.getCColor(cellSkin.CellBackground);
+			this.cells.defaultState.border = this.getCColor(cellSkin.CellGrid);
+			// col/row resize border pattern must be regenerated for the new theme's color
+			this.ptrnLineDotted1 = this._generateLineDottedPattern(cellSkin.ColOrRowResizeBorderColor);
+		};
+
+		// builds the 2x2 dotted-pattern canvas used by ptrnLineDotted1
+		this._generateLineDottedPattern = function (color) {
+			let cnv = document.createElement("canvas");
+			cnv.width = 2;
+			cnv.height = 2;
+			let ctx = cnv.getContext("2d");
+			ctx.clearRect(0, 0, 2, 2);
+			ctx.fillStyle = color;
+			ctx.fillRect(0, 0, 1, 1);
+			ctx.fillRect(1, 1, 1, 1);
+			return ctx.createPattern(cnv, "repeat");
 		};
 		this._generateStyle = function () {
 			return [// Header colors
@@ -147,9 +169,21 @@
 			printColor: new CColor(0, 0, 0)
 		};
 		this.cells = {
+			// note, below defaultState.background colors values are for placeholder only -- WorkbookView's own constructor unconditionally overwrites both
+			// values via this.updateDarkMode() -> updateStyle() before it returns, in light mode
+			// same as dark, from EditorSkins (content theme), not GlobalSkin (interface theme,
+			// a different, independent axis)
 			defaultState: {
 				background: new CColor(255, 255, 255), border: new CColor(202, 202, 202)
-			}, padding: -1 /*px horizontal padding*/
+			},
+			// Print and print-preview must always render the light theme, regardless of whatever
+			// content dark mode is currently active on screen (dark mode is a screen-editing
+			// affordance, not a document property) - fixed, never updated by updateStyle().
+			printState: {
+				background: this.getCColor(AscCommon.EditorSkins["theme-light"].CellBackground),
+				border: this.getCColor(AscCommon.EditorSkins["theme-light"].CellGrid)
+			},
+			padding: -1 /*px horizontal padding*/
 		};
 		this.activeCellBorderColor = new CColor(72, 121, 92);
 		this.activeCellBorderColor2 = new CColor(255, 255, 255, 1);
@@ -161,15 +195,8 @@
 		// Число знаков для математической информации
 		this.mathMaxDigCount = 9;
 
-		var cnv = document.createElement("canvas");
-		cnv.width = 2;
-		cnv.height = 2;
-		var ctx = cnv.getContext("2d");
-		ctx.clearRect(0, 0, 2, 2);
-		ctx.fillStyle = "#000";
-		ctx.fillRect(0, 0, 1, 1);
-		ctx.fillRect(1, 1, 1, 1);
-		this.ptrnLineDotted1 = ctx.createPattern(cnv, "repeat");
+		// externalise canvas-based col/rows resize border creation AND color
+		this.ptrnLineDotted1 = this._generateLineDottedPattern(AscCommon.EditorSkins["theme-light"].ColOrRowResizeBorderColor);
 
 		this.halfSelection = false;
 
@@ -335,6 +362,13 @@
 	this.externalReferenceUpdateTimer = null;
 
 	this.isPartialReading = null;
+
+	// buffers/cellEditor already exist at this point (created inside _init() above), so
+	// routing through updateDarkMode here keeps the DrawingContext instances used for the
+	// very first paint in sync with the mode the document actually loads in, rather than
+	// only picking it up on the next explicit dark-mode toggle
+	this.isDarkMode = !!(Api && Api.isDarkMode);
+	this.updateDarkMode(this.isDarkMode);
 
 	return this;
   }
@@ -4119,7 +4153,8 @@
 		}
 
 		printPreviewContext.clear();
-		printPreviewContext.setFillStyle( this.defaults.worksheetView.cells.defaultState.background )
+		// Always the light theme here - print preview must not inherit content dark mode.
+		printPreviewContext.setFillStyle( this.defaults.worksheetView.cells.printState.background )
 			.fillRect( 0, 0, printPreviewContext.getWidth(), printPreviewContext.getHeight() );
 
 		var ws;
@@ -5290,7 +5325,41 @@
 	};
 
 	WorkbookView.prototype.updateSkin = function () {
-		this.defaults.worksheetView.updateStyle();
+		this.defaults.worksheetView.updateStyle(this.isDarkMode);
+	};
+
+	// Every DrawingContext owned by this WorkbookView: the main/overlay buffers and the
+	// cell editor's own contexts. Used by updateDarkMode to keep them all in sync.
+	WorkbookView.prototype._getOwnedDrawingContexts = function () {
+		var contexts = [];
+		if (this.buffers.main) {
+			contexts.push(this.buffers.main);
+		}
+		if (this.buffers.overlay) {
+			contexts.push(this.buffers.overlay);
+		}
+		if (this.cellEditor) {
+			if (this.cellEditor.drawingCtx) {
+				contexts.push(this.cellEditor.drawingCtx);
+			}
+			if (this.cellEditor.overlayCtx) {
+				contexts.push(this.cellEditor.overlayCtx);
+			}
+		}
+		return contexts;
+	};
+
+	WorkbookView.prototype.updateDarkMode = function (isDarkMode) {		
+		this.isDarkMode = isDarkMode;
+		this.defaults.worksheetView.updateStyle(isDarkMode);
+		this._getOwnedDrawingContexts().forEach(function (drawingCtx) {
+			drawingCtx.isDarkMode = isDarkMode;
+		});
+		this.wsViews.forEach(function (ws) {
+			if (ws) {
+				ws._cleanCellsTextMetricsCache();
+			}
+		});
 	};
 
 	WorkbookView.prototype.executeWithCurrentTopLeftCell = function (runFunction) {
