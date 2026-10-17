@@ -1099,9 +1099,9 @@
 
 					global_mouseEvent.Sender = _t.canvasForms;
 
-					_t.parent.onmousewheel = _t.onMouseWhell;
-					if (_t.parent.addEventListener)
-						_t.parent.addEventListener("DOMMouseScroll", _t.onMouseWhell, false);
+					// Use the standard "wheel" event: web-apps registers a "wheel" listener on this same
+					// element, and Chromium then never dispatches the legacy "mousewheel" event to it.
+					_t.parent.addEventListener("wheel", _t.onMouseWhell, { passive : false });
 
 					_t.startTimer();
 				}
@@ -2275,7 +2275,27 @@
 				isAllowHorizontal : oThis.isVisibleHorScroll,
 				isUseMaximumDelta : true
 			});
-			
+
+			// browsers without the legacy wheelDelta* properties on WheelEvent
+			if (0 === values.x && 0 === values.y && undefined === e.wheelDelta)
+			{
+				let nScale = 1;
+				if (e.deltaMode === 1) // lines
+					nScale = 15;
+				else if (e.deltaMode === 2) // pages
+					nScale = oThis.height;
+				else // pixels
+					nScale = 45 / 100;
+
+				values.y = (e.deltaY * nScale) >> 0;
+				values.x = oThis.isVisibleHorScroll ? (e.deltaX * nScale) >> 0 : 0;
+
+				if (Math.abs(values.y) >= Math.abs(values.x))
+					values.x = 0;
+				else
+					values.y = 0;
+			}
+
 			let oField = oThis.getPageFieldByMouse();
 			let isFieldScrollable = oField && [AscPDF.FIELD_TYPES.listbox, AscPDF.FIELD_TYPES.text].includes(oField.GetType());
 			let scrollField = false;
