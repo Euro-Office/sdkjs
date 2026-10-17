@@ -4533,6 +4533,10 @@ CSparklineView.prototype.setMinMaxValAx = function(minVal, maxVal, oSparklineGro
                     objectInfo.hyperlink = graphicObjectInfo.hyperlink;
                     objectInfo.macro = graphicObjectInfo.macro;
                     objectInfo.tooltip = graphicObjectInfo.tooltip;
+                    var go = objectInfo.object.graphicObject;
+                    if (go && go.formControlPr && go.formControlPr.objectType === 1 /*checkBox*/) {
+                        objectInfo.isCheckbox = true;
+                    }
                 }
             }
         }

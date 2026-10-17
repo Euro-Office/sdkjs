@@ -1720,6 +1720,15 @@
 				}
 			}
 
+			if (2 === button) {
+				console.log("RC_DBG", "targetInfo:", t.targetInfo && t.targetInfo.target, "isCheckbox:", t.targetInfo && t.targetInfo.isCheckbox, "graphicsInfo:", !!graphicsInfo, "gi.isCheckbox:", graphicsInfo && graphicsInfo.isCheckbox);
+			}
+			if (2 === button && ((t.targetInfo && t.targetInfo.target === c_oTargetType.FilterObject && t.targetInfo.isCheckbox) || (graphicsInfo && graphicsInfo.isCheckbox))) {
+				this.handlers.trigger("changeSelectionRightClick", coord.x, coord.y, c_oTargetType.FilterObject);
+				this.handlers.trigger("onContextMenu", event);
+				return;
+			}
+
 			// do not work with drawings in selection dialog mode
 			if (!this.getSelectionDialogMode()) {
 				if (asc["editor"].isStartAddShape || asc["editor"].isInkDrawerOn() || graphicsInfo) {
