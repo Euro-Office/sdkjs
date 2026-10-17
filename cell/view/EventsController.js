@@ -1250,6 +1250,10 @@
 							oThis.handlers.trigger("selectRowsByRange");
 							nRetValue = keydownresult_PreventAll;
 						}
+						if (!bIsSelectColumns && !bIsSelect && oThis.canEdit() &&
+							oThis.handlers.trigger("toggleActiveCellCheckbox")) {
+							nRetValue = keydownresult_PreventAll;
+						}
 						break;
 					case 33: // PageUp
 						nDeltaRow = -0.5;
@@ -1716,6 +1720,15 @@
 				}
 			}
 
+			if (2 === button) {
+				console.log("RC_DBG", "targetInfo:", t.targetInfo && t.targetInfo.target, "isCheckbox:", t.targetInfo && t.targetInfo.isCheckbox, "graphicsInfo:", !!graphicsInfo, "gi.isCheckbox:", graphicsInfo && graphicsInfo.isCheckbox);
+			}
+			if (2 === button && ((t.targetInfo && t.targetInfo.target === c_oTargetType.FilterObject && t.targetInfo.isCheckbox) || (graphicsInfo && graphicsInfo.isCheckbox))) {
+				this.handlers.trigger("changeSelectionRightClick", coord.x, coord.y, c_oTargetType.FilterObject);
+				this.handlers.trigger("onContextMenu", event);
+				return;
+			}
+
 			// do not work with drawings in selection dialog mode
 			if (!this.getSelectionDialogMode()) {
 				if (asc["editor"].isStartAddShape || asc["editor"].isInkDrawerOn() || graphicsInfo) {
@@ -1796,7 +1809,9 @@
 						return;
 					} else if (t.targetInfo.target === c_oTargetType.FilterObject) {
 						if (0 === button) {
-							if (t.targetInfo.isDataValidation) {
+							if (t.targetInfo.isCheckbox) {
+								this.handlers.trigger("checkboxClick", t.targetInfo.col, t.targetInfo.row);
+							} else if (t.targetInfo.isDataValidation) {
 								this.handlers.trigger('onDataValidation');
 							} else if (t.targetInfo.idPivot) {
 								this.handlers.trigger("pivotFiltersClick", t.targetInfo.idPivot);
