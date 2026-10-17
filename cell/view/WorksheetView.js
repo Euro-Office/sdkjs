@@ -16654,6 +16654,24 @@ function isAllowPasteLink(pastedWb) {
 							}
 						}
 						break;
+					case "removeCheckbox":
+						range.setCheckbox(false);
+						// Clear boolean values left by the checkbox so cells don't show TRUE/FALSE
+						var removeR2 = range.bbox.r2, removeC2 = range.bbox.c2;
+						if (isLargeRange) {
+							removeR2 = Math.min(removeR2, t.model.getRowsCount() - 1);
+							removeC2 = Math.min(removeC2, t.model.getColsCount() - 1);
+						}
+						for (var removeRow = range.bbox.r1; removeRow <= removeR2; ++removeRow) {
+							for (var removeCol = range.bbox.c1; removeCol <= removeC2; ++removeCol) {
+								t.model._getCell(removeRow, removeCol, function (removeCell) {
+									if (CellValueType.Bool === removeCell.getType() && !removeCell.isFormula()) {
+										removeCell.setValue("");
+									}
+								});
+							}
+						}
+						break;
                     case "rh":
                         range.removeHyperlink(null, true);
                         break;
