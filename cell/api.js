@@ -6564,9 +6564,24 @@ var editor;
     if (this.collaborativeEditing.getGlobalLock() || !this.canEdit()) {
       return;
     }
-    this.wb.getWorksheet().setSelectionInfo("checkbox", true);
+    var cellInfo = this.asc_getCellInfo();
+    var hasCheckbox = cellInfo && cellInfo.asc_getCheckbox && cellInfo.asc_getCheckbox();
+    if (hasCheckbox) {
+      this.wb.getWorksheet().setSelectionInfo("removeCheckbox", true);
+    } else {
+      this.wb.getWorksheet().setSelectionInfo("checkbox", true);
+    }
     this.wb.restoreFocus();
   };
+
+  spreadsheet_api.prototype.asc_removeCheckbox = function () {
+    if (this.collaborativeEditing.getGlobalLock() || !this.canEdit()) {
+      return;
+    }
+    this.wb.getWorksheet().setSelectionInfo("removeCheckbox", true);
+    this.wb.restoreFocus();
+  };
+
 
 	spreadsheet_api.prototype.asc_checkProtectedRange = function () {
 		var ws = this.wbModel.getActiveWs();
@@ -10406,6 +10421,7 @@ var editor;
   prot["asc_setCellFontSize"] = prot.asc_setCellFontSize;
   prot["asc_setCellBold"] = prot.asc_setCellBold;
   prot["asc_insertCheckbox"] = prot.asc_insertCheckbox;
+  prot["asc_removeCheckbox"] = prot.asc_removeCheckbox;
   prot["asc_setCellItalic"] = prot.asc_setCellItalic;
   prot["asc_setCellUnderline"] = prot.asc_setCellUnderline;
   prot["asc_setCellStrikeout"] = prot.asc_setCellStrikeout;
