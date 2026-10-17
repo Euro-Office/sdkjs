@@ -1720,6 +1720,7 @@
 				}
 			}
 
+
 			// do not work with drawings in selection dialog mode
 			if (!this.getSelectionDialogMode()) {
 				if (asc["editor"].isStartAddShape || asc["editor"].isInkDrawerOn() || graphicsInfo) {
@@ -1813,10 +1814,12 @@
 							} else {
 								this.handlers.trigger("autoFiltersClick", t.targetInfo.idFilter);
 							}
+							event.preventDefault && event.preventDefault();
+							event.stopPropagation && event.stopPropagation();
+							return;
 						}
-						event.preventDefault && event.preventDefault();
-						event.stopPropagation && event.stopPropagation();
-						return;
+						// Right-click on FilterObject (checkbox, filter): fall through
+						// to the normal right-click path so the context menu opens.
 					} else if (t.targetInfo.commentIndexes) {
 						t._commentCellClick(event);
 					} else if (t.targetInfo.target === c_oTargetType.MoveResizeRange && this.canEdit()) {
