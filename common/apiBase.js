@@ -2002,6 +2002,10 @@
 				t.aiPluginSettings = JSON.stringify(data);
 			}
 		};
+		this.CoAuthoringApi.onAllowLocalNetworkAccess = function(isAllowed)
+		{
+			t.allowLocalNetworkAccess = (true === isAllowed);
+		};
 		this.CoAuthoringApi.onMiscEvent = function(data)
 		{
 			if (data['type'] === 'updateVersion')
@@ -5761,6 +5765,11 @@
 	baseEditorsApi.prototype["asc_getUserColorById"] = function(id)
 	{
 		return AscCommon.getUserColorById(id, null, false, true);
+	};
+
+	baseEditorsApi.prototype["asc_isLocalNetworkAccessAllowed"] = function()
+	{
+		return true === this.allowLocalNetworkAccess;
 	};
 
 	baseEditorsApi.prototype.asc_openDocumentFromBytes = function(data)
