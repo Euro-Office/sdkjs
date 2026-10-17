@@ -4840,6 +4840,9 @@ var g_oFontProperties = {
     CellXfs.prototype.getCheckbox = function () {
         return this.checkbox;
     };
+    CellXfs.prototype.asc_getCheckbox = function () {
+        return !!this.checkbox;
+    };
     CellXfs.prototype.setCheckbox = function (val) {
         this.checkbox = val;
     };
@@ -22146,6 +22149,7 @@ function RangeDataManagerElem(bbox, data)
 	prot["asc_getPreview"] = prot.asc_getPreview;
 	prot["asc_getLocked"] = prot.asc_getLocked;
 	prot["asc_getHidden"] = prot.asc_getHidden;
+	prot["asc_getCheckbox"] = function() { return !!this.checkbox; };
 	prot["asc_setFillColor"] = prot.asc_setFillColor;
 	prot["asc_setFill"] = prot.asc_setFill;
 	prot["asc_setFontName"] = prot.asc_setFontName;

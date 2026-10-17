@@ -13798,6 +13798,7 @@ function isAllowPasteLink(pastedWb) {
 
         var cell_info = new asc_CCellInfo();
         cell_info.xfs = c.getXfs(false).clone();
+        cell_info.checkbox = this._isCheckboxCell(c);
 
 		AscCommonExcel.g_ActiveCell = new Asc.Range(c1, r1, c1, r1);
         cell_info.text = c.getValueForEdit(true);
