@@ -493,6 +493,61 @@ $(function () {
 		assert.strictEqual(trackManager.IsAllChecked(), true, "Nothing is queued for the track changes check");
 	});
 
+	QUnit.test("Several footnotes or endnotes", function (assert)
+	{
+		function AddTwoNotes(isEndnote)
+		{
+			AscTest.ClearDocument();
+			let p1 = CreateParagraphWithText("Body one");
+			let p2 = CreateParagraphWithText("Body two");
+			logicDocument.AddToContent(0, p1);
+			logicDocument.AddToContent(1, p2);
+
+			let notes = [[p1, "alpha beta"], [p2, "gamma delta epsilon"]].map(function(item)
+			{
+				logicDocument.SetDocPosType(docpostype_Content);
+				AscTest.MoveCursorToParagraph(item[0], false);
+				let note = isEndnote ? logicDocument.AddEndnote() : logicDocument.AddFootnote();
+				AscTest.AddTextToParagraph(note.GetElement(0), item[1]);
+				return note;
+			});
+			AscTest.Recalculate();
+			return notes;
+		}
+
+		let isDocumentEditor = editor.isDocumentEditor;
+		editor.isDocumentEditor = true;
+
+		try
+		{
+			AddTwoNotes(false);
+			logicDocument.SetDocPosType(docpostype_Footnotes);
+			logicDocument.Footnotes.SelectAll(1);
+			assert.strictEqual(logicDocument.GetSelectionStatistics().WordsCount, 5, "Two footnotes");
+
+			// The endnotes controller has no SelectAll, so select from the first endnote to the second one directly
+			let endnotes = AddTwoNotes(true);
+			let selection = logicDocument.Endnotes.Selection;
+			logicDocument.SetDocPosType(docpostype_Endnotes);
+			selection.Use              = true;
+			selection.Direction        = 1;
+			selection.Start.Endnote    = endnotes[0];
+			selection.End.Endnote      = endnotes[1];
+			selection.Endnotes         = {};
+			endnotes.forEach(function(endnote)
+			{
+				selection.Endnotes[endnote.GetId()] = endnote;
+				endnote.SelectAll(1);
+			});
+			assert.strictEqual(logicDocument.GetSelectionStatistics().WordsCount, 5, "Two endnotes");
+		}
+		finally
+		{
+			logicDocument.SetDocPosType(docpostype_Content);
+			editor.isDocumentEditor = isDocumentEditor;
+		}
+	});
+
 	QUnit.test("Pages spanned by the selection", function (assert)
 	{
 		AscTest.ClearDocument();
