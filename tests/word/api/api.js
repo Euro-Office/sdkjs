@@ -465,6 +465,34 @@ $(function () {
 		CheckStatistics(assert, total, "Select all");
 	});
 
+	QUnit.test("List number counts only when the paragraph start is selected", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p = CreateParagraphWithText("Numbered item");
+		logicDocument.AddToContent(0, p);
+		AscTest.SelectParagraph(p);
+		AscTest.AddNumbering(1, 1);
+
+		AscTest.SelectParagraphRange(p, 0, 8);
+		assert.strictEqual(logicDocument.GetSelectionStatistics().WordsCount, 2, "From the start: number and one word");
+
+		AscTest.SelectParagraphRange(p, 9, 13);
+		assert.strictEqual(logicDocument.GetSelectionStatistics().WordsCount, 1, "From the middle: one word");
+	});
+
+	QUnit.test("Selection statistics leave the track changes queue empty", function (assert)
+	{
+		AscTest.ClearDocument();
+		logicDocument.AddToContent(0, CreateParagraphWithText("Hello world"));
+		logicDocument.AddToContent(1, CreateParagraphWithText("Second paragraph"));
+		let trackManager = logicDocument.GetTrackRevisionsManager();
+		trackManager.ContinueTrackRevisions(true);
+		logicDocument.SelectAll();
+
+		logicDocument.GetSelectionStatistics();
+		assert.strictEqual(trackManager.IsAllChecked(), true, "Nothing is queued for the track changes check");
+	});
+
 	QUnit.test("Pages spanned by the selection", function (assert)
 	{
 		AscTest.ClearDocument();
