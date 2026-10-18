@@ -17608,12 +17608,39 @@ CDocument.prototype.GetSelectionStatistics = function()
 	if (!this.IsSelectionUse() || this.IsSelectionEmpty())
 		return null;
 
-	let stats           = new CStatistics(this);
-	let selectedContent = this.GetSelectedContent(false);
-	for (let i = 0, count = selectedContent.Elements.length; i < count; ++i)
+	let docContent = this.Controller.GetCurrentTopDocContent();
+	if (!docContent)
+		return null;
+
+	// Count the selected runs in place. A GetSelectedContent copy is slow on large selections and queues each
+	// copied paragraph for the track changes check.
+	let stats     = new CStatistics(this);
+	let paragraph = null;
+	let paraStats = null;
+	function endParagraph()
 	{
-		selectedContent.Elements[i].Element.CollectDocumentStatistics(stats);
+		if (paraStats && false === paraStats.EmptyParagraph)
+			stats.Add_Paragraph();
 	}
+	docContent.CheckSelectedRunContent(function(run, startPos, endPos)
+	{
+		let runParagraph = run.GetParagraph();
+		if (runParagraph !== paragraph)
+		{
+			endParagraph();
+			paragraph = runParagraph;
+			paraStats = new CParagraphStatistics(stats);
+
+			// The list number counts only when the selection includes the start of the paragraph
+			if (paragraph.GetNumPr() && paragraph.IsSelectionFromStart())
+				paragraph.CollectNumberingStatistics(paraStats);
+		}
+
+		// Equations are not counted, as in ParaMath.CollectDocumentStatistics
+		if (!run.IsMathRun())
+			run.CollectDocumentStatistics(paraStats, startPos, endPos);
+	});
+	endParagraph();
 
 	// Pages spanned by the selection; a header or footer repeats on every page, so it has no page count
 	let bounds = docpostype_HdrFtr !== this.GetDocPosType() ? this.GetSelectionBounds() : null;
