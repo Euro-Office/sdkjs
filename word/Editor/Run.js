@@ -3035,10 +3035,15 @@ ParaRun.prototype.GetPrevRunElements = function(oRunElements, isUseContentPos, n
 	}
 };
 
-ParaRun.prototype.CollectDocumentStatistics = function(ParaStats)
+/**
+ * @param {CParagraphStatistics} ParaStats
+ * @param {number} [nStartPos=0] first element to count
+ * @param {number} [nEndPos=this.Content.length] element after the last one to count
+ */
+ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEndPos)
 {
-	var Count = this.Content.length;
-	for (var Index = 0; Index < Count; Index++)
+	var Count = undefined !== nEndPos ? nEndPos : this.Content.length;
+	for (var Index = undefined !== nStartPos ? nStartPos : 0; Index < Count; Index++)
 	{
 		var Item     = this.Content[Index];
 		var ItemType = Item.Type;

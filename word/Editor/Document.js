@@ -271,18 +271,19 @@ CStatistics.prototype.Check_Stop = function()
 		this.Api.sync_GetDocInfoEndCallback();
 	}
 };
-CStatistics.prototype.Send = function()
+CStatistics.prototype.GetInfo = function()
 {
-	var Stats =
-	{
+	return {
 		PageCount      : this.Pages,
 		WordsCount     : this.Words,
 		ParagraphCount : this.Paragraphs,
 		SymbolsCount   : this.SymbolsWOSpaces,
 		SymbolsWSCount : this.SymbolsWhSpaces
 	};
-
-	this.Api.sync_DocInfoCallback(Stats);
+};
+CStatistics.prototype.Send = function()
+{
+	this.Api.sync_DocInfoCallback(this.GetInfo());
 };
 CStatistics.prototype.Add_Paragraph = function (Count)
 {
@@ -17596,6 +17597,59 @@ CDocument.prototype.Statistics_GetPagesInfo = function()
 CDocument.prototype.Statistics_Stop = function()
 {
 	this.Statistics.Stop();
+};
+/**
+ * Counts pages, words, paragraphs and symbols in the current selection with the same rules as the document total.
+ * Returns null when nothing is selected.
+ * @returns {?{PageCount: number, WordsCount: number, ParagraphCount: number, SymbolsCount: number, SymbolsWSCount: number}}
+ */
+CDocument.prototype.GetSelectionStatistics = function()
+{
+	if (!this.IsSelectionUse() || this.IsSelectionEmpty())
+		return null;
+
+	let docContents = this.Controller.GetSelectedTopDocContents();
+	if (!docContents.length)
+		return null;
+
+	// Count the selected runs in place. A GetSelectedContent copy is slow on large selections and queues each
+	// copied paragraph for the track changes check.
+	let stats     = new CStatistics(this);
+	let paragraph = null;
+	let paraStats = null;
+	function endParagraph()
+	{
+		if (paraStats && false === paraStats.EmptyParagraph)
+			stats.Add_Paragraph();
+	}
+	function countRun(run, startPos, endPos)
+	{
+		let runParagraph = run.GetParagraph();
+		if (runParagraph !== paragraph)
+		{
+			endParagraph();
+			paragraph = runParagraph;
+			paraStats = new CParagraphStatistics(stats);
+
+			// The list number counts only when the selection includes the start of the paragraph
+			if (paragraph.GetNumPr() && paragraph.IsSelectionFromStart())
+				paragraph.CollectNumberingStatistics(paraStats);
+		}
+
+		// Equations are not counted, as in ParaMath.CollectDocumentStatistics
+		if (!run.IsMathRun())
+			run.CollectDocumentStatistics(paraStats, startPos, endPos);
+	}
+	for (let i = 0; i < docContents.length; ++i)
+	{
+		docContents[i].CheckSelectedRunContent(countRun);
+	}
+	endParagraph();
+
+	// Pages spanned by the selection; a header or footer repeats on every page, so it has no page count
+	let bounds = docpostype_HdrFtr !== this.GetDocPosType() ? this.GetSelectionBounds() : null;
+	stats.Update_Pages(bounds && bounds.Start && bounds.End ? bounds.End.Page - bounds.Start.Page + 1 : -1);
+	return stats.GetInfo();
 };
 //----------------------------------------------------------------------------------------------------------------------
 // Функции для работы с MailMerge
