@@ -3495,6 +3495,18 @@ CEndnotesController.prototype.GetCurrentTopDocContent = function()
 	
 	return this.LogicDocument;
 };
+CEndnotesController.prototype.GetSelectedTopDocContents = function()
+{
+	if (!this.Selection.Use)
+		return CDocumentControllerBase.prototype.GetSelectedTopDocContents.call(this);
+
+	let endnotes = [];
+	for (let id in this.Selection.Endnotes)
+	{
+		endnotes.push(this.Selection.Endnotes[id]);
+	}
+	return endnotes;
+};
 
 /**
  * Класс регистрирующий концевые сноски на странице

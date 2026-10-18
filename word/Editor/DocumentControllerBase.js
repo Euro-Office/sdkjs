@@ -851,3 +851,12 @@ CDocumentControllerBase.prototype.CollectSelectedReviewChanges = function(oTrack
  * @returns {?CDocumentContent}
  */
 CDocumentControllerBase.prototype.GetCurrentTopDocContent = function(){return null;};
+/**
+ * Returns the top-level contents the selection covers. Several footnotes or endnotes can be selected at once.
+ * @returns {CDocumentContent[]}
+ */
+CDocumentControllerBase.prototype.GetSelectedTopDocContents = function()
+{
+	let docContent = this.GetCurrentTopDocContent();
+	return docContent ? [docContent] : [];
+};
