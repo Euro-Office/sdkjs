@@ -5333,7 +5333,7 @@ CDocument.prototype.Draw                                     = function(nPageInd
     // Определим секцию
     var SectPr = this.Pages[nPageIndex].GetFirstSectPr();
 
-	this.Background.draw(pGraphics, SectPr, this.GetTheme(), this.GetColorMap());
+	this.Background.draw(pGraphics, SectPr, this.GetTheme(), this.GetColorMap(), nPageIndex);
 
 	// Рисуем границы вокруг страницы (если границы надо рисовать под текстом)
 	if (section_borders_ZOrderBack === SectPr.Get_Borders_ZOrder())
@@ -5628,6 +5628,7 @@ CDocument.prototype.setBackgroundColor = function(color, unifill)
 {
 	let oldValue = this.Background.copy();
 	let newValue = new AscWord.DocumentBackground(color, unifill, null);
+	newValue.firstPageOnly = this.Background.firstPageOnly;
 
 	AscCommon.History.Add(new CChangesDocumentPageColor(this, oldValue, newValue));
 	this.Background = newValue;
