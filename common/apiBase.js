@@ -413,12 +413,12 @@
 		// disable mousewheel on macOS
 		if (AscCommon.AscBrowser.isMacOs)
 		{
-			document.body.addEventListener("wheel", function(e) {
+			document.body.onmousewheel = function(e) {
 				if (e.stopPropagation)
 					e.stopPropagation();
 				e.returnValue = false;
 				return false;
-			}, false);
+			};
 		}
 
 		this.initBroadcastChannel();
