@@ -1100,8 +1100,8 @@
 					global_mouseEvent.Sender = _t.canvasForms;
 
 					// 'wheel', not legacy 'mousewheel': web-apps listens for 'wheel' on this same element,
-					// and Chromium then no longer dispatches 'mousewheel' to it
-					_t.parent.addEventListener("wheel", _t.onMouseWhell, { passive: false });
+					// and Chromium and Safari then no longer dispatch 'mousewheel' to it
+					_t.parent.addEventListener("wheel", _t.onMouseWhell, false);
 
 					_t.startTimer();
 				}
