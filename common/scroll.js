@@ -505,7 +505,7 @@ CArrowDrawer.prototype.InitSize = function ( sizeW, sizeH )
         AscCommon.addMouseEvent(this.canvas, "up", this.evt_mouseup);
         AscCommon.addMouseEvent(this.canvas, "over", this.evt_mouseover);
         AscCommon.addMouseEvent(this.canvas, "out", this.evt_mouseout);
-        this.canvas.onmousewheel = this.evt_mousewheel;
+        this.canvas.addEventListener("wheel", this.evt_mousewheel, false);
 
 		var _that = this;
 		this.canvas.ontouchstart = function ( e ) {
@@ -520,10 +520,6 @@ CArrowDrawer.prototype.InitSize = function ( sizeW, sizeH )
 			_that.evt_mouseup( e.changedTouches[0] );
 			return false;
 		};
-
-		if ( this.canvas.addEventListener ){
-			this.canvas.addEventListener( 'DOMMouseScroll', this.evt_mousewheel, false );
-		}
 
 		this.context.fillStyle = this.settings.scrollBackgroundColor;
 		this.context.fillRect(0,0,this.canvasW,this.canvasH);
