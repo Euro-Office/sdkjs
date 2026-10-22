@@ -6721,5 +6721,195 @@ $(function () {
 		assert.strictEqual(g_cCalcRecursion.nRelativeError, 0.00001, 'API: UpdateCalcSettings. CalcRecursion check: "nRelativeError" is "0.00001"');
 	});
 
+	QUnit.test('Area listeners index', function (assert) {
+		const sheetId = ws.getId();
+		const isValid = function (elem) {
+			if (elem.count === 1) {
+				for (let id in elem.listeners) {
+					return elem.listeners[id].isTable !== 1;
+				}
+			}
+			return true;
+		};
+		// The linear search that DependencyGraph.findAreaListeners replaces
+		const findLinear = function (container, col, row) {
+			for (let key in container.areaMap) {
+				let elem = container.areaMap[key];
+				if (elem.bbox.contains(col, row) && isValid(elem)) {
+					return elem;
+				}
+			}
+		};
+		const countMismatches = function (graph, container, maxCol, maxRow) {
+			let mismatches = 0;
+			for (let col = 0; col <= maxCol; ++col) {
+				for (let row = 0; row <= maxRow; ++row) {
+					if (findLinear(container, col, row) !== graph.findAreaListeners(container, col, row, isValid)) {
+						++mismatches;
+					}
+				}
+			}
+			return mismatches;
+		};
+
+		// Random areas against the linear search
+		let graph = new AscCommonExcel.DependencyGraph(wb);
+		let seed = 12345;
+		const rnd = function (n) {
+			seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+			return seed % n;
+		};
+		const randomBbox = function () {
+			let r1 = rnd(20000), c1 = rnd(200);
+			switch (rnd(5)) {
+				case 0: // small
+					return new Asc.Range(c1, r1, c1 + rnd(5), r1 + rnd(30));
+				case 1: // tall and narrow, more row blocks than the index buckets
+					return new Asc.Range(c1, r1, c1 + rnd(3), r1 + 5000 + rnd(50000));
+				case 2: // whole column
+					return new Asc.Range(c1, 0, c1, AscCommon.gc_nMaxRow0);
+				case 3: // tall and wide, kept in the plain list
+					return new Asc.Range(c1, r1, c1 + 2000, r1 + 5000 + rnd(1000));
+				default: // wide and short
+					return new Asc.Range(c1, r1, c1 + rnd(1500), r1 + rnd(3));
+			}
+		};
+		let nextId = 0;
+		let added = [];
+		const addListener = function () {
+			let id = nextId++;
+			let listener = {
+				bbox: randomBbox(), isTable: rnd(4) === 0 ? 1 : 0, getListenerId: function () {
+					return id;
+				}, notify: function () {
+				}
+			};
+			graph.startListeningRange(sheetId, listener.bbox, listener);
+			added.push(listener);
+		};
+		const checkRandomCells = function (label) {
+			let container = graph.sheetListeners[sheetId];
+			let mismatches = 0;
+			for (let i = 0; i < 1000; ++i) {
+				let col = rnd(2300), row = rnd(80000);
+				if (findLinear(container, col, row) !== graph.findAreaListeners(container, col, row, isValid)) {
+					++mismatches;
+				}
+			}
+			assert.strictEqual(mismatches, 0, label);
+		};
+		for (let i = 0; i < 300; ++i) {
+			addListener();
+		}
+		checkRandomCells('Area listeners index: random areas');
+		for (let i = 0; i < 100; ++i) {
+			let listener = added.splice(rnd(added.length), 1)[0];
+			graph.endListeningRange(sheetId, listener.bbox, listener);
+		}
+		assert.strictEqual(graph.sheetListeners[sheetId].areaIndex, null, 'Area listeners index: invalidated by endListeningRange');
+		checkRandomCells('Area listeners index: after removing areas');
+		for (let i = 0; i < 100; ++i) {
+			addListener();
+		}
+		assert.strictEqual(graph.sheetListeners[sheetId].areaIndex, null, 'Area listeners index: invalidated by startListeningRange');
+		checkRandomCells('Area listeners index: after adding areas');
+
+		// The area registered first wins
+		let graph2 = new AscCommonExcel.DependencyGraph(wb);
+		const listenTo = function (id, bbox) {
+			graph2.startListeningRange(sheetId, bbox, {
+				getListenerId: function () {
+					return id;
+				}, notify: function () {
+				}
+			});
+		};
+		listenTo(1, new Asc.Range(55, 150, 56, 160));
+		listenTo(2, new Asc.Range(50, 100, 60, 200));
+		let container2 = graph2.sheetListeners[sheetId];
+		assert.strictEqual(graph2.findAreaListeners(container2, 55, 155, isValid).bbox.getName(), 'BD151:BE161', 'Area listeners index: first registered area wins');
+		assert.strictEqual(graph2.findAreaListeners(container2, 52, 155, isValid).bbox.getName(), 'AY101:BI201', 'Area listeners index: only the other area matches');
+		assert.strictEqual(graph2.findAreaListeners(container2, 70, 155, isValid), undefined, 'Area listeners index: no area matches');
+
+		// Insert and delete rows and columns of a real sheet
+		const container = wb.dependencyFormulas.sheetListeners[ws.Id];
+		for (let i = 1; i <= 10; ++i) {
+			ws.getRange2("AZ" + (7000 + i)).setValue(String(i));
+		}
+		ws.getRange2("BA7001").setValue("=SUM(AZ7001:AZ7010)");
+		ws.getRange2("BA7002").setValue('=SUM(AZ7001:AZ7010)+INDIRECT("AZ7001")');
+		ws.getRange2("BB7001").setValue("=SUM(AZ7003:BA7005)");
+		ws.getRange2("BB7002").setValue("=SUM(AZ:AZ)");
+		const check = function (label) {
+			assert.strictEqual(countMismatches(wb.dependencyFormulas, container, 60, 7030), 0, 'Area listeners index: ' + label);
+		};
+		check('initial');
+		ws.insertRowsBefore(7002, 2);
+		assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7012)", 'Area listeners index: insert rows shifts the area');
+		check('insert rows');
+		ws.removeRows(7002, 7003, false);
+		assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7010)", 'Area listeners index: delete rows shifts the area');
+		check('delete rows');
+		ws.insertColsBefore(51, 2);
+		assert.strictEqual(ws.getRange2("BC7001").getFormula(), "SUM(BB7001:BB7010)", 'Area listeners index: insert columns shifts the area');
+		check('insert columns');
+		ws.removeCols(51, 52);
+		assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7010)", 'Area listeners index: delete columns shifts the area back');
+		check('delete columns');
+
+		// A cycle that is only reachable through the area listeners of a volatile formula is still found:
+		// BC7020 listens to the area BC7021:BC7023, and BC7022 inside that area refers back to BC7020.
+		const g_cCalcRecursion = AscCommonExcel.g_cCalcRecursion;
+		const wasEnabled = g_cCalcRecursion.getIsEnabledRecursion();
+		const prevMaxIterations = g_cCalcRecursion.getMaxIterations();
+		// The list of cycle cells is cleared when the calculation ends, so the cells are recorded while it runs
+		let reportedCycleCells = [];
+		const origAddCycleCell = g_cCalcRecursion.addCycleCell;
+		g_cCalcRecursion.addCycleCell = function (cell) {
+			reportedCycleCells.push(new Asc.Range(cell.nCol, cell.nRow, cell.nCol, cell.nRow).getName());
+			return origAddCycleCell.apply(this, arguments);
+		};
+		const cycleCellNames = function () {
+			let res = reportedCycleCells.filter(function (name, i, arr) {
+				return arr.indexOf(name) === i;
+			}).sort();
+			reportedCycleCells = [];
+			return res;
+		};
+		const setCycle = function () {
+			ws.getRange2("BC7022").setValue('=BC7020+INDIRECT("AZ7001")');
+			ws.getRange2("BC7020").setValue('=SUM(BC7021:BC7023)+INDIRECT("AZ7001")');
+		};
+		const clearCycle = function () {
+			ws.getRange2("BC7020").setValue("");
+			ws.getRange2("BC7022").setValue("");
+		};
+		g_cCalcRecursion.setIsEnabledRecursion(false);
+		setCycle();
+		const cycleCells = cycleCellNames();
+		assert.ok(cycleCells.indexOf("BC7020") !== -1 || cycleCells.indexOf("BC7022") !== -1,
+			'Area listeners index: cycle through an area is reported without iterative calculation: ' + cycleCells.join());
+		assert.strictEqual(ws.getRange2("BC7020").getValue(), "0", 'Area listeners index: cycle cell BC7020 is 0 without iterative calculation');
+		clearCycle();
+
+		// No cycle: the same volatile formulas without the reference back
+		ws.getRange2("BC7022").setValue('=AZ7002+INDIRECT("AZ7001")');
+		ws.getRange2("BC7020").setValue('=SUM(BC7021:BC7023)+INDIRECT("AZ7001")');
+		assert.deepEqual(cycleCellNames(), [], 'Area listeners index: no cycle is reported for volatile formulas without a cycle');
+		assert.strictEqual(ws.getRange2("BC7020").getValue(), "4", 'Area listeners index: volatile formulas without a cycle are calculated');
+		clearCycle();
+
+		// With iterative calculation the cycle is calculated by iterations
+		g_cCalcRecursion.setIsEnabledRecursion(true);
+		g_cCalcRecursion.setMaxIterations(10);
+		setCycle();
+		assert.deepEqual(cycleCellNames(), [], 'Area listeners index: cycle cells are not reported with iterative calculation');
+		assert.notStrictEqual(ws.getRange2("BC7020").getValue(), "0", 'Area listeners index: cycle is calculated by iterations. BC7020 = ' + ws.getRange2("BC7020").getValue());
+		clearCycle();
+		g_cCalcRecursion.setMaxIterations(prevMaxIterations);
+		g_cCalcRecursion.setIsEnabledRecursion(wasEnabled);
+		g_cCalcRecursion.addCycleCell = origAddCycleCell;
+	});
+
 	wb.dependencyFormulas.unlockRecal();
 });

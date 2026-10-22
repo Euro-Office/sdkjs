@@ -585,10 +585,16 @@
 		return res;
 	}
 
+	// Area listeners are indexed in blocks of rows (or, for tall areas, columns), see DependencyGraph._buildAreaIndex
+	var AREA_INDEX_ROW_SHIFT = 6;
+	var AREA_INDEX_COL_SHIFT = 4;
+	var AREA_INDEX_MAX_BLOCKS = 64;
+
 	function DependencyGraph(wb) {
 		this.wb = wb;
 		//listening
 		this.sheetListeners = {};
+		this.areaSeq = 0;
 		this.volatileListeners = {};
 		this.defNameListeners = {};
 		this.tempGetByCells = [];
@@ -627,7 +633,7 @@
 			var listenerId = listener.getListenerId();
 			var sheetContainer = this.sheetListeners[sheetId];
 			if (!sheetContainer) {
-				sheetContainer = {cellMap: {}, areaMap: {}, defName3d: {}, rangesTopFrom: null, rangesTopTo: null, rangesBottomFrom: null, rangesBottomTo: null, cells: null };
+				sheetContainer = {cellMap: {}, areaMap: {}, defName3d: {}, rangesTopFrom: null, rangesTopTo: null, rangesBottomFrom: null, rangesBottomTo: null, cells: null, areaIndex: null };
 				this.sheetListeners[sheetId] = sheetContainer;
 			}
 			if (bbox.isOneCell()) {
@@ -648,11 +654,12 @@
 				if (!areaSheetElem) {
 					//todo clone inside or outside startListeningRange?
 					bbox = bbox.clone();
-					areaSheetElem = {index: 0, bbox: bbox, count: 0, listeners: {}, isActive: true};
+					areaSheetElem = {index: 0, bbox: bbox, count: 0, listeners: {}, isActive: true, seq: this.areaSeq++};
 					if (true) {
 						areaSheetElem.sharedBroadcast = {changedBBox: null, prevChangedBBox: null, recursion: 0};
 					}
 					sheetContainer.areaMap[vertexIndex] = areaSheetElem;
+					sheetContainer.areaIndex = null;
 					sheetContainer.rangesTopFrom = null;
 					sheetContainer.rangesTopTo = null;
 					sheetContainer.rangesBottomFrom = null;
@@ -688,6 +695,7 @@
 							areaSheetElem.count--;
 							if (areaSheetElem.count <= 0) {
 								delete sheetContainer.areaMap[vertexIndex];
+								sheetContainer.areaIndex = null;
 								sheetContainer.rangesTopFrom = null;
 								sheetContainer.rangesTopTo = null;
 								sheetContainer.rangesBottomFrom = null;
@@ -697,6 +705,73 @@
 					}
 				}
 			}
+		},
+		/**
+		 * Builds a spatial index of the area listeners of a sheet. Each area is put into the buckets of the row blocks
+		 * it covers; areas that are too tall go into the buckets of the column blocks instead, and areas that are both
+		 * too tall and too wide go into a plain list.
+		 * @param sheetContainer
+		 * @returns {{rows: object, cols: object, rest: Array}}
+		 * @private
+		 */
+		_buildAreaIndex: function(sheetContainer) {
+			var index = {rows: {}, cols: {}, rest: []};
+			for (var key in sheetContainer.areaMap) {
+				var elem = sheetContainer.areaMap[key];
+				var bbox = elem.bbox;
+				var buckets, from, to;
+				var r1 = bbox.r1 >> AREA_INDEX_ROW_SHIFT, r2 = bbox.r2 >> AREA_INDEX_ROW_SHIFT;
+				var c1 = bbox.c1 >> AREA_INDEX_COL_SHIFT, c2 = bbox.c2 >> AREA_INDEX_COL_SHIFT;
+				if (r2 - r1 < AREA_INDEX_MAX_BLOCKS) {
+					buckets = index.rows;
+					from = r1;
+					to = r2;
+				} else if (c2 - c1 < AREA_INDEX_MAX_BLOCKS) {
+					buckets = index.cols;
+					from = c1;
+					to = c2;
+				} else {
+					index.rest.push(elem);
+					continue;
+				}
+				for (var i = from; i <= to; i++) {
+					var bucket = buckets[i];
+					if (bucket) {
+						bucket.push(elem);
+					} else {
+						buckets[i] = [elem];
+					}
+				}
+			}
+			sheetContainer.areaIndex = index;
+			return index;
+		},
+		/**
+		 * Returns the area listeners element that was registered first among the ones that contain the cell and are
+		 * accepted by fIsValid. It is the same element that a linear search over areaMap would return.
+		 * @param sheetContainer
+		 * @param {number} nCol
+		 * @param {number} nRow
+		 * @param {function(object): boolean} fIsValid
+		 * @returns {object|undefined}
+		 */
+		findAreaListeners: function(sheetContainer, nCol, nRow, fIsValid) {
+			var index = sheetContainer.areaIndex || this._buildAreaIndex(sheetContainer);
+			var res;
+			var lists = [index.rows[nRow >> AREA_INDEX_ROW_SHIFT], index.cols[nCol >> AREA_INDEX_COL_SHIFT], index.rest];
+			for (var i = 0; i < lists.length; i++) {
+				var list = lists[i];
+				if (!list) {
+					continue;
+				}
+				for (var j = 0; j < list.length; j++) {
+					var elem = list[j];
+					if ((!res || elem.seq < res.seq) && elem.bbox.contains(nCol, nRow) && fIsValid(elem)) {
+						res = elem;
+					}
+				}
+			}
+			return res;
 		},
 		startListeningVolatile: function(listener) {
 			var listenerId = listener.getListenerId();
@@ -743,7 +818,7 @@
 			if(opt_sheetId){
 				var sheetContainer = this.sheetListeners[opt_sheetId];
 				if (!sheetContainer) {
-					sheetContainer = {cellMap: {}, areaMap: {}, defName3d: {}, rangesTopFrom: null, rangesTopTo: null, rangesBottomFrom: null, rangesBottomTo: null, cells: null };
+					sheetContainer = {cellMap: {}, areaMap: {}, defName3d: {}, rangesTopFrom: null, rangesTopTo: null, rangesBottomFrom: null, rangesBottomTo: null, cells: null, areaIndex: null };
 					this.sheetListeners[opt_sheetId] = sheetContainer;
 				}
 				sheetContainer.defName3d[listenerId] = listener;
@@ -16445,6 +16520,20 @@
 		return false;
 	}
 	/**
+	 * Checks that "areaMap" is not listened to only by a table
+	 * @param {object} oAreaMap
+	 * @returns {boolean}
+	 * @private
+	 */
+	function _isValidAreaListeners(oAreaMap) {
+		if (oAreaMap.count === 1) {
+			for (let sListenerId in oAreaMap.listeners) {
+				return oAreaMap.listeners[sListenerId].isTable !== 1;
+			}
+		}
+		return true;
+	}
+	/**
 	 * Method returns listeners of cell
 	 * @memberOf Cell
 	 * @returns {object}
@@ -16469,17 +16558,9 @@
 		if (oSheetListeners.cellMap.hasOwnProperty(nCellIndex) && !_isExcludeFormula(aOutStack, sFunctionName)) {
 			return oSheetListeners.cellMap[nCellIndex];
 		} else if (aOutStack && aOutStack.length && sFunctionName) {
-			for (let nIndex in oSheetListeners.areaMap) {
-				const oAreaMap = oSheetListeners.areaMap[nIndex];
-				let bInvalidListener = false;
-				if (oAreaMap.count === 1) {
-					const sListenerId = Object.getOwnPropertyNames(oAreaMap.listeners)[0];
-					const oListener = oAreaMap.listeners[sListenerId];
-					bInvalidListener = oListener.isTable === 1;
-				}
-				if (oAreaMap.bbox.contains(this.nCol, this.nRow) && !bInvalidListener) {
-					return _areaMapIsExcludeFormula(aOutStack, oAreaMap) ? null : oAreaMap;
-				}
+			const oAreaMap = oDepFormulas.findAreaListeners(oSheetListeners, this.nCol, this.nRow, _isValidAreaListeners);
+			if (oAreaMap) {
+				return _areaMapIsExcludeFormula(aOutStack, oAreaMap) ? null : oAreaMap;
 			}
 		}
 	};
