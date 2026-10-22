@@ -5063,8 +5063,9 @@
 
 						// PowerPoint saves up to 20% line spacing reduction with any font scale
 						// (e.g. fontScale="77500" lnSpcReduction="20000"). Search the font scale with
-						// that maximum applied, then use the smallest reduction that still fits,
-						// so a box from PowerPoint does not shrink further than the file had it.
+						// that maximum applied, also trying the saved font scale, then use the smallest
+						// reduction that still fits, so a box from PowerPoint does not shrink further
+						// than the file had it.
 						var dReductionScale = 0.2;
 						var nMaxLnSpcReduction = 20000;
 						var oShape = this;
@@ -5098,13 +5099,22 @@
 							}
 						}
 						var nFontScale = aScales[nFitIndex];
+						if (AscFormat.isRealNumber(oTextFit.fontScale) && oTextFit.fontScale > nFontScale
+							&& fFits(oTextFit.fontScale, nMaxLnSpcReduction)) {
+							nFontScale = oTextFit.fontScale;
+						}
+						var nLnSpcReduction;
 						if (nFontScale < 90000 && this.isPlaceholder()) {
 							var nType = this.getPlaceholderType();
 							if (nType === AscFormat.phType_title || nType === AscFormat.phType_ctrTitle) {
 								nFontScale = 90000;
+								nLnSpcReduction = dReductionScale * (100000 - nFontScale) >> 0;
 							}
 						}
-						this.tmpLnSpcReduction = fGetLnSpcReduction(nFontScale);
+						if (nLnSpcReduction === undefined) {
+							nLnSpcReduction = fGetLnSpcReduction(nFontScale);
+						}
+						this.tmpLnSpcReduction = nLnSpcReduction;
 						this.tmpFontScale = nFontScale;
 
 						if (oBodyPr.textFit.lnSpcReduction !== this.tmpLnSpcReduction
