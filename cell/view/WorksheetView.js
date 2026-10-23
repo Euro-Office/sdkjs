@@ -6773,8 +6773,22 @@ function isAllowPasteLink(pastedWb) {
 
 		var textH = ct.metrics.height * this.getZoom();
 		var side = Math.max(5, Math.min(Asc.round(textH * 0.7), h - 2));
-		var bx = this._calcTextHorizPos(x1ct, x2ct, {width: side}, ct.cellHA, true);
-		var by = this._calcTextVertPos(y1, h, bl, ct.metrics, ct.cellVA) + Asc.round((textH - side) / 2);
+		var bx;
+		if (AscCommon.align_Center === ct.cellHA || AscCommon.align_Distributed === ct.cellHA) {
+			// x2ct is the right gridline, so the cell interior is x1ct..x2ct-1;
+			// _calcTextHorizPos counts the gridline and ends up 1px to the right.
+			bx = x1ct + Math.floor((x2ct - x1ct - side) / 2);
+		} else {
+			bx = this._calcTextHorizPos(x1ct, x2ct, {width: side}, ct.cellHA, true);
+		}
+		var by;
+		if (Asc.c_oAscVAlign.Top === ct.cellVA) {
+			by = this._calcTextVertPos(y1, h, bl, ct.metrics, ct.cellVA) + Asc.round((textH - side) / 2);
+		} else {
+			// Bottom is the default vertical alignment, so a checkbox would sit on the
+			// bottom edge of any taller row; center it in the cell instead.
+			by = y1 + Asc.round((h - gridlineSize - side) / 2);
+		}
 
 		return {x: bx, y: by, side: side};
 	};
@@ -6801,10 +6815,14 @@ function isAllowPasteLink(pastedWb) {
 			this._lineTo(ctx, rect.x + 0.78 * rect.side, rect.y + 0.3 * rect.side);
 			ctx.stroke();
 		} else {
-			ctx.beginPath();
-			ctx.setLineWidth(lineW);
-			ctx.setStrokeStyle(this.settings.cells.defaultState.border);
-			this._strokeRect(ctx, rect.x + 0.5, rect.y + 0.5, rect.side - 1, rect.side - 1);
+			// Draw the border as four filled bars inside the box so it covers exactly
+			// the same pixels as the checked state; a stroked rect is shifted by the
+			// half-pixel alignment in DrawingContext.strokeRect.
+			ctx.setFillStyle(this.settings.cells.defaultState.border);
+			this._fillRect(ctx, rect.x, rect.y, rect.side, lineW);
+			this._fillRect(ctx, rect.x, rect.y + rect.side - lineW, rect.side, lineW);
+			this._fillRect(ctx, rect.x, rect.y, lineW, rect.side);
+			this._fillRect(ctx, rect.x + rect.side - lineW, rect.y, lineW, rect.side);
 		}
 	};
 
@@ -16656,22 +16674,9 @@ function isAllowPasteLink(pastedWb) {
 						}
 						break;
 					case "removeCheckbox":
+						// Only the checkbox format is removed; the TRUE/FALSE value stays
+						// in the cell, like Excel's "Clear Formats".
 						range.setCheckbox(false);
-						// Clear boolean values left by the checkbox so cells don't show TRUE/FALSE
-						var removeR2 = range.bbox.r2, removeC2 = range.bbox.c2;
-						if (isLargeRange) {
-							removeR2 = Math.min(removeR2, t.model.getRowsCount() - 1);
-							removeC2 = Math.min(removeC2, t.model.getColsCount() - 1);
-						}
-						for (var removeRow = range.bbox.r1; removeRow <= removeR2; ++removeRow) {
-							for (var removeCol = range.bbox.c1; removeCol <= removeC2; ++removeCol) {
-								t.model._getCell(removeRow, removeCol, function (removeCell) {
-									if (CellValueType.Bool === removeCell.getType() && !removeCell.isFormula()) {
-										removeCell.setValue("");
-									}
-								});
-							}
-						}
 						break;
                     case "rh":
                         range.removeHyperlink(null, true);
