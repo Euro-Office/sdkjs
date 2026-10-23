@@ -5100,7 +5100,7 @@
 						}
 						var nFontScale = aScales[nFitIndex];
 						if (AscFormat.isRealNumber(oTextFit.fontScale) && oTextFit.fontScale > nFontScale
-							&& fFits(oTextFit.fontScale, nMaxLnSpcReduction)) {
+							&& oTextFit.fontScale < aScales[nFitIndex + 1] && fFits(oTextFit.fontScale, nMaxLnSpcReduction)) {
 							nFontScale = oTextFit.fontScale;
 						}
 						var nLnSpcReduction;
