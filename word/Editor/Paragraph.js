@@ -11230,22 +11230,12 @@ Paragraph.prototype.Internal_CompiledParaPrPresentation = function(Lvl, bNoMerge
 		Pr.TextPr.Merge(TableStyle.TextPr);
 	}
 	Pr.ParaPr.StyleTabs = ( Pr.ParaPr.Tabs ? Pr.ParaPr.Tabs.Copy() : new CParaTabs() );
-	let LnSpcReduction = Pr.ParaPr.LnSpcReduction;
 
 	if(!(bNoMergeDefault === true))
 	{
 		Pr.ParaPr.Merge(this.Pr);
 		if (this.Pr.DefaultRunPr)
 			Pr.TextPr.Merge(this.Pr.DefaultRunPr);
-	}
-	// Reduce after the paragraph's own spacing is merged, otherwise a direct lnSpc ignores normAutofit
-	if(LnSpcReduction !== undefined && LnSpcReduction !== null)
-	{
-		let Spacing = Pr.ParaPr.Spacing;
-		if(Spacing.LineRule === Asc.linerule_Auto)
-		{
-			Spacing.Line = Spacing.Line - LnSpcReduction;
-		}
 	}
 	Pr.TextPr.Color.Auto = false;
 	
