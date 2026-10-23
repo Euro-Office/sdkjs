@@ -2982,7 +2982,13 @@ CParaLineMetrics.prototype =
         {
             case Asc.linerule_Auto:
             {
-                LineGap = ( TextAscent + TextDescent ) * ( ParaPr.Spacing.Line - 1 );
+                // normAutofit line spacing reduction is applied here, so it stays out of the calculated
+                // paragraph properties that the interface shows and Format Painter copies
+                var Line = ParaPr.Spacing.Line;
+                if ( undefined !== ParaPr.LnSpcReduction && null !== ParaPr.LnSpcReduction )
+                    Line -= ParaPr.LnSpcReduction;
+
+                LineGap = ( TextAscent + TextDescent ) * ( Line - 1 );
                 break;
             }
             case Asc.linerule_Exact:
