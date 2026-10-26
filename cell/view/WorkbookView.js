@@ -374,6 +374,7 @@
     this.overlayGraphicCtx = this.buffers.overlayGraphic;
 
     this.shapeCtx = new AscCommon.CGraphics();
+    this.shapeCtx.pictureFilter = this.Api.pictureDisplayFilter || "";
     this.shapeOverlayCtx = new AscCommon.CGraphics();
     this.mainGraphics = new AscCommon.CGraphics();
     this.trackOverlay = new AscCommon.COverlay();

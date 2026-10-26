@@ -1764,6 +1764,7 @@ CShapeDrawer.prototype =
 		if (!isImageLoaded) return;
 
 		graphics.save();
+		graphics.applyPictureFilter();
 		graphics.clip();
 
 		const isTile = AscCommon.isRealObject(this.UniFill.fill.tile);

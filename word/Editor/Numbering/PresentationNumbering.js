@@ -530,7 +530,15 @@ CPresentationBullet.prototype.Draw = function(X, Y, Context, PDSE)
 		var x_height = this.m_oTextPr.FontSize * kHeightImageBullet;
 		var adaptImageHeight = x_height;
 		var adaptImageWidth = sizes.width * adaptImageHeight / (sizes.height ? sizes.height : 1);
+		var isFiltered = !!Context.pictureFilter;
+		if (isFiltered)
+		{
+			Context.save();
+			Context.applyPictureFilter();
+		}
 		Context.drawImage(this.m_sSrc, X, Y - adaptImageHeight, adaptImageWidth, adaptImageHeight);
+		if (isFiltered)
+			Context.restore();
 		return;
 	}
 

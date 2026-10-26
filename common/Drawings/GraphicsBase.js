@@ -882,6 +882,11 @@
 		return img.isVectorImage;
 	};
 
+	// Sets the filter for the pictures drawn next; the matching restore() undoes it
+	CGraphicsBase.prototype.applyPictureFilter = function()
+	{
+	};
+
 	CGraphicsBase.prototype.drawImage2 = function(img,x,y,w,h,alpha,srcRect)
 	{
 	};

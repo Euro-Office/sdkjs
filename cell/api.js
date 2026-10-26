@@ -74,6 +74,7 @@ var editor;
 
     this.fontRenderingMode = Asc.c_oAscFontRenderingModeType.hintingAndSubpixeling;
     this.wb = null;
+    this.pictureDisplayFilter = "";
     this.wbModel = null;
     this.tmpLCID = null;
     this.tmpDecimalSeparator = null;
@@ -3221,6 +3222,36 @@ var editor;
         ws.objectRender.showDrawingObjects();
       }
     }
+  };
+
+  /**
+   * Sets a CSS filter (a canvas context filter value, e.g. "invert(1)") that the pictures of the drawing objects
+   * are drawn with on screen. An empty string turns it off. Document data, print and export are not affected.
+   * @param {string} filter
+   * @returns {boolean} false if the browser does not support canvas context filters or rejects the value
+   * (the current filter is kept)
+   */
+  spreadsheet_api.prototype.asc_setPictureDisplayFilter = function(filter) {
+    var ctx = document.createElement("canvas").getContext("2d");
+    if (!("filter" in ctx)) {
+      return false;
+    }
+    filter = (filter && filter !== "none") ? filter : "";
+    if (filter) {
+      // A rejected value leaves the context filter at its default "none"
+      ctx.filter = filter;
+      if (ctx.filter === "none") {
+        return false;
+      }
+    }
+    if (this.pictureDisplayFilter !== filter) {
+      this.pictureDisplayFilter = filter;
+      if (this.wb) {
+        this.wb.shapeCtx.pictureFilter = filter;
+        this._onShowDrawingObjects();
+      }
+    }
+    return true;
   };
 
   spreadsheet_api.prototype._onShowComments = function() {
@@ -10303,6 +10334,7 @@ var editor;
   // Drawing objects interface
 
   prot["asc_showDrawingObjects"] = prot.asc_showDrawingObjects;
+  prot["asc_setPictureDisplayFilter"] = prot.asc_setPictureDisplayFilter;
   prot["asc_drawingObjectsExist"] = prot.asc_drawingObjectsExist;
   prot["asc_getFrameChartSettings"] = prot.asc_getFrameChartSettings;
   prot["asc_addChartDrawingObject"] = prot.asc_addChartDrawingObject;
