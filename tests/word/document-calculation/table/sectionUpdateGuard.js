@@ -29,6 +29,23 @@ $(function ()
 		return count;
 	}
 	
+	function countSectionUpdates(f)
+	{
+		let sections = logicDocument.GetSections();
+		let removes  = 0;
+		let adds     = countCalls(sections, "UpdateOnAdd", function()
+		{
+			removes = countCalls(sections, "UpdateOnRemove", f);
+		});
+		return adds + removes;
+	}
+	
+	function fillAndEmpty(content)
+	{
+		content.AddToContent(1, AscTest.CreateParagraph());
+		content.RemoveFromContent(1, 1);
+	}
+	
 	QUnit.module("Section updates on content changes");
 	
 	QUnit.test("Adding to or removing from table cell content doesn't scan the table rows", function (assert)
@@ -68,19 +85,59 @@ $(function ()
 	{
 		AscTest.ClearDocument();
 		let content = new AscWord.CDocumentContent(logicDocument, logicDocument.GetDrawingDocument(), 0, 0, 0, 0, true, false, false);
-		content.AddToContent(0, AscTest.CreateParagraph());
-		content.RemoveFromContent(0, 1);
+		let updates = countSectionUpdates(function()
+		{
+			content.AddToContent(0, AscTest.CreateParagraph());
+			content.RemoveFromContent(0, 1);
+		});
 		assert.strictEqual(content.GetElementsCount(), 1, "Paragraph added to and removed from detached content");
+		assert.strictEqual(updates, 0, "Sections not updated for detached content");
 	});
 
 	QUnit.test("Content of a block-level content control without a parent can be filled", function (assert)
 	{
 		// A content control created from a remote change has no parent until it is added to the document
 		AscTest.ClearDocument();
-		let sdt = new AscWord.CBlockLevelSdt();
-		sdt.Content.LogicDocument = logicDocument;
-		sdt.Content.AddToContent(0, AscTest.CreateParagraph());
-		sdt.Content.RemoveFromContent(0, 1);
+		let sdt = new AscWord.CBlockLevelSdt(logicDocument);
+		let updates = countSectionUpdates(function()
+		{
+			sdt.Content.AddToContent(0, AscTest.CreateParagraph());
+			sdt.Content.RemoveFromContent(0, 1);
+		});
 		assert.strictEqual(sdt.Content.GetElementsCount(), 1, "Paragraph added to and removed from the content control");
+		assert.strictEqual(updates, 0, "Sections not updated for a content control without a parent");
+	});
+	
+	QUnit.test("Content of a block-level content control in the document body still updates sections", function (assert)
+	{
+		AscTest.ClearDocument();
+		let sdt = new AscWord.CBlockLevelSdt(logicDocument);
+		logicDocument.PushToContent(sdt);
+		let updates = countSectionUpdates(function()
+		{
+			fillAndEmpty(sdt.Content);
+		});
+		assert.strictEqual(updates, 2, "Sections updated once on add and once on remove");
+	});
+	
+	QUnit.test("Content of a block-level content control in a table cell doesn't update sections or scan the table rows", function (assert)
+	{
+		AscTest.ClearDocument();
+		let table = AscTest.CreateTable(50, 2);
+		logicDocument.PushToContent(table);
+		let sdt = new AscWord.CBlockLevelSdt(logicDocument);
+		table.GetRow(49).GetCell(1).GetContent().AddToContent(0, sdt);
+		
+		let updates = 0;
+		let scans   = countCalls(AscWord.CTable.prototype, "IsUseInDocument", function()
+		{
+			updates = countSectionUpdates(function()
+			{
+				fillAndEmpty(sdt.Content);
+			});
+		});
+		assert.strictEqual(sdt.Content.GetElementsCount(), 1, "Paragraph added to and removed from the content control");
+		assert.strictEqual(updates, 0, "Sections not updated for a content control in a cell");
+		assert.strictEqual(scans, 0, "CTable.IsUseInDocument is not called for a content control in a cell");
 	});
 });
