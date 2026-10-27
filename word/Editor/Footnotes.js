@@ -3569,6 +3569,18 @@ CFootnotesController.prototype.GetCurrentTopDocContent = function()
 	
 	return this.LogicDocument;
 };
+CFootnotesController.prototype.GetSelectedTopDocContents = function()
+{
+	if (!this.Selection.Use)
+		return CDocumentControllerBase.prototype.GetSelectedTopDocContents.call(this);
+
+	let footnotes = [];
+	for (let id in this.Selection.Footnotes)
+	{
+		footnotes.push(this.Selection.Footnotes[id]);
+	}
+	return footnotes;
+};
 
 function CFootEndnotePageColumn()
 {
