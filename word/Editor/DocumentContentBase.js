@@ -3043,10 +3043,12 @@ CDocumentContentBase.prototype.IsAllowSectionBreak = function()
 CDocumentContentBase.prototype.UpdateSectionsAfterAdd = function(items)
 {
 	let logicDocument = this.GetLogicDocument();
+	// IsTableCellContent() goes first: for cell content IsUseInDocument() scans every row of the parent table,
+	// which made filling a large table (e.g. pasting a big HTML table) quadratic
 	if (!logicDocument
 		|| !logicDocument.IsDocumentEditor()
-		|| !this.IsUseInDocument()
 		|| this.IsTableCellContent()
+		|| !this.IsUseInDocument()
 		|| this.GetTopDocumentContent() !== logicDocument)
 		return;
 	
@@ -3062,8 +3064,8 @@ CDocumentContentBase.prototype.UpdateSectionsBeforeRemove = function(items, chec
 	let logicDocument = this.GetLogicDocument();
 	if (!logicDocument
 		|| !logicDocument.IsDocumentEditor()
-		|| !this.IsUseInDocument()
 		|| this.IsTableCellContent()
+		|| !this.IsUseInDocument()
 		|| this.GetTopDocumentContent() !== logicDocument)
 		return;
 	
