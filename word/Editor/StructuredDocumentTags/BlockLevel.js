@@ -1241,7 +1241,7 @@ CBlockLevelSdt.prototype.Is_TopDocument = function(bReturnTopDocument)
 };
 CBlockLevelSdt.prototype.IsCell = function(isReturnCell)
 {
-	return this.Parent.IsTableCellContent(isReturnCell);
+	return this.Parent ? this.Parent.IsTableCellContent(isReturnCell) : (isReturnCell ? null : false);
 };
 CBlockLevelSdt.prototype.Is_DrawingShape = function(bRetShape)
 {
