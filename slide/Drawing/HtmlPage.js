@@ -1885,14 +1885,12 @@
 
 		document.getElementById('id_target_cursor').style.pointerEvents = "none";
 
-		this.m_oMainContent.HtmlElement.onmousewheel = this.onMouseWhell;
-		if (this.m_oMainContent.HtmlElement.addEventListener)
-			this.m_oMainContent.HtmlElement.addEventListener("DOMMouseScroll", this.onMouseWhell, false);
+		this.m_oMainContent.HtmlElement.addEventListener("wheel", this.onMouseWhell, false);
 
-		this.m_oBody.HtmlElement.onmousewheel = function (e) {
+		this.m_oBody.HtmlElement.addEventListener("wheel", function (e) {
 			e.preventDefault();
 			return false;
-		};
+		}, false);
 
 		AscCommon.addMouseEvent(this.m_oTopRuler_horRuler.HtmlElement, "down", this.horRulerMouseDown);
 		AscCommon.addMouseEvent(this.m_oTopRuler_horRuler.HtmlElement, "move", this.horRulerMouseMove);

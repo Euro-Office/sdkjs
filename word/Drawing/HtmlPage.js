@@ -509,12 +509,7 @@ function CEditorPage(api)
 
 		document.getElementById('id_target_cursor').style.pointerEvents = "none";
 
-		this.m_oMainContent.HtmlElement.onmousewheel = this.onMouseWhell;
-		if (this.m_oMainContent.HtmlElement.addEventListener)
-		{
-			//this.m_oMainContent.HtmlElement.addEventListener("DOMMouseScroll", new Function("event", "return Editor_OnMouseWhell(event);"), false);
-			this.m_oMainContent.HtmlElement.addEventListener("DOMMouseScroll", this.onMouseWhell, false);
-		}
+		this.m_oMainContent.HtmlElement.addEventListener("wheel", this.onMouseWhell, false);
 
         AscCommon.addMouseEvent(this.m_oTopRuler_horRuler.HtmlElement, "down", this.horRulerMouseDown);
         AscCommon.addMouseEvent(this.m_oTopRuler_horRuler.HtmlElement, "move", this.horRulerMouseMove);

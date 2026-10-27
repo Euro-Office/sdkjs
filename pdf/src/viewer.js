@@ -1099,9 +1099,9 @@
 
 					global_mouseEvent.Sender = _t.canvasForms;
 
-					_t.parent.onmousewheel = _t.onMouseWhell;
-					if (_t.parent.addEventListener)
-						_t.parent.addEventListener("DOMMouseScroll", _t.onMouseWhell, false);
+					// 'wheel', not legacy 'mousewheel': web-apps listens for 'wheel' on this same element,
+					// and Chromium and Safari then no longer dispatch 'mousewheel' to it
+					_t.parent.addEventListener("wheel", _t.onMouseWhell, false);
 
 					_t.startTimer();
 				}
