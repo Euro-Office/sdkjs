@@ -69,6 +69,7 @@ const allTests = [
 	'word/document-calculation/table/correctBadTable.html',
 	'word/document-calculation/table/flowTablePosition.html',
 	'word/document-calculation/table/pageBreak.html',
+	'word/document-calculation/table/sectionUpdateGuard.html',
 	'word/document-calculation/table/table-flow.html',
 	'word/document-calculation/table/table-grid.html',
 	'word/document-calculation/table/table-header.html',

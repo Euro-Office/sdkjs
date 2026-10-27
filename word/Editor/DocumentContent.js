@@ -581,7 +581,8 @@ CDocumentContent.prototype.Get_NearestPos = function(CurPage, X, Y, bAnchor, Dra
 // Проверяем, описывает ли данный класс содержимое ячейки
 CDocumentContent.prototype.IsTableCellContent = function(isReturnCell)
 {
-	if (!this.Parent)
+	// The parent can be the logic document itself (e.g. content read from JSON), which has no IsCell
+	if (!this.Parent || !this.Parent.IsCell)
 		return isReturnCell ? null : false;
 
 	return this.Parent.IsCell(isReturnCell);
