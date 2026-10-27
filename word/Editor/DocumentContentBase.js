@@ -3062,6 +3062,7 @@ CDocumentContentBase.prototype.UpdateSectionsAfterAdd = function(items)
 CDocumentContentBase.prototype.UpdateSectionsBeforeRemove = function(items, checkHdrFtr)
 {
 	let logicDocument = this.GetLogicDocument();
+	// IsTableCellContent() goes first for the same reason as in UpdateSectionsAfterAdd
 	if (!logicDocument
 		|| !logicDocument.IsDocumentEditor()
 		|| this.IsTableCellContent()
