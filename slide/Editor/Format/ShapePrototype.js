@@ -737,9 +737,10 @@ CShape.prototype.OnContentReDraw = function(){
         return 0;
     };
 		CShape.prototype.onRemoveContent = function () {
-			const oPresentation = this.getLogicDocument();
-			if (oPresentation && oPresentation.timing) {
-				oPresentation.timing.onRemoveContent(this.GetId());
+			// the timing belongs to the slide (layout, master), not to the presentation
+			const oParent = this.parent;
+			if (oParent && oParent.timing) {
+				oParent.timing.onRemoveContent(this.GetId());
 			}
 		};
     //--------------------------------------------------------export----------------------------------------------------

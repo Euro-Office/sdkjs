@@ -1948,8 +1948,12 @@
         this.removeObjectAnimation(sObjectId);
     };
 		CTiming.prototype.onRemoveContent = function (sObjectId) {
+			// the traversal also visits the timing itself, lists and CTxEl (which expects the object)
 			this.traverse(function (oNode) {
-				oNode.handleRemoveContent(sObjectId);
+				if (oNode.getObjectType() === AscDFH.historyitem_type_SpTgt) {
+					oNode.handleRemoveContent(sObjectId);
+				}
+				return false;
 			});
 		};
     CTiming.prototype.removeObjectAnimation = function (sObjectId) {
