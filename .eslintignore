@@ -1,0 +1,2 @@
+# Vendored jQuery fork. tests/code-style/check.py excludes it as well.
+common/Native/jquery_native.js
