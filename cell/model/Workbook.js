@@ -586,9 +586,9 @@
 	}
 
 	// Area listeners are indexed in blocks of rows (or, for tall areas, columns), see DependencyGraph._buildAreaIndex
-	var AREA_INDEX_ROW_SHIFT = 6;
-	var AREA_INDEX_COL_SHIFT = 4;
-	var AREA_INDEX_MAX_BLOCKS = 64;
+	var AREA_INDEX_ROW_SHIFT = 6; // 64 rows per block
+	var AREA_INDEX_COL_SHIFT = 4; // 16 columns per block
+	var AREA_INDEX_MAX_BLOCKS = 64; // at most 64 blocks per area, so at most 4,096 rows or 1,024 columns
 
 	function DependencyGraph(wb) {
 		this.wb = wb;
@@ -709,15 +709,23 @@
 		/**
 		 * Builds a spatial index of the area listeners of a sheet. Each area is put into the buckets of the row blocks
 		 * it covers; areas that are too tall go into the buckets of the column blocks instead, and areas that are both
-		 * too tall and too wide go into a plain list.
+		 * too tall and too wide go into a plain list. Every list is in the order of registration (seq), which
+		 * findAreaListeners relies on to stop at the first match.
 		 * @param sheetContainer
 		 * @returns {{rows: object, cols: object, rest: Array}}
 		 * @private
 		 */
 		_buildAreaIndex: function(sheetContainer) {
 			var index = {rows: {}, cols: {}, rest: []};
+			var elems = [];
 			for (var key in sheetContainer.areaMap) {
-				var elem = sheetContainer.areaMap[key];
+				elems.push(sheetContainer.areaMap[key]);
+			}
+			elems.sort(function(a, b) {
+				return a.seq - b.seq;
+			});
+			for (var n = 0; n < elems.length; n++) {
+				var elem = elems[n];
 				var bbox = elem.bbox;
 				var buckets, from, to;
 				var r1 = bbox.r1 >> AREA_INDEX_ROW_SHIFT, r2 = bbox.r2 >> AREA_INDEX_ROW_SHIFT;
@@ -757,17 +765,30 @@
 		 */
 		findAreaListeners: function(sheetContainer, nCol, nRow, fIsValid) {
 			var index = sheetContainer.areaIndex || this._buildAreaIndex(sheetContainer);
-			var res;
-			var lists = [index.rows[nRow >> AREA_INDEX_ROW_SHIFT], index.cols[nCol >> AREA_INDEX_COL_SHIFT], index.rest];
-			for (var i = 0; i < lists.length; i++) {
-				var list = lists[i];
-				if (!list) {
-					continue;
-				}
-				for (var j = 0; j < list.length; j++) {
-					var elem = list[j];
-					if ((!res || elem.seq < res.seq) && elem.bbox.contains(nCol, nRow) && fIsValid(elem)) {
-						res = elem;
+			var res = this._findFirstAreaListeners(index.rows[nRow >> AREA_INDEX_ROW_SHIFT], nCol, nRow, fIsValid, undefined);
+			res = this._findFirstAreaListeners(index.cols[nCol >> AREA_INDEX_COL_SHIFT], nCol, nRow, fIsValid, res);
+			return this._findFirstAreaListeners(index.rest, nCol, nRow, fIsValid, res);
+		},
+		/**
+		 * Returns the first element of the list that contains the cell and is accepted by fIsValid, if it was registered
+		 * before res, otherwise returns res. The lists of the index are in the order of registration.
+		 * @param {Array|undefined} list
+		 * @param {number} nCol
+		 * @param {number} nRow
+		 * @param {function(object): boolean} fIsValid
+		 * @param {object|undefined} res
+		 * @returns {object|undefined}
+		 * @private
+		 */
+		_findFirstAreaListeners: function(list, nCol, nRow, fIsValid, res) {
+			if (list) {
+				for (var i = 0; i < list.length; i++) {
+					var elem = list[i];
+					if (res && elem.seq > res.seq) {
+						break;
+					}
+					if (elem.bbox.contains(nCol, nRow) && fIsValid(elem)) {
+						return elem;
 					}
 				}
 			}

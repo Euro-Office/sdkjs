@@ -6756,19 +6756,23 @@ $(function () {
 		let graph = new AscCommonExcel.DependencyGraph(wb);
 		let seed = 12345;
 		const rnd = function (n) {
-			seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-			return seed % n;
+			// Math.imul keeps the low bits of the product, a plain multiplication goes past 2^53 and loses them.
+			// The low bits of this generator repeat with a short period, so the result is taken from the high bits.
+			seed = (Math.imul(seed, 1103515245) + 12345) & 0x7fffffff;
+			return Math.floor(seed / 0x80000000 * n);
 		};
 		const randomBbox = function () {
 			let r1 = rnd(20000), c1 = rnd(200);
-			switch (rnd(5)) {
+			switch (rnd(6)) {
 				case 0: // small
 					return new Asc.Range(c1, r1, c1 + rnd(5), r1 + rnd(30));
-				case 1: // tall and narrow, more row blocks than the index buckets
+				case 1: // medium height, in several row blocks (the tallest ones go to the column blocks)
+					return new Asc.Range(c1, r1, c1 + rnd(5), r1 + 30 + rnd(4200));
+				case 2: // tall and narrow, more row blocks than the index buckets
 					return new Asc.Range(c1, r1, c1 + rnd(3), r1 + 5000 + rnd(50000));
-				case 2: // whole column
+				case 3: // whole column
 					return new Asc.Range(c1, 0, c1, AscCommon.gc_nMaxRow0);
-				case 3: // tall and wide, kept in the plain list
+				case 4: // tall and wide, kept in the plain list
 					return new Asc.Range(c1, r1, c1 + 2000, r1 + 5000 + rnd(1000));
 				default: // wide and short
 					return new Asc.Range(c1, r1, c1 + rnd(1500), r1 + rnd(3));
@@ -6789,14 +6793,29 @@ $(function () {
 		};
 		const checkRandomCells = function (label) {
 			let container = graph.sheetListeners[sheetId];
-			let mismatches = 0;
+			let mismatches = 0, hits = 0;
 			for (let i = 0; i < 1000; ++i) {
-				let col = rnd(2300), row = rnd(80000);
-				if (findLinear(container, col, row) !== graph.findAreaListeners(container, col, row, isValid)) {
+				let col, row;
+				if (i % 2) {
+					// A cell inside a random area, most areas are too small to be hit by a random cell of the sheet
+					let bbox = added[rnd(added.length)].bbox;
+					col = bbox.c1 + rnd(bbox.c2 - bbox.c1 + 1);
+					row = bbox.r1 + rnd(Math.min(bbox.r2, 80000) - bbox.r1 + 1);
+				} else {
+					col = rnd(2300);
+					row = rnd(80000);
+				}
+				let elem = findLinear(container, col, row);
+				if (elem) {
+					++hits;
+				}
+				if (elem !== graph.findAreaListeners(container, col, row, isValid)) {
 					++mismatches;
 				}
 			}
 			assert.strictEqual(mismatches, 0, label);
+			// The comparison proves little if almost no cell is inside an area
+			assert.ok(hits >= 300, label + ': ' + hits + ' of 1000 cells are inside an area');
 		};
 		for (let i = 0; i < 300; ++i) {
 			addListener();
@@ -6830,85 +6849,104 @@ $(function () {
 		assert.strictEqual(graph2.findAreaListeners(container2, 55, 155, isValid).bbox.getName(), 'BD151:BE161', 'Area listeners index: first registered area wins');
 		assert.strictEqual(graph2.findAreaListeners(container2, 52, 155, isValid).bbox.getName(), 'AY101:BI201', 'Area listeners index: only the other area matches');
 		assert.strictEqual(graph2.findAreaListeners(container2, 70, 155, isValid), undefined, 'Area listeners index: no area matches');
+		// Also across the lists of the index: a tall area is in the column blocks, a short one in the row blocks
+		listenTo(3, new Asc.Range(80, 0, 80, 9999));
+		listenTo(4, new Asc.Range(80, 300, 81, 310));
+		listenTo(5, new Asc.Range(90, 300, 91, 310));
+		listenTo(6, new Asc.Range(90, 0, 90, 9999));
+		assert.strictEqual(graph2.findAreaListeners(container2, 80, 305, isValid).bbox.getName(), 'CC1:CC10000', 'Area listeners index: first registered area wins across the lists, tall area first');
+		assert.strictEqual(graph2.findAreaListeners(container2, 90, 305, isValid).bbox.getName(), 'CM301:CN311', 'Area listeners index: first registered area wins across the lists, short area first');
 
 		// Insert and delete rows and columns of a real sheet
 		const container = wb.dependencyFormulas.sheetListeners[ws.Id];
-		for (let i = 1; i <= 10; ++i) {
-			ws.getRange2("AZ" + (7000 + i)).setValue(String(i));
-		}
-		ws.getRange2("BA7001").setValue("=SUM(AZ7001:AZ7010)");
-		ws.getRange2("BA7002").setValue('=SUM(AZ7001:AZ7010)+INDIRECT("AZ7001")');
-		ws.getRange2("BB7001").setValue("=SUM(AZ7003:BA7005)");
-		ws.getRange2("BB7002").setValue("=SUM(AZ:AZ)");
-		const check = function (label) {
-			assert.strictEqual(countMismatches(wb.dependencyFormulas, container, 60, 7030), 0, 'Area listeners index: ' + label);
-		};
-		check('initial');
-		ws.insertRowsBefore(7002, 2);
-		assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7012)", 'Area listeners index: insert rows shifts the area');
-		check('insert rows');
-		ws.removeRows(7002, 7003, false);
-		assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7010)", 'Area listeners index: delete rows shifts the area');
-		check('delete rows');
-		ws.insertColsBefore(51, 2);
-		assert.strictEqual(ws.getRange2("BC7001").getFormula(), "SUM(BB7001:BB7010)", 'Area listeners index: insert columns shifts the area');
-		check('insert columns');
-		ws.removeCols(51, 52);
-		assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7010)", 'Area listeners index: delete columns shifts the area back');
-		check('delete columns');
-
-		// A cycle that is only reachable through the area listeners of a volatile formula is still found:
-		// BC7020 listens to the area BC7021:BC7023, and BC7022 inside that area refers back to BC7020.
 		const g_cCalcRecursion = AscCommonExcel.g_cCalcRecursion;
 		const wasEnabled = g_cCalcRecursion.getIsEnabledRecursion();
 		const prevMaxIterations = g_cCalcRecursion.getMaxIterations();
-		// The list of cycle cells is cleared when the calculation ends, so the cells are recorded while it runs
-		let reportedCycleCells = [];
 		const origAddCycleCell = g_cCalcRecursion.addCycleCell;
-		g_cCalcRecursion.addCycleCell = function (cell) {
-			reportedCycleCells.push(new Asc.Range(cell.nCol, cell.nRow, cell.nCol, cell.nRow).getName());
-			return origAddCycleCell.apply(this, arguments);
-		};
-		const cycleCellNames = function () {
-			let res = reportedCycleCells.filter(function (name, i, arr) {
-				return arr.indexOf(name) === i;
-			}).sort();
-			reportedCycleCells = [];
-			return res;
-		};
-		const setCycle = function () {
-			ws.getRange2("BC7022").setValue('=BC7020+INDIRECT("AZ7001")');
+		const hasOwnAddCycleCell = Object.prototype.hasOwnProperty.call(g_cCalcRecursion, 'addCycleCell');
+		try {
+			for (let i = 1; i <= 10; ++i) {
+				ws.getRange2("AZ" + (7000 + i)).setValue(String(i));
+			}
+			ws.getRange2("BA7001").setValue("=SUM(AZ7001:AZ7010)");
+			ws.getRange2("BA7002").setValue('=SUM(AZ7001:AZ7010)+INDIRECT("AZ7001")');
+			ws.getRange2("BB7001").setValue("=SUM(AZ7003:BA7005)");
+			ws.getRange2("BB7002").setValue("=SUM(AZ:AZ)");
+			const check = function (label) {
+				assert.strictEqual(countMismatches(wb.dependencyFormulas, container, 60, 7030), 0, 'Area listeners index: ' + label);
+			};
+			check('initial');
+			ws.insertRowsBefore(7002, 2);
+			assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7012)", 'Area listeners index: insert rows shifts the area');
+			check('insert rows');
+			ws.removeRows(7002, 7003, false);
+			assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7010)", 'Area listeners index: delete rows shifts the area');
+			check('delete rows');
+			ws.insertColsBefore(51, 2);
+			assert.strictEqual(ws.getRange2("BC7001").getFormula(), "SUM(BB7001:BB7010)", 'Area listeners index: insert columns shifts the area');
+			check('insert columns');
+			ws.removeCols(51, 52);
+			assert.strictEqual(ws.getRange2("BA7001").getFormula(), "SUM(AZ7001:AZ7010)", 'Area listeners index: delete columns shifts the area back');
+			check('delete columns');
+
+			// A cycle that is only reachable through the area listeners of a volatile formula is still found:
+			// BC7020 listens to the area BC7021:BC7023, and BC7022 inside that area refers back to BC7020.
+			// The list of cycle cells is cleared when the calculation ends, so the cells are recorded while it runs
+			let reportedCycleCells = [];
+			g_cCalcRecursion.addCycleCell = function (cell) {
+				reportedCycleCells.push(new Asc.Range(cell.nCol, cell.nRow, cell.nCol, cell.nRow).getName());
+				return origAddCycleCell.apply(this, arguments);
+			};
+			const cycleCellNames = function () {
+				let res = reportedCycleCells.filter(function (name, i, arr) {
+					return arr.indexOf(name) === i;
+				}).sort();
+				reportedCycleCells = [];
+				return res;
+			};
+			const setCycle = function () {
+				ws.getRange2("BC7022").setValue('=BC7020+INDIRECT("AZ7001")');
+				ws.getRange2("BC7020").setValue('=SUM(BC7021:BC7023)+INDIRECT("AZ7001")');
+			};
+			const clearCycle = function () {
+				ws.getRange2("BC7020").setValue("");
+				ws.getRange2("BC7022").setValue("");
+			};
+			g_cCalcRecursion.setIsEnabledRecursion(false);
+			setCycle();
+			const cycleCells = cycleCellNames();
+			assert.ok(cycleCells.indexOf("BC7020") !== -1 || cycleCells.indexOf("BC7022") !== -1,
+				'Area listeners index: cycle through an area is reported without iterative calculation: ' + cycleCells.join());
+			assert.strictEqual(ws.getRange2("BC7020").getValue(), "0", 'Area listeners index: cycle cell BC7020 is 0 without iterative calculation');
+			clearCycle();
+
+			// No cycle: the same volatile formulas without the reference back
+			ws.getRange2("BC7022").setValue('=AZ7002+INDIRECT("AZ7001")');
 			ws.getRange2("BC7020").setValue('=SUM(BC7021:BC7023)+INDIRECT("AZ7001")');
-		};
-		const clearCycle = function () {
-			ws.getRange2("BC7020").setValue("");
-			ws.getRange2("BC7022").setValue("");
-		};
-		g_cCalcRecursion.setIsEnabledRecursion(false);
-		setCycle();
-		const cycleCells = cycleCellNames();
-		assert.ok(cycleCells.indexOf("BC7020") !== -1 || cycleCells.indexOf("BC7022") !== -1,
-			'Area listeners index: cycle through an area is reported without iterative calculation: ' + cycleCells.join());
-		assert.strictEqual(ws.getRange2("BC7020").getValue(), "0", 'Area listeners index: cycle cell BC7020 is 0 without iterative calculation');
-		clearCycle();
+			assert.deepEqual(cycleCellNames(), [], 'Area listeners index: no cycle is reported for volatile formulas without a cycle');
+			assert.strictEqual(ws.getRange2("BC7020").getValue(), "4", 'Area listeners index: volatile formulas without a cycle are calculated');
+			clearCycle();
 
-		// No cycle: the same volatile formulas without the reference back
-		ws.getRange2("BC7022").setValue('=AZ7002+INDIRECT("AZ7001")');
-		ws.getRange2("BC7020").setValue('=SUM(BC7021:BC7023)+INDIRECT("AZ7001")');
-		assert.deepEqual(cycleCellNames(), [], 'Area listeners index: no cycle is reported for volatile formulas without a cycle');
-		assert.strictEqual(ws.getRange2("BC7020").getValue(), "4", 'Area listeners index: volatile formulas without a cycle are calculated');
-		clearCycle();
-
-		// With iterative calculation the cycle is calculated by iterations
-		g_cCalcRecursion.setIsEnabledRecursion(true);
-		g_cCalcRecursion.setMaxIterations(10);
-		setCycle();
-		assert.deepEqual(cycleCellNames(), [], 'Area listeners index: cycle cells are not reported with iterative calculation');
-		assert.notStrictEqual(ws.getRange2("BC7020").getValue(), "0", 'Area listeners index: cycle is calculated by iterations. BC7020 = ' + ws.getRange2("BC7020").getValue());
-		clearCycle();
-		g_cCalcRecursion.setMaxIterations(prevMaxIterations);
-		g_cCalcRecursion.setIsEnabledRecursion(wasEnabled);
-		g_cCalcRecursion.addCycleCell = origAddCycleCell;
+			// With iterative calculation the cycle is calculated by iterations
+			g_cCalcRecursion.setIsEnabledRecursion(true);
+			g_cCalcRecursion.setMaxIterations(10);
+			setCycle();
+			assert.deepEqual(cycleCellNames(), [], 'Area listeners index: cycle cells are not reported with iterative calculation');
+			assert.notStrictEqual(ws.getRange2("BC7020").getValue(), "0", 'Area listeners index: cycle is calculated by iterations. BC7020 = ' + ws.getRange2("BC7020").getValue());
+			clearCycle();
+		} finally {
+			// The tests after this one must not inherit the settings or the volatile and whole-column formulas.
+			// The range also covers the cells shifted by inserted rows and columns, in case a step above throws.
+			g_cCalcRecursion.setMaxIterations(prevMaxIterations);
+			g_cCalcRecursion.setIsEnabledRecursion(wasEnabled);
+			// Put back exactly what was there: usually the method of the prototype, so the wrapper is removed
+			if (hasOwnAddCycleCell) {
+				g_cCalcRecursion.addCycleCell = origAddCycleCell;
+			} else {
+				delete g_cCalcRecursion.addCycleCell;
+			}
+			ws.getRange2("AZ7001:BE7030").cleanAll();
+		}
 	});
 
 	wb.dependencyFormulas.unlockRecal();
