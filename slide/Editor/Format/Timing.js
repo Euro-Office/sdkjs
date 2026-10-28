@@ -2339,19 +2339,25 @@
                         oEffect = aSeq[nEffectIdx];
                         if (oEffect.isSelected()) {
                             sObjectId = oEffect.getObjectId();
+                            var oRange = oEffect.getParagraphRange();
+                            var sKey = oRange ? (sObjectId + "_" + oEffect.cTn.grpId + "_" + oRange.st) : sObjectId;
                             if (bNeedRemoveExtra) {
-                                if (oMapOfObjects[sObjectId]) {
+                                if (oMapOfObjects[sKey]) {
                                     aSeq.splice(nEffectIdx, 1);
                                     nEffectIdx--;
                                     continue;
                                 } else {
-                                    oMapOfObjects[sObjectId] = true;
+                                    oMapOfObjects[sKey] = true;
                                 }
                             }
                             oNewEffect = this.createEffect(sObjectId, nPresetClass, nPresetId, nPresetSubtype, oColor);
                             if (oNewEffect) {
                                 oNewEffect.cTn.setNodeType(oEffect.cTn.nodeType);
                                 oNewEffect.cTn.changeDelay(oEffect.cTn.getDelay());
+                                if (oRange) {
+                                    oNewEffect.cTn.setGrpId(oEffect.cTn.grpId);
+                                    oNewEffect.setParagraphRange(oRange.st, oRange.end);
+                                }
                                 oNewEffect.select();
                                 aSeq[nEffectIdx] = oNewEffect;
                                 bNeedRebuild = true;
@@ -2645,6 +2651,7 @@
             }
         }
         this.updateNodesIDs();
+        this.updateBldLst();
         return aAddedEffects;
     };
     CTiming.prototype.setAnimationProperties = function (oPr) {
@@ -2670,6 +2677,12 @@
                 }
             }
             this.buildTree(aSeqs);
+            return;
+        }
+
+        let nTextSequence = oPr.asc_getTextSequence();
+        if (AscFormat.isRealNumber(nTextSequence) && nTextSequence !== oCurPr.asc_getTextSequence()) {
+            this.changeTextSequence(nTextSequence);
             return;
         }
 
@@ -2803,6 +2816,226 @@
             }
         });
         return aEffects;
+    };
+    CTiming.prototype.getFreeGrpId = function (sObjectId) {
+        let nMaxGrpId = -1;
+        const aEffects = this.getObjectEffects(sObjectId);
+        for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+            if (AscFormat.isRealNumber(aEffects[nIdx].cTn.grpId)) {
+                nMaxGrpId = Math.max(nMaxGrpId, aEffects[nIdx].cTn.grpId);
+            }
+        }
+        if (this.bldLst) {
+            for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+                const oBld = this.bldLst.list[nIdx];
+                if (oBld.spid === sObjectId && AscFormat.isRealNumber(oBld.grpId)) {
+                    nMaxGrpId = Math.max(nMaxGrpId, oBld.grpId);
+                }
+            }
+        }
+        return nMaxGrpId + 1;
+    };
+    CTiming.prototype.changeTextSequence = function (nTextSequence) {
+        const bByParagraph = (nTextSequence === AscFormat.TEXT_SEQUENCE_BY_PARAGRAPH);
+        const aSeqs = this.getEffectsSequences();
+        const oNextGrpId = {};
+        let bChanged = false;
+        for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+            const aSeq = aSeqs[nSeq];
+            for (let nEffect = 1; nEffect < aSeq.length; ++nEffect) {
+                const oEffect = aSeq[nEffect];
+                if (!oEffect.isSelected() || bByParagraph === !!oEffect.getParagraphRange()) {
+                    continue;
+                }
+                const sObjectId = oEffect.getObjectId();
+                if (bByParagraph) {
+                    const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(sObjectId), PARAGRAPH_BUILD_LEVEL);
+                    if (aRanges.length === 0) {
+                        continue;
+                    }
+                    if (!AscFormat.isRealNumber(oNextGrpId[sObjectId])) {
+                        oNextGrpId[sObjectId] = this.getFreeGrpId(sObjectId);
+                    }
+                    oEffect.cTn.setGrpId(oNextGrpId[sObjectId]++);
+                    const aCopies = [];
+                    for (let nRange = 1; nRange < aRanges.length; ++nRange) {
+                        const oCopy = oEffect.createDuplicate();
+                        oCopy.setParagraphRange(aRanges[nRange].st, aRanges[nRange].end);
+                        oCopy.select();
+                        aCopies.push(oCopy);
+                    }
+                    oEffect.setParagraphRange(aRanges[0].st, aRanges[0].end);
+                    aSeq.splice.apply(aSeq, [nEffect + 1, 0].concat(aCopies));
+                    nEffect += aCopies.length;
+                } else {
+                    // collapse the whole paragraph build into its first effect
+                    const nGrpId = oEffect.cTn.grpId;
+                    for (let nSeq2 = 0; nSeq2 < aSeqs.length; ++nSeq2) {
+                        const aSeq2 = aSeqs[nSeq2];
+                        for (let nEffect2 = aSeq2.length - 1; nEffect2 > 0; --nEffect2) {
+                            const oOther = aSeq2[nEffect2];
+                            if (oOther !== oEffect && oOther.getObjectId() === sObjectId
+                                && oOther.cTn.grpId === nGrpId && oOther.getParagraphRange()) {
+                                aSeq2.splice(nEffect2, 1);
+                                if (aSeq2 === aSeq && nEffect2 < nEffect) {
+                                    --nEffect;
+                                }
+                            }
+                        }
+                    }
+                    oEffect.setParagraphRange(null, null);
+                }
+                bChanged = true;
+            }
+        }
+        if (bChanged) {
+            this.buildTree(aSeqs);
+        }
+    };
+    // paragraph builds of this timing: "spid_grpId" -> {spid, grpId, effects (sequence order)}
+    CTiming.prototype.getParagraphBuilds = function () {
+        const oBuilds = {};
+        const aAllEffects = this.getAllAnimEffects();
+        for (let nIdx = 0; nIdx < aAllEffects.length; ++nIdx) {
+            const oEffect = aAllEffects[nIdx];
+            if (oEffect.getParagraphRange()) {
+                const sObjectId = oEffect.getObjectId();
+                const nGrpId = AscFormat.isRealNumber(oEffect.cTn.grpId) ? oEffect.cTn.grpId : 0;
+                const sKey = sObjectId + "_" + nGrpId;
+                if (!oBuilds[sKey]) {
+                    oBuilds[sKey] = {spid: sObjectId, grpId: nGrpId, effects: []};
+                }
+                oBuilds[sKey].effects.push(oEffect);
+            }
+        }
+        return oBuilds;
+    };
+    // bldLst is only read by PowerPoint; the player works with the text targets of the effects
+    CTiming.prototype.updateBldLst = function () {
+        const oParagraphBuilds = this.getParagraphBuilds();
+        // builds with other text targets (e.g. character ranges from imported files) stay untouched
+        const oUsedBuilds = {};
+        const oOtherTextBuilds = {};
+        const aAllEffects = this.getAllAnimEffects();
+        for (let nIdx = 0; nIdx < aAllEffects.length; ++nIdx) {
+            const oEffect = aAllEffects[nIdx];
+            const nGrpId = AscFormat.isRealNumber(oEffect.cTn.grpId) ? oEffect.cTn.grpId : 0;
+            const sKey = oEffect.getObjectId() + "_" + nGrpId;
+            oUsedBuilds[sKey] = true;
+            if (!oEffect.getParagraphRange() && oEffect.hasTextTarget()) {
+                oOtherTextBuilds[sKey] = true;
+            }
+        }
+        const fGetBuildType = function (oBuild) {
+            const oDrawing = AscCommon.g_oTableId.Get_ById(oBuild.spid);
+            const aRanges = getParagraphBuildRanges(oDrawing, PARAGRAPH_BUILD_LEVEL);
+            return isSameParagraphRanges(oBuild.effects, aRanges) ? ParaBuildType_p : ParaBuildType_cust;
+        };
+        if (this.bldLst) {
+            for (let nIdx = this.bldLst.list.length - 1; nIdx > -1; --nIdx) {
+                const oBld = this.bldLst.list[nIdx];
+                if (oBld.getObjectType() !== AscDFH.historyitem_type_BldP) {
+                    continue;
+                }
+                const sKey = oBld.spid + "_" + oBld.grpId;
+                const oBuild = oParagraphBuilds[sKey];
+                const bParagraphBuildType = (oBld.build === ParaBuildType_p || oBld.build === ParaBuildType_cust);
+                if (oBuild) {
+                    const nBuild = fGetBuildType(oBuild);
+                    if (oBld.build !== nBuild && (bParagraphBuildType || oBld.build === null || oBld.build === ParaBuildType_whole)) {
+                        oBld.setBuild(nBuild);
+                    }
+                    delete oParagraphBuilds[sKey];
+                } else if (!oUsedBuilds[sKey] || (bParagraphBuildType && !oOtherTextBuilds[sKey])) {
+                    this.bldLst.removeFromLst(nIdx);
+                }
+            }
+        }
+        for (let sKey in oParagraphBuilds) {
+            if (!oParagraphBuilds.hasOwnProperty(sKey)) {
+                continue;
+            }
+            if (!this.bldLst) {
+                this.setBldLst(new CBldLst());
+            }
+            const oBldP = new CBldP();
+            oBldP.setSpid(oParagraphBuilds[sKey].spid);
+            oBldP.setGrpId(oParagraphBuilds[sKey].grpId);
+            oBldP.setBuild(fGetBuildType(oParagraphBuilds[sKey]));
+            this.bldLst.push(oBldP);
+        }
+        if (this.bldLst && this.bldLst.isEmpty()) {
+            this.setBldLst(null);
+        }
+    };
+    // keeps "by paragraph" builds (build="p") in sync with the text: one effect per paragraph range
+    CTiming.prototype.syncParagraphBuilds = function () {
+        if (!this.bldLst) {
+            return;
+        }
+        const oParagraphBuildKeys = {};
+        let bHasParagraphBuild = false;
+        for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+            const oBld = this.bldLst.list[nIdx];
+            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p) {
+                oParagraphBuildKeys[oBld.spid + "_" + oBld.grpId] = true;
+                bHasParagraphBuild = true;
+            }
+        }
+        if (!bHasParagraphBuild) {
+            return;
+        }
+        const aSeqs = this.getEffectsSequences();
+        const oBuilds = this.getParagraphBuilds();
+        let bChanged = false;
+        for (let sKey in oBuilds) {
+            if (!oBuilds.hasOwnProperty(sKey) || !oParagraphBuildKeys[sKey]) {
+                continue;
+            }
+            const aEffects = oBuilds[sKey].effects;
+            const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), PARAGRAPH_BUILD_LEVEL);
+            if (isSameParagraphRanges(aEffects, aRanges)) {
+                continue;
+            }
+            bChanged = true;
+            for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+                const oEffect = aEffects[nIdx];
+                if (nIdx < aRanges.length) {
+                    const oRange = oEffect.getParagraphRange();
+                    if (oRange.st !== aRanges[nIdx].st || oRange.end !== aRanges[nIdx].end) {
+                        oEffect.setParagraphRange(aRanges[nIdx].st, aRanges[nIdx].end);
+                    }
+                } else if (nIdx === 0) {
+                    // no text left: keep one effect for the whole object
+                    oEffect.setParagraphRange(null, null);
+                } else {
+                    for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+                        const nPos = aSeqs[nSeq].indexOf(oEffect);
+                        if (nPos > 0) {
+                            aSeqs[nSeq].splice(nPos, 1);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (aEffects.length < aRanges.length) {
+                const oLast = aEffects[aEffects.length - 1];
+                for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+                    let nPos = aSeqs[nSeq].indexOf(oLast);
+                    if (nPos > 0) {
+                        for (let nRange = aEffects.length; nRange < aRanges.length; ++nRange) {
+                            const oCopy = oLast.createDuplicate();
+                            oCopy.setParagraphRange(aRanges[nRange].st, aRanges[nRange].end);
+                            aSeqs[nSeq].splice(++nPos, 0, oCopy);
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+        if (bChanged) {
+            this.buildTree(aSeqs);
+        }
     };
     CTiming.prototype.getAnimEffect = function (sObjectId) {
         var aEffects = this.getObjectEffects(sObjectId);
@@ -3905,6 +4138,49 @@
     const ParaBuildType_cust = 1;
     const ParaBuildType_p = 2;
     const ParaBuildType_whole = 3;
+
+    // PowerPoint "By paragraph" = "By 1st level paragraphs": deeper levels join their parent
+    const PARAGRAPH_BUILD_LEVEL = 1;
+
+    function getParagraphBuildRanges(oDrawing, nBldLvl) {
+        const aRanges = [];
+        // CGraphicFrame.getDocContent returns the current table cell, so only shapes take part
+        if (!oDrawing || oDrawing.getObjectType() !== AscDFH.historyitem_type_Shape) {
+            return aRanges;
+        }
+        const oDocContent = oDrawing.getDocContent();
+        if (!oDocContent) {
+            return aRanges;
+        }
+        let oLastRange = null;
+        for (let nPara = 0; nPara < oDocContent.Content.length; ++nPara) {
+            const oParagraph = oDocContent.Content[nPara];
+            if (oParagraph.IsEmpty()) {
+                continue;
+            }
+            const nLvl = AscFormat.isRealNumber(oParagraph.Pr.Lvl) ? oParagraph.Pr.Lvl : 0;
+            if (oLastRange && nLvl >= nBldLvl) {
+                oLastRange.end = nPara;
+            } else {
+                oLastRange = {st: nPara, end: nPara};
+                aRanges.push(oLastRange);
+            }
+        }
+        return aRanges;
+    }
+
+    function isSameParagraphRanges(aEffects, aRanges) {
+        if (aEffects.length !== aRanges.length) {
+            return false;
+        }
+        for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+            const oRange = aEffects[nIdx].getParagraphRange();
+            if (!oRange || oRange.st !== aRanges[nIdx].st || oRange.end !== aRanges[nIdx].end) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     function CBldP() {
         CBldOleChart.call(this);
@@ -5737,6 +6013,11 @@
             if (sObjectId !== null) {
                 var oNewEffect = CTiming.prototype.createEffect(sObjectId, this.presetClass, this.presetID, v, null);
                 if (oNewEffect) {
+                    // the preset children have no text target, keep the animated paragraphs
+                    var oEffect = this.parent;
+                    var oRange = (oEffect && oEffect.getParagraphRange) ? oEffect.getParagraphRange() : null;
+                    var nSt = oRange ? oRange.st : null;
+                    var nEnd = oRange ? oRange.end : null;
                     var oNewCTn = oNewEffect.cTn;
                     if (this.getEffectDuration() !== oNewCTn.getEffectDuration()) {
                         oNewCTn.changeEffectDuration(this.getEffectDuration());
@@ -5744,6 +6025,9 @@
                     this.setPresetSubtype(v);
                     this.childTnLst.clear();
                     oNewCTn.childTnLst.fillObject(this.childTnLst, {});
+                    if (oRange) {
+                        oEffect.setParagraphRange(nSt, nEnd);
+                    }
                 }
             }
         }
@@ -9028,6 +9312,63 @@
         }
         return false;
     };
+    CTimeNodeContainer.prototype.getParagraphRange = function () {
+        const sObjectId = this.getObjectId();
+        let oRange = null;
+        this.traverse(function (oChild) {
+            if (oChild.getObjectType() === AscDFH.historyitem_type_SpTgt && oChild.spid === sObjectId) {
+                const oTxEl = oChild.getTargetTextOptions();
+                if (oTxEl && oTxEl.pRg) {
+                    oRange = oTxEl.pRg;
+                    return true;
+                }
+            }
+            return false;
+        });
+        return oRange;
+    };
+    CTimeNodeContainer.prototype.hasTextTarget = function () {
+        const sObjectId = this.getObjectId();
+        let bResult = false;
+        this.traverse(function (oChild) {
+            if (oChild.getObjectType() === AscDFH.historyitem_type_SpTgt && oChild.spid === sObjectId && oChild.txEl) {
+                bResult = true;
+                return true;
+            }
+            return false;
+        });
+        return bResult;
+    };
+    CTimeNodeContainer.prototype.setParagraphRange = function (nStart, nEnd) {
+        // every behavior (set, animEffect, anim...) has its own target
+        const sObjectId = this.getObjectId();
+        const bSet = AscFormat.isRealNumber(nStart) && AscFormat.isRealNumber(nEnd);
+        this.traverse(function (oChild) {
+            if (oChild.getObjectType() === AscDFH.historyitem_type_SpTgt && oChild.spid === sObjectId) {
+                if (bSet) {
+                    const oPRg = new CIndexRg();
+                    oPRg.setSt(nStart);
+                    oPRg.setEnd(nEnd);
+                    const oTxEl = new CTxEl();
+                    oTxEl.setPRg(oPRg);
+                    oChild.setTxEl(oTxEl);
+                } else if (oChild.txEl) {
+                    oChild.setTxEl(null);
+                }
+            }
+            return false;
+        });
+    };
+    CTimeNodeContainer.prototype.getTextSequence = function () {
+        if (this.getParagraphRange()) {
+            return AscFormat.TEXT_SEQUENCE_BY_PARAGRAPH;
+        }
+        const oDrawing = AscCommon.g_oTableId.Get_ById(this.getObjectId());
+        if (getParagraphBuildRanges(oDrawing, PARAGRAPH_BUILD_LEVEL).length > 0) {
+            return AscFormat.TEXT_SEQUENCE_AS_ONE_OBJECT;
+        }
+        return null;
+    };
     CTimeNodeContainer.prototype.merge = function (oTNContainer) {
         AscFormat.ExecuteNoHistory(function () {
             if (oTNContainer === this) {
@@ -9199,6 +9540,16 @@
     CTimeNodeContainer.prototype.getObjectText = function () {
         const sObjectId = this.getObjectId();
         const oObject = AscCommon.g_oTableId.Get_ById(sObjectId);
+        const oRange = this.getParagraphRange();
+        const oDocContent = oRange && oObject && oObject.getDocContent && oObject.getDocContent();
+        if (oDocContent) {
+            const aTexts = [];
+            const nEnd = Math.min(oRange.end, oDocContent.Content.length - 1);
+            for (let nPara = oRange.st; nPara <= nEnd; ++nPara) {
+                aTexts.push(oDocContent.Content[nPara].GetText({ParaSeparator: ""}));
+            }
+            return aTexts.join(" ");
+        }
 				if (oObject && oObject.getText) {
 					let sText = oObject.getText();
 					if (typeof sText === 'string') {
@@ -9425,6 +9776,28 @@
         this.triggerObjectClick = v;
     };
     CTimeNodeContainer.prototype["asc_putTriggerObjectClick"] = CTimeNodeContainer.prototype.asc_putTriggerObjectClick;
+    // null: not applicable (no text), undefined: mixed selection
+    CTimeNodeContainer.prototype.asc_getTextSequence = function () {
+        if (this.textSequence !== undefined) {
+            return this.textSequence;
+        }
+        const aEffects = (Array.isArray(this.merged) && this.merged.length > 0) ? this.merged : [this];
+        let nResult = null;
+        for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+            const nCur = aEffects[nIdx].getTextSequence();
+            if (nIdx === 0) {
+                nResult = nCur;
+            } else if (nCur !== nResult) {
+                return undefined;
+            }
+        }
+        return nResult;
+    };
+    CTimeNodeContainer.prototype["asc_getTextSequence"] = CTimeNodeContainer.prototype.asc_getTextSequence;
+    CTimeNodeContainer.prototype.asc_putTextSequence = function (v) {
+        this.textSequence = v;
+    };
+    CTimeNodeContainer.prototype["asc_putTextSequence"] = CTimeNodeContainer.prototype.asc_putTextSequence;
     CTimeNodeContainer.prototype.isEqualProperties = function (oPr) {
         if (!oPr) {
             return false;
@@ -9457,6 +9830,9 @@
             return false;
         }
         if (this.asc_getTriggerObjectClick() !== oPr.asc_getTriggerObjectClick()) {
+            return false;
+        }
+        if (this.asc_getTextSequence() !== oPr.asc_getTextSequence()) {
             return false;
         }
         return true;
@@ -15104,4 +15480,5 @@
     window['AscFormat'].ParaBuildType_cust = ParaBuildType_cust;
     window['AscFormat'].ParaBuildType_p = ParaBuildType_p;
     window['AscFormat'].ParaBuildType_whole = ParaBuildType_whole;
+    window['AscFormat'].getParagraphBuildRanges = getParagraphBuildRanges;
 }(window))

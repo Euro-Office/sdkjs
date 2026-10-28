@@ -101,6 +101,8 @@ const allTests = [
 	'slide/shortcuts/shortcuts.html',
 	'word/shortcuts/shortcuts.html',
 
+	'slide/animation/paragraph-build.html',
+
 	//related ooxml tests
 	'oform/xml/oformXml.html',
 	'word/custom-xml/custom-xml-ooxml.html',

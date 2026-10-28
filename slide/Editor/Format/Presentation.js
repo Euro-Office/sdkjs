@@ -11210,6 +11210,11 @@ CPresentation.prototype.StartAction = function (nDescription, additional) {
 	this.Api.getMacroRecorder().addStepData(nDescription, additional, true);
 };
 CPresentation.prototype.FinalizeAction = function (isCheckEmptyAction, isCheckLockedAction, additional) {
+	// text edits (typing, Enter, Backspace) end here: keep "by paragraph" animations in sync in the same history point
+	const oCurSlide = this.GetCurrentSlide();
+	if (oCurSlide && oCurSlide.checkParagraphBuilds) {
+		oCurSlide.checkParagraphBuilds();
+	}
 	this.Recalculate();
 	this.Api.checkChangesSize();
 	if (false !== isCheckEmptyAction && AscCommon.History.Is_LastPointEmpty()) {
