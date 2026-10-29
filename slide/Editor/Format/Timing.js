@@ -2680,6 +2680,8 @@
             return;
         }
 
+        // like the start type above: the effect options send the text sequence alone, other properties
+        // in the same call are dropped because the selected effects are split or merged here
         let nTextSequence = oPr.asc_getTextSequence();
         if (AscFormat.isRealNumber(nTextSequence) && nTextSequence !== oCurPr.asc_getTextSequence()) {
             this.changeTextSequence(nTextSequence);
@@ -2926,9 +2928,9 @@
                 oOtherTextBuilds[sKey] = true;
             }
         }
-        const fGetBuildType = function (oBuild) {
+        const fGetBuildType = function (oBuild, nBldLvl) {
             const oDrawing = AscCommon.g_oTableId.Get_ById(oBuild.spid);
-            const aRanges = getParagraphBuildRanges(oDrawing, PARAGRAPH_BUILD_LEVEL);
+            const aRanges = getParagraphBuildRanges(oDrawing, nBldLvl);
             return isSameParagraphRanges(oBuild.effects, aRanges) ? ParaBuildType_p : ParaBuildType_cust;
         };
         if (this.bldLst) {
@@ -2941,7 +2943,7 @@
                 const oBuild = oParagraphBuilds[sKey];
                 const bParagraphBuildType = (oBld.build === ParaBuildType_p || oBld.build === ParaBuildType_cust);
                 if (oBuild) {
-                    const nBuild = fGetBuildType(oBuild);
+                    const nBuild = fGetBuildType(oBuild, getParagraphBuildLevel(oBld));
                     if (oBld.build !== nBuild && (bParagraphBuildType || oBld.build === null || oBld.build === ParaBuildType_whole)) {
                         oBld.setBuild(nBuild);
                     }
@@ -2961,43 +2963,54 @@
             const oBldP = new CBldP();
             oBldP.setSpid(oParagraphBuilds[sKey].spid);
             oBldP.setGrpId(oParagraphBuilds[sKey].grpId);
-            oBldP.setBuild(fGetBuildType(oParagraphBuilds[sKey]));
+            oBldP.setBuild(fGetBuildType(oParagraphBuilds[sKey], PARAGRAPH_BUILD_LEVEL));
             this.bldLst.push(oBldP);
         }
         if (this.bldLst && this.bldLst.isEmpty()) {
             this.setBldLst(null);
         }
     };
-    // keeps "by paragraph" builds (build="p") in sync with the text: one effect per paragraph range
-    CTiming.prototype.syncParagraphBuilds = function () {
+    // "by paragraph" builds (build="p") whose effects no longer match the paragraph ranges of the text
+    CTiming.prototype.getOutdatedParagraphBuilds = function () {
+        const aResult = [];
         if (!this.bldLst) {
-            return;
+            return aResult;
         }
-        const oParagraphBuildKeys = {};
+        const oParagraphBuildLevels = {};
         let bHasParagraphBuild = false;
         for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
             const oBld = this.bldLst.list[nIdx];
             if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p) {
-                oParagraphBuildKeys[oBld.spid + "_" + oBld.grpId] = true;
+                oParagraphBuildLevels[oBld.spid + "_" + oBld.grpId] = getParagraphBuildLevel(oBld);
                 bHasParagraphBuild = true;
             }
         }
         if (!bHasParagraphBuild) {
-            return;
+            return aResult;
         }
-        const aSeqs = this.getEffectsSequences();
         const oBuilds = this.getParagraphBuilds();
-        let bChanged = false;
         for (let sKey in oBuilds) {
-            if (!oBuilds.hasOwnProperty(sKey) || !oParagraphBuildKeys[sKey]) {
+            if (!oBuilds.hasOwnProperty(sKey) || !oParagraphBuildLevels.hasOwnProperty(sKey)) {
                 continue;
             }
             const aEffects = oBuilds[sKey].effects;
-            const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), PARAGRAPH_BUILD_LEVEL);
-            if (isSameParagraphRanges(aEffects, aRanges)) {
-                continue;
+            const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), oParagraphBuildLevels[sKey]);
+            if (!isSameParagraphRanges(aEffects, aRanges)) {
+                aResult.push({effects: aEffects, ranges: aRanges});
             }
-            bChanged = true;
+        }
+        return aResult;
+    };
+    // keeps "by paragraph" builds in sync with the text: one effect per paragraph range
+    CTiming.prototype.syncParagraphBuilds = function () {
+        const aOutdatedBuilds = this.getOutdatedParagraphBuilds();
+        if (aOutdatedBuilds.length === 0) {
+            return;
+        }
+        const aSeqs = this.getEffectsSequences();
+        for (let nBuild = 0; nBuild < aOutdatedBuilds.length; ++nBuild) {
+            const aEffects = aOutdatedBuilds[nBuild].effects;
+            const aRanges = aOutdatedBuilds[nBuild].ranges;
             for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
                 const oEffect = aEffects[nIdx];
                 if (nIdx < aRanges.length) {
@@ -3033,9 +3046,7 @@
                 }
             }
         }
-        if (bChanged) {
-            this.buildTree(aSeqs);
-        }
+        this.buildTree(aSeqs);
     };
     CTiming.prototype.getAnimEffect = function (sObjectId) {
         var aEffects = this.getObjectEffects(sObjectId);
@@ -4141,6 +4152,11 @@
 
     // PowerPoint "By paragraph" = "By 1st level paragraphs": deeper levels join their parent
     const PARAGRAPH_BUILD_LEVEL = 1;
+
+    // "By 2nd/3rd... level paragraphs" are build="p" with bldLvl 2, 3...; bldLvl defaults to 1
+    function getParagraphBuildLevel(oBld) {
+        return (AscFormat.isRealNumber(oBld.bldLvl) && oBld.bldLvl > 0) ? oBld.bldLvl : PARAGRAPH_BUILD_LEVEL;
+    }
 
     function getParagraphBuildRanges(oDrawing, nBldLvl) {
         const aRanges = [];
