@@ -12561,18 +12561,26 @@ Paragraph.prototype.CollectDocumentStatistics = function(Stats)
 		Item.CollectDocumentStatistics(ParaStats);
 	}
 
-	var oNumPr = this.GetNumPr();
-	if (oNumPr)
-	{
-		ParaStats.EmptyParagraph = false;
-
-		var oNum = this.Parent.GetNumbering().GetNum(oNumPr.NumId);
-		if (oNum)
-			oNum.GetLvl(oNumPr.Lvl).CollectDocumentStatistics(Stats);
-	}
+	this.CollectNumberingStatistics(ParaStats);
 
 	if (false === ParaStats.EmptyParagraph)
 		Stats.Add_Paragraph();
+};
+/**
+ * Counts the list number of the paragraph, if it has one
+ * @param {CParagraphStatistics} ParaStats
+ */
+Paragraph.prototype.CollectNumberingStatistics = function(ParaStats)
+{
+	var oNumPr = this.GetNumPr();
+	if (!oNumPr)
+		return;
+
+	ParaStats.EmptyParagraph = false;
+
+	var oNum = this.Parent.GetNumbering().GetNum(oNumPr.NumId);
+	if (oNum)
+		oNum.GetLvl(oNumPr.Lvl).CollectDocumentStatistics(ParaStats.Stats);
 };
 Paragraph.prototype.Get_ParentTextTransform = function()
 {
