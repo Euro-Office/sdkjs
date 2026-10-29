@@ -446,8 +446,54 @@
 
 		// AscCommon.CColor
 		this.fillColor = new AscCommon.CColor(255, 255, 255);
+
+		//////
+		// DarkMode support (DM)
+		this.isDarkMode = false;
+
+		// DM / performance - cache for darkModeCorrectColor2 results, avoids recalculating the
+		// same color thousands of times per redraw. Never exposed directly, only read back via
+		// _darkModeColorShuttle.
+		this._darkModeRgbCache = {};
+
+		// DM / performance - one shared CColor reused for every getDarkModeCorrectedColor call,
+		// instead of allocating a new one each time. Safe because every caller reads it
+		// synchronously (setStrokeStyle/setFillStyle unpack it immediately) and never retains it.
+		this._darkModeColorShuttle = new AscCommon.CColor(0, 0, 0, 1);
+
 		return this;
 	}
+
+	/**
+	 * Returns the corrected color for the given automatic color.
+	 * Callers should decide whether a color is eligible (explicit vs. automatic) before calling this.
+	 * isDarkMode is not re-checked here: every current caller already gates the call itself on it.
+	 * @param {Number} r  0-255
+	 * @param {Number} g  0-255
+	 * @param {Number} b  0-255
+	 * @param {Number} [a]  0-1
+	 * @return {AscCommon.CColor}  the shared shuttle instance - read it immediately, it is
+	 * overwritten by the next call, never store or mutate the reference. Not safe across an
+	 * async boundary: a caller that awaits before reading it may see a different call's color.
+	 */
+	DrawingContext.prototype.getDarkModeCorrectedColor = function (r, g, b, a) {
+
+		var shuttle = this._darkModeColorShuttle;
+		var key = r + ',' + g + ',' + b;
+		var corrected = this._darkModeRgbCache[key];
+
+		if (!corrected)  {
+			corrected = AscCommon.darkModeCorrectColor2(r, g, b);
+			this._darkModeRgbCache[key] = corrected;
+		}
+
+		shuttle.put_r(corrected.R);
+		shuttle.put_g(corrected.G);
+		shuttle.put_b(corrected.B);
+		shuttle.a = a;
+		
+		return shuttle;
+	};
 
 	DrawingContext.prototype._ppiInit = function () {
 		this.scaleFactor = 1;
