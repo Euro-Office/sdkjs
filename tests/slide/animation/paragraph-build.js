@@ -350,6 +350,100 @@ $(function ()
 		assert.deepEqual(GetRanges(slide), [[0, 0], [4, 4]], "Custom builds are not synchronized");
 	});
 
+	QUnit.test("Text changes need the timing lock", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+		const lock = slide.timingLock.Lock;
+
+		lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeOther, false);
+		logicDocument.StartAction(0);
+		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point D"));
+		logicDocument.FinalizeAction();
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [6, [[0, 0], [2, 3], [4, 4]]], "Animations locked by someone else: the text changes, the effects stay");
+
+		lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+		logicDocument.StartAction(0);
+		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point E"));
+		logicDocument.FinalizeAction();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3], [4, 4], [5, 5], [6, 6]], "Lock free again: the next edit catches up");
+		assert.strictEqual(lock.Get_Type(), AscCommon.c_oAscLockTypes.kLockTypeMine, "The timing lock is taken for the sync");
+		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p");
+	});
+
+	QUnit.test("Removing text needs the timing lock", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+		const lock = slide.timingLock.Lock;
+
+		lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeOther, false);
+		SelectShape(slide, shape);
+		docContent.SetThisElementCurrent();
+		logicDocument.MoveCursorToEndPos();
+		const historyIndex = AscCommon.History.Index;
+		for (let i = 0; i < 8; ++i)
+			logicDocument.Remove(-1, true, false, false, false);
+		let timingChanges = 0;
+		for (let point = historyIndex + 1; point <= AscCommon.History.Index; ++point)
+		{
+			AscCommon.History.Points[point].Items.forEach(function (item)
+			{
+				if (item.Class instanceof AscFormat.CIndexRg || item.Class instanceof AscFormat.CTxEl)
+					++timingChanges;
+			});
+		}
+		assert.deepEqual([docContent.Content.length, GetRanges(slide), timingChanges], [4, [[0, 0], [2, 3], [4, 4]], 0], "Animations locked by someone else: the text targets are not clamped");
+
+		lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+		logicDocument.EnterText("x".codePointsArray());
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3]], "Lock free again: the next edit catches up");
+		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p");
+	});
+
+	QUnit.test("By 2nd level paragraphs", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		const timing = AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+		assert.deepEqual(AscFormat.getParagraphBuildRanges(shape, 2), [{st : 0, end : 0}, {st : 2, end : 2}, {st : 3, end : 3}, {st : 4, end : 4}], "Level 2: the sub point is on its own");
+
+		// build as imported from PowerPoint: build="p" bldLvl="2"
+		AscCommon.History.Create_NewPoint(0);
+		timing.bldLst.list[0].setBldLvl(2);
+		const sequences = timing.getEffectsSequences();
+		const effect = timing.getAllAnimEffects()[1];
+		const copy = effect.createDuplicate();
+		copy.setParagraphRange(3, 3);
+		effect.setParagraphRange(2, 2);
+		sequences[0].splice(sequences[0].indexOf(effect) + 1, 0, copy);
+		timing.buildTree(sequences);
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 2], [3, 3], [4, 4]], "One effect per 2nd level paragraph");
+		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p");
+
+		logicDocument.StartAction(0);
+		const subPoint = CreateParagraph(docContent, "Sub point C1");
+		docContent.Internal_Content_Add(docContent.Content.length, subPoint);
+		subPoint.Set_PresentationLevel(1);
+		const subSubPoint = CreateParagraph(docContent, "Sub sub point C1a");
+		docContent.Internal_Content_Add(docContent.Content.length, subSubPoint);
+		subSubPoint.Set_PresentationLevel(2);
+		logicDocument.FinalizeAction();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 2], [3, 3], [4, 4], [5, 6]], "Text edit keeps level 2: 3rd level joins its parent");
+		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p after the text edit");
+		assert.strictEqual(timing.bldLst.list[0].bldLvl, 2, "bldLvl kept");
+		Undo();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 2], [3, 3], [4, 4]], "One undo restores text and effects");
+	});
+
 	QUnit.test("Editing text in the shape", function (assert)
 	{
 		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);

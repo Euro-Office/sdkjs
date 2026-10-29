@@ -875,7 +875,10 @@ AscFormat.InitClass(Slide, AscFormat.CBaseFormatObject, AscDFH.historyitem_type_
         this.timing.setAnimationProperties(oPr);
         this.showDrawingObjects();
     };
-    Slide.prototype.checkParagraphBuilds = function() {
+    Slide.prototype.hasOutdatedParagraphBuilds = function() {
+        return !!this.timing && this.timing.getOutdatedParagraphBuilds().length > 0;
+    };
+    Slide.prototype.syncParagraphBuilds = function() {
         if(this.timing) {
             this.timing.syncParagraphBuilds();
         }
