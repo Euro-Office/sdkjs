@@ -1,0 +1,7 @@
+{
+    "ignore": [
+        "vendor/*", "*/engine/*", "*_ie.js", "common/Images/*", "*.bin",
+        "slide/themes/*", "slide/Texture/*", "*.css", "tools/*",
+        ".github/*", "*.md", "LICENSE*", ".gitignore", "*npm-shrinkwrap.json", "*package-lock.json"
+    ]
+}
