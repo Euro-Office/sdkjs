@@ -195,7 +195,14 @@ function CStatistics(LogicDocument)
     this.Id       = null; // Id таймера для подсчета всего кроме страниц
     this.PagesId  = null; // Id таймера для подсчета страниц
 
-    this.IncludeHdrFtr = false;
+    this.IncludeHdrFtr   = false;
+    this.IncludeComments = false;
+
+    // counting a selection: notes are counted only when they are selected themselves
+    this.IsSelection = false;
+
+    // drawings of the main text are counted per page; elsewhere (headers, footnotes) they are counted in the runs
+    this.CountDrawingsInRuns = false;
 
     this.Reset();
 }
@@ -214,11 +221,16 @@ CStatistics.prototype.Reset = function()
 	this.Paragraphs      = 0;
 	this.SymbolsWOSpaces = 0;
 	this.SymbolsWhSpaces = 0;
+	this.AddedWords      = 0;
+	this.DeletedWords    = 0;
+
+	this.CountDrawingsInRuns = false;
 };
-CStatistics.prototype.Start = function(includeHdrFtr)
+CStatistics.prototype.Start = function(includeHdrFtr, includeComments)
 {
 	this.Reset();
-	this.IncludeHdrFtr = !!includeHdrFtr;
+	this.IncludeHdrFtr   = !!includeHdrFtr;
+	this.IncludeComments = !!includeComments;
 
 	var LogicDocument = this.LogicDocument;
 	this.PagesId = setTimeout(function(){LogicDocument.Statistics_GetPagesInfo();}, 1);
@@ -281,7 +293,10 @@ CStatistics.prototype.GetInfo = function()
 		WordsCount     : this.Words,
 		ParagraphCount : this.Paragraphs,
 		SymbolsCount   : this.SymbolsWOSpaces,
-		SymbolsWSCount : this.SymbolsWhSpaces
+		SymbolsWSCount : this.SymbolsWhSpaces,
+
+		AddedWordsCount   : this.AddedWords,
+		DeletedWordsCount : this.DeletedWords
 	};
 };
 CStatistics.prototype.Send = function()
@@ -313,6 +328,53 @@ CStatistics.prototype.Add_Symbol = function(bSpace)
 	this.SymbolsWhSpaces++;
 	if ( true != bSpace )
 		this.SymbolsWOSpaces++;
+};
+/**
+ * Counts a plain text, e.g. of a comment, with the same rules as the document text
+ * @param {string} text
+ */
+CStatistics.prototype.AddText = function(text)
+{
+	let isWord      = false;
+	let isEmptyLine = true;
+	for (let iter = text.getUnicodeIterator(); iter.check(); iter.next())
+	{
+		let codePoint = iter.value();
+		if (0x0A === codePoint || 0x0D === codePoint)
+		{
+			if (!isEmptyLine)
+				this.Add_Paragraph();
+			isEmptyLine = true;
+			isWord      = false;
+			continue;
+		}
+
+		let isSpace = AscCommon.IsSpace(codePoint) || 0x09 === codePoint || 0xA0 === codePoint;
+		this.Add_Symbol(isSpace);
+		if (isSpace || AscWord.IsWordSeparatorDash(codePoint))
+		{
+			isWord = false;
+		}
+		else
+		{
+			if (!isWord)
+				this.Add_Word();
+			isWord = true;
+		}
+		isEmptyLine = false;
+	}
+
+	if (!isEmptyLine)
+		this.Add_Paragraph();
+};
+/**
+ * En and em dashes separate words, as in the word count of LibreOffice
+ * @param {number} codePoint
+ * @returns {boolean}
+ */
+AscWord.IsWordSeparatorDash = function(codePoint)
+{
+	return (0x2013 === codePoint || 0x2014 === codePoint);
 };
 
 function CDocumentRecalcInfo()
@@ -17553,9 +17615,9 @@ CDocument.prototype.Set_MathProps = function(MathProps)
 //----------------------------------------------------------------------------------------------------------------------
 // Statistics (Функции для работы со статистикой)
 //----------------------------------------------------------------------------------------------------------------------
-CDocument.prototype.Statistics_Start = function(includeHdrFtr)
+CDocument.prototype.Statistics_Start = function(includeHdrFtr, includeComments)
 {
-	this.Statistics.Start(includeHdrFtr);
+	this.Statistics.Start(includeHdrFtr, includeComments);
 };
 CDocument.prototype.Statistics_GetParagraphsInfo = function()
 {
@@ -17598,6 +17660,9 @@ CDocument.prototype.Statistics_GetPagesInfo = function()
 		if (this.Statistics.IncludeHdrFtr)
 			this.CollectHdrFtrStatistics(this.Statistics);
 
+		if (this.Statistics.IncludeComments)
+			this.CollectCommentStatistics(this.Statistics);
+
 		this.Statistics.Stop_PagesInfo();
 	}
 };
@@ -17622,6 +17687,7 @@ CDocument.prototype.GetSelectionStatistics = function()
 	// Count the selected runs in place. A GetSelectedContent copy is slow on large selections and queues each
 	// copied paragraph for the track changes check.
 	let stats     = new CStatistics(this);
+	stats.IsSelection = true;
 	let paragraph = null;
 	let paraStats = null;
 	function endParagraph()
@@ -17676,10 +17742,34 @@ CDocument.prototype.CollectHdrFtrStatistics = function(stats)
 			hdrFtrs.add(footer);
 	}
 
+	stats.CountDrawingsInRuns = true;
 	hdrFtrs.forEach(function(hdrFtr)
 	{
 		hdrFtr.GetContent().CollectDocumentStatistics(stats);
 	});
+	stats.CountDrawingsInRuns = false;
+};
+/**
+ * Adds the text of all comments and their replies to the statistics
+ * @param stats {CStatistics}
+ */
+CDocument.prototype.CollectCommentStatistics = function(stats)
+{
+	function collectData(data)
+	{
+		stats.AddText(data.m_sText || "");
+		for (let index = 0, count = data.m_aReplies.length; index < count; ++index)
+		{
+			collectData(data.m_aReplies[index]);
+		}
+	}
+
+	let comments = this.Comments.GetAllComments();
+	for (let id in comments)
+	{
+		if (comments[id] && comments[id].GetData())
+			collectData(comments[id].GetData());
+	}
 };
 //----------------------------------------------------------------------------------------------------------------------
 // Функции для работы с MailMerge

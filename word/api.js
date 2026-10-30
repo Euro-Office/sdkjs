@@ -3067,7 +3067,7 @@ background-repeat: no-repeat;\
 	/**
 	 * @param {boolean} [includeHdrFtr=false] - Also count the text of headers and footers
 	 */
-	asc_docs_api.prototype.startGetDocInfo              = function(includeHdrFtr)
+	asc_docs_api.prototype.startGetDocInfo              = function(includeHdrFtr, includeComments)
 	{
 		/*
 		 Возвращаем объект следующего вида:
@@ -3082,7 +3082,7 @@ background-repeat: no-repeat;\
 		this.sync_GetDocInfoStartCallback();
 
 		if (this.WordControl.m_oLogicDocument)
-			this.WordControl.m_oLogicDocument.Statistics_Start(includeHdrFtr);
+			this.WordControl.m_oLogicDocument.Statistics_Start(includeHdrFtr, includeComments);
 	};
 	asc_docs_api.prototype.stopGetDocInfo               = function()
 	{
@@ -3161,6 +3161,9 @@ background-repeat: no-repeat;\
 			this.ParagraphCount = obj.ParagraphCount;
 			this.SymbolsCount   = obj.SymbolsCount;
 			this.SymbolsWSCount = obj.SymbolsWSCount;
+
+			this.AddedWordsCount   = undefined !== obj.AddedWordsCount ? obj.AddedWordsCount : -1;
+			this.DeletedWordsCount = undefined !== obj.DeletedWordsCount ? obj.DeletedWordsCount : -1;
 		}
 		else
 		{
@@ -3169,8 +3172,28 @@ background-repeat: no-repeat;\
 			this.ParagraphCount = -1;
 			this.SymbolsCount   = -1;
 			this.SymbolsWSCount = -1;
+
+			this.AddedWordsCount   = -1;
+			this.DeletedWordsCount = -1;
 		}
 	}
+
+	/**
+	 * Words inserted with tracked changes
+	 * @returns {number}
+	 */
+	CDocInfoProp.prototype.get_AddedWordsCount   = function()
+	{
+		return this.AddedWordsCount;
+	};
+	/**
+	 * Words deleted with tracked changes
+	 * @returns {number}
+	 */
+	CDocInfoProp.prototype.get_DeletedWordsCount = function()
+	{
+		return this.DeletedWordsCount;
+	};
 
 	CDocInfoProp.prototype.get_PageCount      = function()
 	{
@@ -15850,6 +15873,8 @@ background-repeat: no-repeat;\
 	CDocInfoProp.prototype['put_SymbolsCount']          = CDocInfoProp.prototype.put_SymbolsCount;
 	CDocInfoProp.prototype['get_SymbolsWSCount']        = CDocInfoProp.prototype.get_SymbolsWSCount;
 	CDocInfoProp.prototype['put_SymbolsWSCount']        = CDocInfoProp.prototype.put_SymbolsWSCount;
+	CDocInfoProp.prototype['get_AddedWordsCount']       = CDocInfoProp.prototype.get_AddedWordsCount;
+	CDocInfoProp.prototype['get_DeletedWordsCount']     = CDocInfoProp.prototype.get_DeletedWordsCount;
 	CContextMenuData.prototype['get_Type']    = CContextMenuData.prototype.get_Type;
 	CContextMenuData.prototype['get_X']       = CContextMenuData.prototype.get_X;
 	CContextMenuData.prototype['get_Y']       = CContextMenuData.prototype.get_Y;

@@ -3036,14 +3036,46 @@ ParaRun.prototype.GetPrevRunElements = function(oRunElements, isUseContentPos, n
 };
 
 /**
+ * Counts words and symbols as LibreOffice does: deleted and hidden text is not counted, en and em dashes separate words.
+ * Words inserted or deleted with tracked changes are also counted on their own, per changed part of the text.
  * @param {CParagraphStatistics} ParaStats
  * @param {number} [nStartPos=0] first element to count
  * @param {number} [nEndPos=this.Content.length] element after the last one to count
  */
 ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEndPos)
 {
+	var Start = undefined !== nStartPos ? nStartPos : 0;
 	var Count = undefined !== nEndPos ? nEndPos : this.Content.length;
-	for (var Index = undefined !== nStartPos ? nStartPos : 0; Index < Count; Index++)
+
+	var nReviewType = this.GetReviewType();
+	var isAdded     = reviewtype_Add === nReviewType;
+	if (!isAdded)
+		ParaStats.AddedWord = false;
+
+	if (reviewtype_Remove === nReviewType)
+	{
+		for (var nPos = Start; nPos < Count; ++nPos)
+		{
+			var oDeleted = this.Content[nPos];
+			if (para_Text === oDeleted.Type && !oDeleted.IsNBSP() && !AscWord.IsWordSeparatorDash(oDeleted.Value))
+			{
+				if (!ParaStats.DeletedWord)
+					ParaStats.Stats.DeletedWords++;
+				ParaStats.DeletedWord = true;
+			}
+			else if (para_Text === oDeleted.Type || para_Space === oDeleted.Type || para_Tab === oDeleted.Type)
+			{
+				ParaStats.DeletedWord = false;
+			}
+		}
+		return;
+	}
+	ParaStats.DeletedWord = false;
+
+	if (this.Get_CompiledPr(false).Vanish)
+		return;
+
+	for (var Index = Start; Index < Count; Index++)
 	{
 		var Item     = this.Content[Index];
 		var ItemType = Item.Type;
@@ -3052,10 +3084,23 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 		var bSpace   = false;
 		var bNewWord = false;
 
-		if ((para_Text === ItemType && false === Item.IsNBSP()) || (para_PageNum === ItemType || para_PageCount === ItemType))
+		if (para_Text === ItemType && AscWord.IsWordSeparatorDash(Item.Value))
+		{
+			// a dash is a symbol, but it separates words
+			bSymbol = true;
+
+			ParaStats.Word           = false;
+			ParaStats.AddedWord      = false;
+			ParaStats.EmptyParagraph = false;
+		}
+		else if ((para_Text === ItemType && false === Item.IsNBSP()) || (para_PageNum === ItemType || para_PageCount === ItemType))
 		{
 			if (false === ParaStats.Word)
 				bNewWord = true;
+
+			if (isAdded && !ParaStats.AddedWord)
+				ParaStats.Stats.AddedWords++;
+			ParaStats.AddedWord = isAdded;
 
 			bSymbol = true;
 			bSpace  = false;
@@ -3068,7 +3113,20 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 			bSymbol = true;
 			bSpace  = true;
 
-			ParaStats.Word = false;
+			ParaStats.Word      = false;
+			ParaStats.AddedWord = false;
+		}
+		else if ((para_FootnoteReference === ItemType || para_EndnoteReference === ItemType) && Item.GetFootnote() && !ParaStats.Stats.IsSelection)
+		{
+			// the whole note counts with the document; a selection counts only the notes it selects itself
+			var isCountDrawings = ParaStats.Stats.CountDrawingsInRuns;
+			ParaStats.Stats.CountDrawingsInRuns = true;
+			Item.GetFootnote().CollectDocumentStatistics(ParaStats.Stats);
+			ParaStats.Stats.CountDrawingsInRuns = isCountDrawings;
+		}
+		else if (para_Drawing === ItemType && ParaStats.Stats.CountDrawingsInRuns)
+		{
+			Item.documentStatistics(ParaStats.Stats);
 		}
 
 		if (true === bSymbol)
