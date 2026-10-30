@@ -20,3 +20,5 @@ package-lock.json
 connector
 tests/package*
 .claude/
+
+coverage/
