@@ -23,10 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: setup python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.15'
 
@@ -42,7 +42,7 @@ jobs:
           sudo apt-get install -y libatk1.0-0 libcups2 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libnss3 libgbm1 libasound2t64
 
       - name: check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: sdkjs
 
@@ -50,7 +50,7 @@ jobs:
       # branch in sdkjs-forms, fall back to master (mirrors the build-test job).
       - name: check out repository sdkjs-forms current branch
         id: sdkjs-forms
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         continue-on-error: true
         with:
           repository: Euro-Office/sdkjs-forms
@@ -58,14 +58,14 @@ jobs:
           ref: ${{ github.ref }}
       - name: check out repository sdkjs-forms master branch
         if: steps.sdkjs-forms.outcome != 'success'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: Euro-Office/sdkjs-forms
           path: sdkjs-forms
           ref: master
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
             node-version: 20
             cache: npm
@@ -93,13 +93,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: sdkjs
 
       - name: check out repository sdkjs-forms current branch
         id: sdkjs-forms
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         continue-on-error: true
         with:
           repository: Euro-Office/sdkjs-forms
@@ -107,14 +107,14 @@ jobs:
           ref: ${{ github.ref }}
       - name: check out repository sdkjs-forms master branch
         if: steps.sdkjs-forms.outcome != 'success'
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: Euro-Office/sdkjs-forms
           path: sdkjs-forms
           ref: master
 
       - name: Use Node.js 20
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 20
           cache: npm
