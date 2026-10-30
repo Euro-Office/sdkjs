@@ -3064,7 +3064,10 @@ background-repeat: no-repeat;\
 			AscCommon.baseEditorsApi.prototype.processSavedFile.call(this, url, downloadType, filetype);
 		}
 	};
-	asc_docs_api.prototype.startGetDocInfo              = function()
+	/**
+	 * @param {boolean} [includeHdrFtr=false] - Also count the text of headers and footers
+	 */
+	asc_docs_api.prototype.startGetDocInfo              = function(includeHdrFtr)
 	{
 		/*
 		 Возвращаем объект следующего вида:
@@ -3079,7 +3082,7 @@ background-repeat: no-repeat;\
 		this.sync_GetDocInfoStartCallback();
 
 		if (this.WordControl.m_oLogicDocument)
-			this.WordControl.m_oLogicDocument.Statistics_Start();
+			this.WordControl.m_oLogicDocument.Statistics_Start(includeHdrFtr);
 	};
 	asc_docs_api.prototype.stopGetDocInfo               = function()
 	{

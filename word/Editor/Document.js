@@ -195,6 +195,8 @@ function CStatistics(LogicDocument)
     this.Id       = null; // Id таймера для подсчета всего кроме страниц
     this.PagesId  = null; // Id таймера для подсчета страниц
 
+    this.IncludeHdrFtr = false;
+
     this.Reset();
 }
 
@@ -213,9 +215,10 @@ CStatistics.prototype.Reset = function()
 	this.SymbolsWOSpaces = 0;
 	this.SymbolsWhSpaces = 0;
 };
-CStatistics.prototype.Start = function()
+CStatistics.prototype.Start = function(includeHdrFtr)
 {
 	this.Reset();
+	this.IncludeHdrFtr = !!includeHdrFtr;
 
 	var LogicDocument = this.LogicDocument;
 	this.PagesId = setTimeout(function(){LogicDocument.Statistics_GetPagesInfo();}, 1);
@@ -17550,9 +17553,9 @@ CDocument.prototype.Set_MathProps = function(MathProps)
 //----------------------------------------------------------------------------------------------------------------------
 // Statistics (Функции для работы со статистикой)
 //----------------------------------------------------------------------------------------------------------------------
-CDocument.prototype.Statistics_Start = function()
+CDocument.prototype.Statistics_Start = function(includeHdrFtr)
 {
-	this.Statistics.Start();
+	this.Statistics.Start(includeHdrFtr);
 };
 CDocument.prototype.Statistics_GetParagraphsInfo = function()
 {
@@ -17590,6 +17593,10 @@ CDocument.prototype.Statistics_GetPagesInfo = function()
 		{
 			this.DrawingObjects.documentStatistics(CurPage, this.Statistics);
 		}
+
+		// Headers and footers are known only once all pages are recalculated
+		if (this.Statistics.IncludeHdrFtr)
+			this.CollectHdrFtrStatistics(this.Statistics);
 
 		this.Statistics.Stop_PagesInfo();
 	}
@@ -17650,6 +17657,29 @@ CDocument.prototype.GetSelectionStatistics = function()
 	let bounds = docpostype_HdrFtr !== this.GetDocPosType() ? this.GetSelectionBounds() : null;
 	stats.Update_Pages(bounds && bounds.Start && bounds.End ? bounds.End.Page - bounds.Start.Page + 1 : -1);
 	return stats.GetInfo();
+};
+/**
+ * Adds the text of the headers and footers shown on the document pages to the statistics.
+ * A header or footer that repeats on several pages is counted once.
+ * @param stats {CStatistics}
+ */
+CDocument.prototype.CollectHdrFtrStatistics = function(stats)
+{
+	let hdrFtrs = new Set();
+	for (let pageIndex = 0, pageCount = this.Pages.length; pageIndex < pageCount; ++pageIndex)
+	{
+		let header = this.HdrFtr.GetHdrFtr(pageIndex, true);
+		let footer = this.HdrFtr.GetHdrFtr(pageIndex, false);
+		if (header)
+			hdrFtrs.add(header);
+		if (footer)
+			hdrFtrs.add(footer);
+	}
+
+	hdrFtrs.forEach(function(hdrFtr)
+	{
+		hdrFtr.GetContent().CollectDocumentStatistics(stats);
+	});
 };
 //----------------------------------------------------------------------------------------------------------------------
 // Функции для работы с MailMerge
