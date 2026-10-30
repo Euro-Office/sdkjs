@@ -95,6 +95,9 @@ SDK_ADDONS=../../sdkjs-forms npm run --prefix build develop
 # run the whole suite (exits non-zero on failure)
 node tests/runAll.js
 
+# the same with coverage (needs `npm install c8`): writes coverage/lcov.info
+node tests/runAll.js --coverage
+
 # run a single suite
 node node_modules/node-qunit-puppeteer/cli.js tests/word/api/api.html 30000 "--no-sandbox"
 ```
@@ -103,6 +106,12 @@ CI (`.github/workflows/check-build.yml`, `ubuntu-latest` runners, not self-hoste
 whole suite via the aggregate runner (`node tests/runAll.js`) in its `unit-tests` job. Suites
 that can't pass yet are listed with reasons in `skippedTests` at the top of `tests/runAll.js`,
 not silently dropped.
+
+On pull requests the job runs with `--coverage` and fails when less than 80% of the PR's
+changed lines are covered (the org's `diff-coverage` action). Files no suite loads count as
+uncovered; the compiled engines (`*/engine/*`, `*_ie.js`), vendored code, externs and test
+harnesses are left out. Feat and fix PRs must also change a test (`require-tests.yml`), or
+carry the `no-tests-needed` label with a reason.
 
 **CI branch scope:** `check-build.yml` triggers on push and pull_request for `main`, `fork`,
 `develop`, `release/**`, and `hotfix/**` — PRs targeting `main` are CI-guarded by this workflow.

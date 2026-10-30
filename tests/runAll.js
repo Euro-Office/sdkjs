@@ -154,11 +154,77 @@ process.on('unhandledRejection', function (reason)
 
 const {performance} = require('perf_hooks');
 
+const puppeteer = require("puppeteer");
 const {
-  runQunitPuppeteer,
+  runQunitWithPage,
   printResultSummary,
   printFailedTests
 } = require("node-qunit-puppeteer");
+
+// With --coverage, the V8 coverage of every test page is merged and written to
+// coverage/lcov.info (needs c8: npm install c8). The develop build loads the
+// source files themselves, so the coverage maps to them directly. Files no test
+// loads count as uncovered, so that the coverage check of pull requests
+// (.github/workflows/check-build.yml) sees changes to them.
+const coverage = process.argv.includes('--coverage');
+const repoRoot = path.resolve(__dirname, '..');
+let processCoverage = {result : []};
+
+// The editors' sources: not the compiled engines, data, externs and test harnesses
+const coverageInclude = ['common/**/*.js', 'word/**/*.js', 'cell/**/*.js', 'slide/**/*.js', 'pdf/**/*.js', 'visio/**/*.js'];
+const coverageExclude = ['**/engine/**', '**/*_ie.js', '**/vendor/**', '**/test/**', '**/externs/**',
+	'common/AllFonts.js', 'common/spell/spell/**', 'slide/document/fonts/**', 'pdf/build/**'];
+
+function addCoverage(entries)
+{
+	const {mergeProcessCovs} = require("@bcoe/v8-coverage");
+	const scripts = [];
+	for (const entry of entries)
+	{
+		if (!entry.url.startsWith("file://"))
+			continue;
+		const file = path.relative(repoRoot, require("url").fileURLToPath(entry.url));
+		if (file.startsWith("..") || /^(develop|tests|node_modules)\//.test(file))
+			continue;
+		scripts.push(entry.rawScriptCoverage);
+	}
+	processCoverage = mergeProcessCovs([processCoverage, {result : scripts}]);
+}
+
+function writeCoverage()
+{
+	const fs = require("fs");
+	const tempDirectory = path.join(repoRoot, "coverage", "tmp");
+	fs.rmSync(path.join(repoRoot, "coverage"), {recursive : true, force : true});
+	fs.mkdirSync(tempDirectory, {recursive : true});
+	fs.writeFileSync(path.join(tempDirectory, "coverage-tests.json"), JSON.stringify(processCoverage));
+
+	const args = [require.resolve("c8/bin/c8.js"), "report", "--temp-directory", tempDirectory,
+		"--reports-dir", path.join(repoRoot, "coverage"), "--reporter", "lcovonly", "--reporter", "text-summary",
+		"--all", "--src", repoRoot, "--exclude-node-modules"];
+	coverageInclude.forEach(pattern => args.push("--include", pattern));
+	coverageExclude.forEach(pattern => args.push("--exclude", pattern));
+	require("child_process").execFileSync(process.execPath, args, {cwd : repoRoot, stdio : "inherit"});
+}
+
+async function runTest(test)
+{
+	const browser = await puppeteer.launch({args : ["--no-sandbox", "--disable-setuid-sandbox"]});
+	try
+	{
+		const page = await browser.newPage();
+		if (coverage)
+			await page.coverage.startJSCoverage({includeRawScriptCoverage : true});
+		const result = await runQunitWithPage(page, {targetUrl : "file://" + path.join(__dirname, test), timeout : 60000});
+		if (coverage)
+			addCoverage(await page.coverage.stopJSCoverage());
+		return result;
+	}
+	finally
+	{
+		await browser.close();
+	}
+}
 
 (async function()
 {
@@ -175,7 +241,7 @@ const {
 	
 	for (let nIndex = 0, nCount = testsToRun.length; nIndex < nCount; ++nIndex)
 	{
-		promiseTests.push(runQunitPuppeteer({targetUrl : "file://" + path.join(__dirname, testsToRun[nIndex]), timeout : 60000, puppeteerArgs : ["--no-sandbox", "--disable-setuid-sandbox"]})
+		promiseTests.push(runTest(testsToRun[nIndex])
 			.then(result =>
 			{
 				count++;
@@ -217,6 +283,9 @@ const {
 		console.log("\nPASSED".green.bold);
 	}
 	
+	if (coverage)
+		writeCoverage();
+
 	process.exit(failed.length ? 1 : 0);
 })();
 
