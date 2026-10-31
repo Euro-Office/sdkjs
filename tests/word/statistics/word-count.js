@@ -119,6 +119,26 @@ $(function ()
 		assert.strictEqual(stats.Paragraphs, 3, "Each line counts as a paragraph");
 	});
 
+	QUnit.test("Every Chinese or Japanese character is a word, Korean is separated by spaces", function (assert)
+	{
+		AscTest.ClearDocument();
+		// "Hello world." in Chinese, "Euro-Office" plus Hiragana and Katakana, and Korean
+		createParagraph(createRun("\u4F60\u597D\u4E16\u754C\u3002 Euro\u3067\u30C6\u30B9\u30C8 \uC548\uB155\uD558\uC138\uC694 \uC138\uACC4"));
+
+		let stats = count();
+		assert.strictEqual(stats.Words, 12, "4 Chinese and the full stop as in LibreOffice, Euro, 4 Japanese, 2 Korean words");
+	});
+
+	QUnit.test("Chinese characters inserted and deleted with tracked changes are counted one by one", function (assert)
+	{
+		AscTest.ClearDocument();
+		createParagraph(createRun("\u4F60\u597D", reviewtype_Add), createRun("\u4E16\u754C\u4EBA", reviewtype_Remove));
+
+		let stats = count();
+		assert.strictEqual(stats.AddedWords, 2, "Two inserted characters");
+		assert.strictEqual(stats.DeletedWords, 3, "Three deleted characters");
+	});
+
 	QUnit.test("Plain text is counted like document text", function (assert)
 	{
 		let stats = logicDocument.Statistics;

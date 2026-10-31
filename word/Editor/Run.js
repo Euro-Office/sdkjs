@@ -3036,7 +3036,8 @@ ParaRun.prototype.GetPrevRunElements = function(oRunElements, isUseContentPos, n
 };
 
 /**
- * Counts words and symbols as LibreOffice does: deleted and hidden text is not counted, en and em dashes separate words.
+ * Counts words and symbols as LibreOffice does: deleted and hidden text is not counted, en and em dashes separate words,
+ * every Chinese or Japanese character is a word.
  * Words inserted or deleted with tracked changes are also counted on their own, per changed part of the text.
  * @param {CParagraphStatistics} ParaStats
  * @param {number} [nStartPos=0] first element to count
@@ -3059,9 +3060,10 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 			var oDeleted = this.Content[nPos];
 			if (para_Text === oDeleted.Type && !oDeleted.IsNBSP() && !AscWord.IsWordSeparatorDash(oDeleted.Value))
 			{
-				if (!ParaStats.DeletedWord)
+				var isDeletedCJ = AscWord.IsCJWordChar(oDeleted.Value);
+				if (!ParaStats.DeletedWord || isDeletedCJ)
 					ParaStats.Stats.DeletedWords++;
-				ParaStats.DeletedWord = true;
+				ParaStats.DeletedWord = !isDeletedCJ;
 			}
 			else if (para_Text === oDeleted.Type || para_Space === oDeleted.Type || para_Tab === oDeleted.Type)
 			{
@@ -3095,17 +3097,20 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 		}
 		else if ((para_Text === ItemType && false === Item.IsNBSP()) || (para_PageNum === ItemType || para_PageCount === ItemType))
 		{
-			if (false === ParaStats.Word)
+			// every Chinese or Japanese character is a word of its own
+			var isCJ = para_Text === ItemType && AscWord.IsCJWordChar(Item.Value);
+
+			if (false === ParaStats.Word || isCJ)
 				bNewWord = true;
 
-			if (isAdded && !ParaStats.AddedWord)
+			if (isAdded && (!ParaStats.AddedWord || isCJ))
 				ParaStats.Stats.AddedWords++;
-			ParaStats.AddedWord = isAdded;
+			ParaStats.AddedWord = isAdded && !isCJ;
 
 			bSymbol = true;
 			bSpace  = false;
 
-			ParaStats.Word           = true;
+			ParaStats.Word           = !isCJ;
 			ParaStats.EmptyParagraph = false;
 		}
 		else if ((para_Text === ItemType && true === Item.IsNBSP()) || para_Space === ItemType || para_Tab === ItemType)
