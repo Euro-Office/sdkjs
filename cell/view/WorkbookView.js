@@ -5519,10 +5519,10 @@
 		var res = null;
 		if (this.printOptionsJson) {
 			let sheetsProps = this.printOptionsJson["spreadsheetLayout"] && this.printOptionsJson["spreadsheetLayout"]["sheetsProps"];
-			var ws = this.model.getWorksheet(index);
-			res = new Asc.CHeaderFooter(ws);
-			if (sheetsProps && sheetsProps[index] && sheetsProps[index]["pageSetup"] && sheetsProps[index]["pageSetup"]["headerFooter"]) {
-				res.initFromJson(sheetsProps[index]["pageSetup"]["headerFooter"]);
+			var json = sheetsProps && sheetsProps[index] && sheetsProps[index]["pageSetup"] && sheetsProps[index]["pageSetup"]["headerFooter"];
+			if (json) {
+				res = new Asc.CHeaderFooter(this.model.getWorksheet(index));
+				res.initFromJson(json);
 			}
 		}
 		return res;
