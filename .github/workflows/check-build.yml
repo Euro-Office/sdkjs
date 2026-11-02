@@ -18,6 +18,15 @@ on:
       - develop
       - 'release/**'
       - 'hotfix/**'
+
+env:
+  # puppeteer 24's postinstall unzips Chrome with extract-zip, which stops
+  # halfway on Node 26. Skip it and install Chrome with @puppeteer/browsers 3
+  # (see "npm install node-qunit-puppeteer" below), per job: self-hosted
+  # runners keep ~/.cache/puppeteer between jobs.
+  PUPPETEER_SKIP_DOWNLOAD: "true"
+  PUPPETEER_CACHE_DIR: ${{ github.workspace }}/.cache/puppeteer
+
 jobs:
   code-style:
     runs-on: ubuntu-latest
@@ -82,6 +91,8 @@ jobs:
           SDK_ADDONS: ../../sdkjs-forms
         run: |
           npm install node-qunit-puppeteer
+          # Install the Chrome puppeteer pins (its own download is skipped, see env).
+          npx -y @puppeteer/browsers@3.2.6 install --path "$PUPPETEER_CACHE_DIR" "chrome@$(node -p "require('puppeteer-core/internal/revisions.js').PUPPETEER_REVISIONS.chrome")"
           npm ci --prefix build
           npm run --prefix build develop
 
@@ -163,6 +174,8 @@ jobs:
           sudo apt-get install -y libatk1.0-0 libcups2 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libnss3 libgbm1 libasound2t64
           cd sdkjs
           npm install node-qunit-puppeteer
+          # Install the Chrome puppeteer pins (its own download is skipped, see env).
+          npx -y @puppeteer/browsers@3.2.6 install --path "$PUPPETEER_CACHE_DIR" "chrome@$(node -p "require('puppeteer-core/internal/revisions.js').PUPPETEER_REVISIONS.chrome")"
 
       # The "unit-tests" job above runs the QUnit suite against raw source files
       # (COMPILED unset) — it never touches the webpack output, so a regression in the
