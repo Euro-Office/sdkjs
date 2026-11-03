@@ -15242,6 +15242,14 @@
 	Cell.prototype.isNullText=function(){
 		return this.isNullTextString() && !this.formulaParsed;
 	};
+	// A blank member of a calculated array formula read from a file: it has no value and nothing calculates it until its
+	// array is recalculated (see setArrayFormulasOpen). Not a pure check: isNullTextString calculates a dirty cell first
+	// (callers like checkTypeCell have already done so); a cell whose calculation is skipped (recursion limit) stays
+	// dirty, and a cell being calculated is not one either.
+	Cell.prototype.isBlankArrayResult = function() {
+		return null != this.formulaParsed && !!this.formulaParsed.getArrayFormulaRef() && !this.getIsCalc() &&
+			this.isNullTextString() && !this.getIsDirty();
+	};
 	Cell.prototype.isEmptyTextString = function() {
 		this._checkDirty();
 		if(null != this.number || (null != this.text && "" != this.text))
@@ -19791,6 +19799,13 @@
 			isNullText = (null != cell) ? cell.isNullText() : true;
 		});
 		return isNullText;
+	};
+	Range.prototype.isBlankArrayResult = function() {
+		var res = false;
+		this.worksheet._getCellNoEmpty(this.bbox.r1, this.bbox.c1, function(cell) {
+			res = null != cell && cell.isBlankArrayResult();
+		});
+		return res;
 	};
 	Range.prototype.isEmptyTextString=function(){
 		var isEmptyTextString;
