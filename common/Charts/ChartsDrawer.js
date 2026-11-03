@@ -1968,14 +1968,13 @@ CChartsDrawer.prototype =
 					pointVal = oErrVal.val;
 				}
 
-				const remainder = oErrVal.plusErrVal % 1;
-				var plusErrVal = remainder <= 0.5 ? Math.floor(oErrVal.plusErrVal) : Math.ceil(oErrVal.plusErrVal);
-				var minusErrVal = Math.floor(oErrVal.minusErrVal);
+				var plusErrVal = oErrVal.plusErrVal;
+				var minusErrVal = oErrVal.minusErrVal;
 				if (!AscFormat.isRealNumber(plusErrVal)) {
 					plusErrVal = 0;
 				}
 				if (!AscFormat.isRealNumber(minusErrVal)) {
-					plusErrVal = 0;
+					minusErrVal = 0;
 				}
 				switch (errBar.errBarType) {
 					case AscFormat.st_errbartypeBOTH: {

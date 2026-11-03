@@ -666,12 +666,14 @@
     };
     drawingsChangesMap[AscDFH.historyitem_ErrBars_SetMinus] = function(oClass, value) {
         oClass.minus = value;
+        oClass.onChangeDataRefs();
     };
     drawingsChangesMap[AscDFH.historyitem_ErrBars_SetNoEndCap] = function(oClass, value) {
         oClass.noEndCap = value;
     };
     drawingsChangesMap[AscDFH.historyitem_ErrBars_SetPlus] = function(oClass, value) {
         oClass.plus = value;
+        oClass.onChangeDataRefs();
     };
     drawingsChangesMap[AscDFH.historyitem_ErrBars_SetSpPr] = function(oClass, value) {
         oClass.spPr = value;
@@ -2045,6 +2047,7 @@
             return oClass.filteredSeries;
         };
     drawingContentChanges[AscDFH.historyitem_CommonChart_AddErrBars] = function(oClass) {
+        oClass.onChangeDataRefs();
         return oClass.errBars;
     };
 
@@ -3979,6 +3982,7 @@
         AscCommon.History.CanAddChanges() && AscCommon.History.Add(new CChangesDrawingsContent(this, AscDFH.historyitem_CommonChart_AddErrBars, pos, [pr], true));
         this.errBars.splice(pos, 0, pr);
         this.setParentToChild(pr);
+        this.onChangeDataRefs();
     };
     CSeriesBase.prototype.addErrBarsArray = function(aErrBars) {
         if(!Array.isArray(aErrBars))
@@ -4039,6 +4043,7 @@
 			const removed = this.errBars.splice(idx, 1);
 			AscCommon.History.CanAddChanges() && AscCommon.History.Add(new CChangesDrawingsContent(this, AscDFH.historyitem_CommonChart_AddErrBars, idx, removed, false));
 			errBar.setParent(null);
+			this.onChangeDataRefs();
 		}
 	};
     CSeriesBase.prototype.getChildren = function() {
@@ -10644,12 +10649,13 @@
         this.errDir = pr;
     };
     CErrBars.prototype.setErrValType = function(pr) {
-        AscCommon.History.CanAddChanges() && AscCommon.History.Add(new CChangesDrawingsLong(this, AscDFH.historyitem_ErrBars_SetErrValType, this.errDir, pr));
+        AscCommon.History.CanAddChanges() && AscCommon.History.Add(new CChangesDrawingsLong(this, AscDFH.historyitem_ErrBars_SetErrValType, this.errValType, pr));
         this.errValType = pr;
     };
     CErrBars.prototype.setMinus = function(pr) {
         AscCommon.History.CanAddChanges() && AscCommon.History.Add(new CChangesDrawingsObject(this, AscDFH.historyitem_ErrBars_SetMinus, this.minus, pr));
         this.minus = pr;
+        this.onChangeDataRefs();
         this.setParentToChild(pr);
     };
     CErrBars.prototype.setNoEndCap = function(pr) {
@@ -10659,6 +10665,7 @@
     CErrBars.prototype.setPlus = function(pr) {
         AscCommon.History.CanAddChanges() && AscCommon.History.Add(new CChangesDrawingsObject(this, AscDFH.historyitem_ErrBars_SetPlus, this.plus, pr));
         this.plus = pr;
+        this.onChangeDataRefs();
         this.setParentToChild(pr);
     };
     CErrBars.prototype.setSpPr = function(pr) {
@@ -10679,6 +10686,9 @@
     };
     CErrBars.prototype.handleUpdateLn = function() {
         this.pen = null;
+    };
+    CErrBars.prototype.Refresh_RecalcData = function() {
+        this.onChartInternalUpdate();
     };
     CErrBars.prototype.update = function() {
         if(this.plus) {
@@ -10714,15 +10724,23 @@
     };
     CErrBars.prototype.getMinusDataRefs = function() {
         if(this.minus) {
-            this.minus.getDataRefs();
+            return this.minus.getDataRefs();
         }
         return new CDataRefs([]);
     };
     CErrBars.prototype.getPlusDataRefs = function() {
         if(this.plus) {
-            this.plus.getDataRefs();
+            return this.plus.getDataRefs();
         }
         return new CDataRefs([]);
+    };
+    CErrBars.prototype.collectRefs = function(aRefs) {
+        if(this.plus) {
+            this.plus.collectRefs(aRefs);
+        }
+        if(this.minus) {
+            this.minus.collectRefs(aRefs);
+        }
     };
     CErrBars.prototype.getPen = function() {
         if(this.pen === null) {
@@ -10750,6 +10768,68 @@
 			default: val = null;
 		}
 		return val;
+	};
+	CErrBars.prototype.setCustomValues = function (sPlus, sMinus) {
+		this.setErrValType(AscFormat.st_errvaltypeCUST);
+		if (typeof sPlus === "string" && sPlus.length > 0) {
+			if (!this.plus) {
+				this.setPlus(new CMinusPlus());
+			}
+			this.plus.setValues(sPlus);
+			if (this.plus.isValid()) {
+				this.plus.updateWithHistory();
+			} else {
+				this.setPlus(null);
+			}
+		} else {
+			this.setPlus(null);
+		}
+		if (typeof sMinus === "string" && sMinus.length > 0) {
+			if (!this.minus) {
+				this.setMinus(new CMinusPlus());
+			}
+			this.minus.setValues(sMinus);
+			if (this.minus.isValid()) {
+				this.minus.updateWithHistory();
+			} else {
+				this.setMinus(null);
+			}
+		} else {
+			this.setMinus(null);
+		}
+	};
+	CErrBars.prototype.getCustomPlusFormula = function () {
+		if (this.plus && this.plus.isValid()) {
+			return CSeriesBase.prototype.checkR1C1ModeForExternal.call(this, this.plus.getFormula());
+		}
+		return "";
+	};
+	CErrBars.prototype.getCustomMinusFormula = function () {
+		if (this.minus && this.minus.isValid()) {
+			return CSeriesBase.prototype.checkR1C1ModeForExternal.call(this, this.minus.getFormula());
+		}
+		return "";
+	};
+	CErrBars.prototype.getCustomPlusValues = function () {
+		if (this.plus && this.plus.isValid()) {
+			return this.plus.getValues(this.plus.getValuesCount());
+		}
+		return [];
+	};
+	CErrBars.prototype.getCustomMinusValues = function () {
+		if (this.minus && this.minus.isValid()) {
+			return this.minus.getValues(this.minus.getValuesCount());
+		}
+		return [];
+	};
+	CErrBars.prototype.isValidCustomValue = function (sVal) {
+		return AscFormat.ExecuteNoHistory(function () {
+			if (sVal === "" || sVal === null || sVal === undefined) {
+				return Asc.c_oAscError.ID.No;
+			}
+			const oMinusPlus = new CMinusPlus();
+			return oMinusPlus.setValues(sVal).getError();
+		}, this, []);
 	};
 
     function CLayout() {
@@ -11864,11 +11944,83 @@
         }
         return new CDataRefs([]);
     };
+    CMinusPlus.prototype.collectRefs = function(aRefs) {
+        if(this.numRef) {
+            aRefs.push(this.numRef);
+        }
+    };
     CMinusPlus.prototype.isValid = function() {
         if(this.numRef || this.numLit) {
             return true;
         }
         return false;
+    };
+    CMinusPlus.prototype.setValues = function(sValues) {
+        var oResult;
+        if(typeof sValues === "string" && sValues.length > 0) {
+            oResult = new CParseResult();
+            fParseNumLit(sValues, false, oResult);
+            if(oResult.isSuccessful()) {
+                if(this.numRef) {
+                    this.setNumRef(null);
+                }
+                this.setNumLit(oResult.getObject());
+            }
+            else {
+                oResult = new CParseResult();
+                fParseNumRef(sValues, false, oResult);
+                if(oResult.isSuccessful()) {
+                    if(this.numLit) {
+                        this.setNumLit(null);
+                    }
+                    this.setNumRef(oResult.getObject());
+                }
+            }
+        }
+        else {
+            oResult = new CParseResult();
+            oResult.setError(Asc.c_oAscError.ID.No);
+            if(this.numLit) {
+                this.setNumLit(null);
+            }
+            if(this.numRef) {
+                this.setNumRef(null);
+            }
+        }
+        return oResult;
+    };
+    CMinusPlus.prototype.getValuesCount = function() {
+        if(this.numLit) {
+            return this.numLit.getPtCount();
+        }
+        if(this.numRef) {
+            return this.numRef.getValuesCount();
+        }
+        return 0;
+    };
+    CMinusPlus.prototype.getValues = function(nMaxValues) {
+        if(this.numLit) {
+            return this.numLit.getValues(nMaxValues);
+        }
+        if(this.numRef) {
+            return this.numRef.getValues(nMaxValues);
+        }
+        return [];
+    };
+    CMinusPlus.prototype.getFormula = function() {
+        if(this.numLit) {
+            return this.numLit.getFormula();
+        }
+        if(this.numRef) {
+            return this.numRef.getFormula();
+        }
+        return "";
+    };
+    CMinusPlus.prototype.getRefFormula = function() {
+        if(this.numRef) {
+            return this.numRef.getFormula();
+        }
+        return null;
     };
 
     function CMultiLvlStrCache() {
@@ -12237,6 +12389,9 @@
 		} else {
 			let oCurObjectForCheck = this;
 			while (!oSeries && oCurObjectForCheck) {
+				if (oCurObjectForCheck.getObjectType && oCurObjectForCheck.getObjectType() === AscDFH.historyitem_type_ErrBars) {
+					break;
+				}
 				if (isObjectSeries(oCurObjectForCheck)) {
 					oSeries = oCurObjectForCheck;
 				} else {
@@ -18365,6 +18520,12 @@
 	};
     CSeriesDataRefs.prototype.collectIntersectionRefsForInsertColRow = function(oRange, aCollectedRefs, isInsertCol) {
         this.val.collectRefsIntersectsForInsertColRow(oRange, aCollectedRefs, isInsertCol);
+        for(let nIdx = 0; nIdx < this.errBarsMinus.length; ++nIdx) {
+            this.errBarsMinus[nIdx].collectRefsIntersectsForInsertColRow(oRange, aCollectedRefs, isInsertCol);
+        }
+        for(let nIdx = 0; nIdx < this.errBarsPlus.length; ++nIdx) {
+            this.errBarsPlus[nIdx].collectRefsIntersectsForInsertColRow(oRange, aCollectedRefs, isInsertCol);
+        }
     };
     CSeriesDataRefs.prototype.getAscSeries = function() {
         var oSeria = new AscFormat.asc_CChartSeria();
@@ -18619,13 +18780,23 @@
 
     };
     CChartDataRefs.prototype.checkBoundsByWs = function() {
+        var nSeries, nIdx, oSerRef;
         if(this.info !== 0) {
             this.val.collectBoundsByWS(this.boundsByWS);
             this.cat.collectBoundsByWS(this.boundsByWS);
             this.tx.collectBoundsByWS(this.boundsByWS);
+            for(nSeries = 0; nSeries < this.seriesRefs.length; ++nSeries) {
+                oSerRef = this.seriesRefs[nSeries];
+                for(nIdx = 0; nIdx < oSerRef.errBarsMinus.length; ++nIdx) {
+                    oSerRef.errBarsMinus[nIdx].collectBoundsByWS(this.boundsByWS);
+                }
+                for(nIdx = 0; nIdx < oSerRef.errBarsPlus.length; ++nIdx) {
+                    oSerRef.errBarsPlus[nIdx].collectBoundsByWS(this.boundsByWS);
+                }
+            }
         }
         else {
-            for(var nSeries = 0; nSeries < this.seriesRefs.length; ++nSeries) {
+            for(nSeries = 0; nSeries < this.seriesRefs.length; ++nSeries) {
                 this.seriesRefs[nSeries].collectBoundsByWS(this.boundsByWS);
             }
         }
@@ -19196,6 +19367,7 @@
         if(!oSheetBounds.isIntersect(oRange)) {
             return false;
         }
+        var nSeries, nIdx, oSerRef;
         if(this.info !== 0) {
             if(this.val.hasIntersection(oRange)) {
                 return true;
@@ -19206,9 +19378,22 @@
             if(this.tx.hasIntersection(oRange)) {
                 return true;
             }
+            for(nSeries = 0; nSeries < this.seriesRefs.length; ++nSeries) {
+                oSerRef = this.seriesRefs[nSeries];
+                for(nIdx = 0; nIdx < oSerRef.errBarsMinus.length; ++nIdx) {
+                    if(oSerRef.errBarsMinus[nIdx].hasIntersection(oRange)) {
+                        return true;
+                    }
+                }
+                for(nIdx = 0; nIdx < oSerRef.errBarsPlus.length; ++nIdx) {
+                    if(oSerRef.errBarsPlus[nIdx].hasIntersection(oRange)) {
+                        return true;
+                    }
+                }
+            }
         }
         else {
-            for(var nSeries = 0; nSeries < this.seriesRefs.length; ++nSeries) {
+            for(nSeries = 0; nSeries < this.seriesRefs.length; ++nSeries) {
                 if(this.seriesRefs[nSeries].hasIntersection(oRange)) {
                     return true;
                 }
