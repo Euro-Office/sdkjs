@@ -7288,6 +7288,48 @@ $(function () {
 		})
 	}
 
+	function testCustomErrorBars() {
+		QUnit.test("Test: Custom Error Bars (st_errvaltypeCUST)", function (assert) {
+			fillData(wsData, [[10, 1.5, 0.5], [20, 2.25, 1.25], [30, 3.75, 2.0]], {r1: 0, c1: 0});
+
+			let oWorksheet = api.GetActiveSheet();
+			let oChart = oWorksheet.AddChart("'Data'!$A$1:$A$3", true, "bar", 2, 100 * 36000, 70 * 36000, 0, 2 * 36000, 7, 3 * 36000);
+			let chartSpace = oChart.Chart;
+			let ser = chartSpace.getAllSeries()[0];
+
+			ser.createAllErrBars(AscFormat.st_errvaltypeCUST);
+
+			assert.ok(ser.errBars && ser.errBars.length === 1, "Custom error bars created on bar series");
+			let errBar = ser.errBars[0];
+			assert.strictEqual(errBar.errValType, AscFormat.st_errvaltypeCUST, "errValType is st_errvaltypeCUST");
+
+			errBar.setCustomValues("=Data!$B$1:$B$3", "=Data!$C$1:$C$3");
+			assert.strictEqual(errBar.getCustomPlusFormula(), "=Data!$B$1:$B$3", "Plus formula matches cell range");
+			assert.strictEqual(errBar.getCustomMinusFormula(), "=Data!$C$1:$C$3", "Minus formula matches cell range");
+
+			let plusVals = errBar.getCustomPlusValues();
+			let minusVals = errBar.getCustomMinusValues();
+			assert.ok(plusVals && isEqual(plusVals[0], 1.5) && isEqual(minusVals[0], 0.5), "Point 0 custom error values: plus=1.5, minus=0.5");
+			assert.ok(plusVals && isEqual(plusVals[1], 2.25) && isEqual(minusVals[1], 1.25), "Point 1 custom error values: plus=2.25, minus=1.25");
+			assert.ok(plusVals && isEqual(plusVals[2], 3.75) && isEqual(minusVals[2], 2.0), "Point 2 custom error values: plus=3.75, minus=2.0");
+
+			let chartsDrawer = new AscFormat.CChartsDrawer();
+			let plotChart = chartSpace.chart.plotArea.charts[0];
+			let errVal0 = chartsDrawer.errBars.calculateErrVal(plotChart, 0, 0, 0);
+			let errVal1 = chartsDrawer.errBars.calculateErrVal(plotChart, 0, 0, 1);
+			let errVal2 = chartsDrawer.errBars.calculateErrVal(plotChart, 0, 0, 2);
+
+			assert.ok(errVal0 && isEqual(errVal0.plusErrVal, 1.5) && isEqual(errVal0.minusErrVal, 0.5), "Point 0 calculateErrVal: plus=1.5, minus=0.5");
+			assert.ok(errVal1 && isEqual(errVal1.plusErrVal, 2.25) && isEqual(errVal1.minusErrVal, 1.25), "Point 1 calculateErrVal: plus=2.25, minus=1.25");
+			assert.ok(errVal2 && isEqual(errVal2.plusErrVal, 3.75) && isEqual(errVal2.minusErrVal, 2.0), "Point 2 calculateErrVal: plus=3.75, minus=2.0");
+
+			errBar.setCustomValues("=Data!$B$1:$B$3", "");
+			assert.strictEqual(errBar.getCustomMinusFormula(), "", "Minus formula is empty when cleared");
+			let emptyMinusErrVal = chartsDrawer.errBars.calculateErrVal(plotChart, 0, 0, 0);
+			assert.ok(emptyMinusErrVal && isEqual(emptyMinusErrVal.plusErrVal, 1.5) && isEqual(emptyMinusErrVal.minusErrVal, 0), "Point 0 with empty minus: plus=1.5, minus=0");
+		});
+	}
+
 	QUnit.module("ChartsDraw");
 
 	function startTests() {
@@ -7309,5 +7351,6 @@ $(function () {
 		testHistogramHandleBinning();
 		testHistogramHandleBinningMinAndMaxAndScale();
 		testRoundValue();
+		testCustomErrorBars();
 	}
 });
