@@ -3278,6 +3278,9 @@
 		// File type (Asc.c_oAscFileType) of the document the workbook was converted from, when the
 		// converter recorded it; null otherwise.
 		this.sourceFileType = null;
+		// Sheets the editor cannot show (Excel 4.0 macro sheets), as an opaque Uint8Array
+		// that is written back unchanged on save.
+		this.preservedSheets = null;
 
 		AscFormat.ExecuteNoHistory(function () {
 			this.CustomProperties = new AscCommon.CCustomProperties();
