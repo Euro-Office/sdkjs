@@ -37,6 +37,76 @@
   var c_oAscServerCommandErrors = AscCommon.c_oAscServerCommandErrors;
   var c_oAscForceSaveTypes = AscCommon.c_oAscForceSaveTypes;
 
+  // Local session transport: an in-page object registered by the host (web-apps) that replaces the
+  // socket.io connection to the DocService. See DocumentServer/docs/client-only-editor-plan.md.
+  var g_oLocalSessionTransport = null;
+  function setLocalSessionTransport(transport) {
+    g_oLocalSessionTransport = transport || null;
+  }
+  function getLocalSessionTransport() {
+    return g_oLocalSessionTransport;
+  }
+
+  // Adapter exposing the subset of the socket.io client surface that DocsCoApi uses, on top of a
+  // local session transport. Reconnection never happens: the transport is closed explicitly.
+  function CLocalTransportSocket(transport, coApi) {
+    this.transport = transport;
+    this.coApi = coApi;
+    this.connected = false;
+    this["auth"] = {};
+    this.io = {
+      "opts": {},
+      reconnectionAttempts: function() {},
+      reconnectionDelay: function() {},
+      reconnectionDelayMax: function() {},
+      randomizationFactor: function() {},
+      setOpenToken: function() {},
+      setSessionToken: function() {}
+    };
+  }
+  CLocalTransportSocket.prototype.connect = function() {
+    if (this.connected) {
+      return;
+    }
+    var t = this;
+    this.connected = true;
+    this.transport.connect({
+      "onOpen": function() {
+        t.coApi._onServerOpen();
+      },
+      "onMessage": function(data) {
+        t.coApi._onServerMessage(data);
+      },
+      "onClose": function(explicit) {
+        t.connected = false;
+        t.coApi._onServerClose(!!explicit);
+        if (!explicit) {
+          t.coApi.onDisconnect();
+        }
+      },
+      "onDisconnect": function(reason, code) {
+        t.connected = false;
+        t.coApi._onServerClose(true);
+        t.coApi.onDisconnect(reason, code);
+      }
+    });
+  };
+  CLocalTransportSocket.prototype.emit = function(name, data) {
+    if ("message" === name) {
+      this.transport.send(data);
+    }
+  };
+  CLocalTransportSocket.prototype.close = function() {
+    if (!this.connected) {
+      return;
+    }
+    this.connected = false;
+    this.transport.close();
+  };
+  CLocalTransportSocket.prototype.disconnect = function() {
+    this.close();
+  };
+
   // Класс надстройка, для online и offline работы
   function CDocsCoApi() {
     this._CoAuthoringApi = new DocsCoApi();
@@ -1765,6 +1835,11 @@
       var t = this;
       let socket;
       let firstConnection = true;
+      if (g_oLocalSessionTransport) {
+        socket = this.socketio = new CLocalTransportSocket(g_oLocalSessionTransport, this);
+        socket.connect();
+        return socket;
+      }
       let options = {
         "path": this.socketio_url,
         "transports": ["websocket", "polling"],
@@ -1942,4 +2017,6 @@
   //----------------------------------------------------------export----------------------------------------------------
   window['AscCommon'] = window['AscCommon'] || {};
   window['AscCommon'].CDocsCoApi = CDocsCoApi;
+  window['AscCommon'].setLocalSessionTransport = window.AscCommon.setLocalSessionTransport = setLocalSessionTransport;
+  window['AscCommon'].getLocalSessionTransport = window.AscCommon.getLocalSessionTransport = getLocalSessionTransport;
 })(window);

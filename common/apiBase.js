@@ -2629,6 +2629,36 @@
 				}
 			};
 		}
+		var transport = AscCommon.getLocalSessionTransport ? AscCommon.getLocalSessionTransport() : null;
+		if (transport && transport.convert)
+		{
+			// Local session: the host converts in the browser instead of the DS "downloadas" service.
+			var fLocalCallback = options.callback || this.fCurCallback;
+			transport.convert({
+				"data": dataContainer.data,
+				"fileType": oAdditionalData["outputformat"],
+				"format": AscCommon.getExtentionByFormat(oAdditionalData["outputformat"]),
+				"title": oAdditionalData["title"],
+				"isPrint": DownloadType.Print === downloadType,
+				"options": oAdditionalData
+			}, function(result)
+			{
+				var input = {"type": oAdditionalData["c"]};
+				if (result && "ok" === result["status"] && result["data"])
+				{
+					input["status"] = "ok";
+					input["data"] = result["data"];
+					input["filetype"] = result["filetype"];
+				}
+				else
+				{
+					input["status"] = "err";
+					input["data"] = AscCommon.c_oAscServerError.Convert;
+				}
+				fLocalCallback && fLocalCallback(input, 200);
+			});
+			return;
+		}
 		AscCommon.saveWithParts(function(fCallback1, oAdditionalData1, dataContainer1) {
 			AscCommon.sendCommand(t, fCallback1, oAdditionalData1, dataContainer1);
 		}, this.fCurCallback, options.callback, oAdditionalData, dataContainer);
@@ -6036,7 +6066,11 @@
 	baseEditorsApi.prototype.initBroadcastChannel = function() {
 		if (!this.broadcastChannel) {
 			if (typeof BroadcastChannel !== "undefined") {
-				this.broadcastChannel = new BroadcastChannel("onlyofficeChannel");
+				try {
+					this.broadcastChannel = new BroadcastChannel("onlyofficeChannel");
+				} catch (e) {
+					// Tor Browser throws here instead of leaving BroadcastChannel undefined
+				}
 			}
 		}
 	};

@@ -2484,6 +2484,20 @@
 
 	function UploadImageFiles(files, documentId, documentUserId, jwt, shardKey, wopiSrc, userSessionId, callback)
 	{
+		var transport = AscCommon.getLocalSessionTransport ? AscCommon.getLocalSessionTransport() : null;
+		if (transport)
+		{
+			// Local session: there is no DS upload service; the host may provide its own storage.
+			if (transport.uploadImages)
+			{
+				transport.uploadImages(files, callback);
+			}
+			else
+			{
+				callback(Asc.c_oAscError.ID.UplImageUrl);
+			}
+			return;
+		}
 		if (files.length > 0)
 		{
 			let url = sUploadServiceLocalUrl + '/' + documentId;
@@ -2560,6 +2574,13 @@
 
     function UploadImageUrls(files, documentId, documentUserId, jwt, shardKey, wopiSrc, userSessionId, callback)
     {
+        var transport = AscCommon.getLocalSessionTransport ? AscCommon.getLocalSessionTransport() : null;
+        if (transport)
+        {
+            // Local session: remote image URLs cannot be fetched through the DS.
+            callback(Asc.c_oAscError.ID.UplImageUrl);
+            return;
+        }
         if (files.length > 0)
         {
             let url = sUploadServiceLocalUrl + '/' + documentId;
