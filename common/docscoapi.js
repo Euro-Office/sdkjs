@@ -102,6 +102,8 @@
     }
     this.connected = false;
     this.transport.close();
+    // mirrors the explicit "io client disconnect" event of socket.io: no reconnect is attempted
+    this.coApi._onServerClose(true);
   };
   CLocalTransportSocket.prototype.disconnect = function() {
     this.close();
