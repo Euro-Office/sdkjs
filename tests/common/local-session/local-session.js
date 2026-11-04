@@ -55,7 +55,8 @@ $(function () {
 		if (!window.Asc.editor.isPdfEditor)
 			window.Asc.editor.isPdfEditor = function () { return false; };
 
-		AscCommon.setLocalSessionTransport(transport);
+		if (transport)
+			AscCommon.setLocalSessionTransport(transport);
 
 		var coApi = new AscCommon.CDocsCoApi();
 		coApi._CoAuthoringApi.set_url("local");
@@ -147,6 +148,187 @@ $(function () {
 		var coApi = createCoApi(transport, {});
 		coApi.sendMessage("hello");
 		assert.strictEqual(transport.sent.length, 1, "state WaitAuth already sends through the transport");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Closing the adapter closes the transport without reconnecting", function (assert)
+	{
+		var transport = createFakeTransport();
+		var disconnects = [];
+		var coApi = createCoApi(transport, {
+			onDisconnect : function (reason, code) { disconnects.push(code); }
+		});
+		var socket = coApi._CoAuthoringApi.socketio;
+		assert.ok(socket, "adapter is used as the socket");
+
+		coApi.disconnect(AscCommon.c_oCloseCode.quiet, "done");
+		assert.strictEqual(transport.closed, 1, "transport.close was called once");
+		assert.strictEqual(coApi._CoAuthoringApi.get_state(), AscCommon.ConnectionState.ClosedAll, "state is ClosedAll, not Reconnect");
+		assert.deepEqual(disconnects, [AscCommon.c_oCloseCode.quiet], "onDisconnect reports the explicit code once");
+
+		socket.close();
+		socket.disconnect();
+		assert.strictEqual(transport.closed, 1, "closing again is a no-op");
+
+		transport.handlers["onClose"](false);
+		assert.strictEqual(coApi._CoAuthoringApi.get_state(), AscCommon.ConnectionState.Reconnect, "an unexpected close reports Reconnect state to the api");
+		assert.strictEqual(disconnects.length, 2, "an unexpected close reports a disconnect");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Without a transport the socket.io path is used", function (assert)
+	{
+		AscCommon.setLocalSessionTransport(null);
+		var origGetSocketIO = AscCommon.getSocketIO;
+		var ioOptions = null;
+		var fakeSocket = {
+			events : {},
+			on : function (name, cb) { this.events[name] = cb; },
+			io : {on : function () {}, opts : {}},
+			emit : function () {},
+			disconnect : function () {}
+		};
+		AscCommon.getSocketIO = function ()
+		{
+			return function (options)
+			{
+				ioOptions = options;
+				return fakeSocket;
+			};
+		};
+		try
+		{
+			var coApi = createCoApi(null, {});
+			assert.strictEqual(coApi._CoAuthoringApi.socketio, fakeSocket, "socket.io client is used");
+			assert.ok(ioOptions && /doc1/.test(ioOptions["path"]), "socket.io is opened on the document path");
+			assert.ok(fakeSocket.events["message"], "message handler is registered on the socket");
+		}
+		finally
+		{
+			AscCommon.getSocketIO = origGetSocketIO;
+		}
+	});
+
+	QUnit.module("Local session download and upload");
+
+	function createApi()
+	{
+		var api = new AscCommon.baseEditorsApi({});
+		api.documentId = "doc1";
+		api.documentTitle = "report.docx";
+		return api;
+	}
+
+	function createDownloadData(isPrint)
+	{
+		return {
+			oAdditionalData : {
+				"c" : "save",
+				"id" : "doc1",
+				"outputformat" : Asc.c_oAscFileType.PDF,
+				"title" : "report.pdf"
+			},
+			dataContainer : {data : "BIN", part : null, index : 0, count : 0},
+			downloadType : isPrint ? AscCommon.DownloadType.Print : AscCommon.DownloadType.Download
+		};
+	}
+
+	QUnit.test("downloadAs converts through the transport", function (assert)
+	{
+		var requests = [];
+		var transport = {
+			convert : function (request, cb)
+			{
+				requests.push(request);
+				cb({"status" : "ok", "data" : "blob:converted", "filetype" : "pdf"});
+			}
+		};
+		AscCommon.setLocalSessionTransport(transport);
+		var api = createApi();
+		var urls = [];
+		var errors = [];
+		api.sendEvent = function (name, a, b)
+		{
+			if ("asc_onPrintUrl" === name)
+				urls.push(a + ":" + b);
+			else if ("asc_onError" === name)
+				errors.push(a);
+		};
+
+		var d = createDownloadData(true);
+		api._downloadAsUsingServer(Asc.c_oAscAsyncAction.Print, {}, d.oAdditionalData, d.dataContainer, d.downloadType);
+
+		assert.strictEqual(requests.length, 1, "transport.convert was called once");
+		var request = requests[0];
+		assert.strictEqual(request["data"], "BIN", "request carries the editor data");
+		assert.strictEqual(request["fileType"], Asc.c_oAscFileType.PDF, "request carries the numeric file type");
+		assert.strictEqual(request["format"], "pdf", "request carries the extension");
+		assert.strictEqual(request["title"], "report.pdf", "request carries the title");
+		assert.strictEqual(request["isPrint"], true, "request flags printing");
+		assert.strictEqual(request["options"], d.oAdditionalData, "request carries the downloadas parameters");
+		assert.deepEqual(urls, ["blob:converted:pdf"], "the converted url reaches the same download event as the server path");
+		assert.deepEqual(errors, [], "no error is raised");
+
+		var callbackInput = null;
+		var d2 = createDownloadData(false);
+		api._downloadAsUsingServer(null, {callback : function (input) { callbackInput = input; }}, d2.oAdditionalData, d2.dataContainer, d2.downloadType);
+		assert.ok(callbackInput && "ok" === callbackInput["status"] && "blob:converted" === callbackInput["data"], "a caller supplied callback receives the server shaped reply");
+		assert.strictEqual(requests[1]["isPrint"], false, "download is not flagged as print");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("downloadAs reports a conversion error from the transport", function (assert)
+	{
+		AscCommon.setLocalSessionTransport({
+			convert : function (request, cb) { cb({"status" : "err", "error" : 1}); }
+		});
+		var api = createApi();
+		var urls = [];
+		var errors = [];
+		api.sendEvent = function (name, a, b)
+		{
+			if ("asc_onDownloadUrl" === name)
+				urls.push(a);
+			else if ("asc_onError" === name)
+				errors.push(a + ":" + b);
+		};
+
+		var d = createDownloadData(false);
+		api._downloadAsUsingServer(Asc.c_oAscAsyncAction.DownloadAs, {}, d.oAdditionalData, d.dataContainer, d.downloadType);
+
+		assert.deepEqual(urls, [], "no url is delivered");
+		assert.deepEqual(errors, [Asc.c_oAscError.ID.ConvertationSaveError + ":" + Asc.c_oAscError.Level.NoCritical], "a non critical conversion save error is raised");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Image upload goes through the transport", function (assert)
+	{
+		var uploaded = null;
+		AscCommon.setLocalSessionTransport({
+			uploadImages : function (files, cb)
+			{
+				uploaded = files;
+				cb(Asc.c_oAscError.ID.No, ["blob:img1"]);
+			}
+		});
+		var result = null;
+		var files = [{name : "a.png"}];
+		AscCommon.UploadImageFiles(files, "doc1", "u1", "", undefined, undefined, undefined, function (error, urls)
+		{
+			result = {error : error, urls : urls};
+		});
+		assert.strictEqual(uploaded, files, "transport.uploadImages receives the files");
+		assert.deepEqual(result, {error : Asc.c_oAscError.ID.No, urls : ["blob:img1"]}, "error and urls are forwarded");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Image upload fails cleanly without transport support", function (assert)
+	{
+		AscCommon.setLocalSessionTransport({});
+		var errors = [];
+		AscCommon.UploadImageFiles([{name : "a.png"}], "doc1", "u1", "", undefined, undefined, undefined, function (error) { errors.push(error); });
+		AscCommon.UploadImageUrls(["http://example.com/a.png"], "doc1", "u1", "", undefined, undefined, undefined, function (error) { errors.push(error); });
+		assert.deepEqual(errors, [Asc.c_oAscError.ID.UplImageUrl, Asc.c_oAscError.ID.UplImageUrl], "both upload paths report the upload url error");
 		AscCommon.setLocalSessionTransport(null);
 	});
 });
