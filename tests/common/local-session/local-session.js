@@ -27,29 +27,48 @@ $(function () {
 
 	QUnit.module("Local session transport");
 
+	// Transport callbacks reach DocsCoApi asynchronously (like socket.io events)
+	function tick()
+	{
+		return new Promise(function (resolve) { setTimeout(resolve, 0); });
+	}
+
 	function createFakeTransport()
 	{
 		return {
 			handlers : null,
+			connects : 0,
 			sent : [],
 			closed : 0,
+			onSend : null,
 			connect : function (handlers)
 			{
+				this.connects++;
 				this.handlers = handlers;
 				handlers["onOpen"]();
 			},
 			send : function (data)
 			{
 				this.sent.push(data);
+				if (this.onSend)
+					this.onSend(data);
 			},
 			close : function ()
 			{
 				this.closed++;
+			},
+			reply : function (data)
+			{
+				this.handlers["onMessage"](data);
+			},
+			sentOfType : function (type)
+			{
+				return this.sent.filter(function (m) { return m["type"] === type; });
 			}
 		};
 	}
 
-	function createCoApi(transport, callbacks)
+	function createCoApi(transport, callbacks, editorType)
 	{
 		window.Asc.editor = window.Asc.editor || {};
 		if (!window.Asc.editor.isPdfEditor)
@@ -63,16 +82,47 @@ $(function () {
 		for (var name in callbacks)
 			coApi[name] = callbacks[name];
 
-		var user = new AscCommon.asc_CUser({"id" : "u10", "idOriginal" : "u1", "username" : "Alice", "indexUser" : 0, "view" : true});
+		var user = new AscCommon.asc_CUser({"id" : "u1", "idOriginal" : "u1", "username" : "Alice", "indexUser" : -1, "view" : false});
 
 		var docInfo = new Asc.asc_CDocInfo();
-		docInfo.put_Mode("view");
-		docInfo.put_Permissions({"edit" : false});
+		docInfo.put_Mode(callbacks && callbacks.mode || "view");
+		docInfo.put_Permissions({"edit" : !!(callbacks && callbacks.mode === "edit")});
 		docInfo.put_Lang("en");
 
 		var openCmd = {"c" : "open", "id" : "doc1", "format" : "docx"};
-		coApi.init(user, "doc1", "", "", AscCommon.c_oEditorId.Word, "docx", docInfo, undefined, undefined, undefined, undefined, openCmd);
+		coApi.init(user, "doc1", "", "", undefined !== editorType ? editorType : AscCommon.c_oEditorId.Word, "docx", docInfo, undefined, undefined, undefined, undefined, openCmd);
 		return coApi;
+	}
+
+	function participant(id, indexUser, view)
+	{
+		return {"id" : id + indexUser, "idOriginal" : id, "username" : id, "indexUser" : indexUser, "view" : !!view};
+	}
+
+	// Opens a session and answers auth like the DocService: the own user id is user.id + indexUser ("u11").
+	async function createAuthorizedCoApi(callbacks, editorType)
+	{
+		var transport = createFakeTransport();
+		callbacks = callbacks || {};
+		callbacks.mode = "edit";
+		var coApi = createCoApi(transport, callbacks, editorType);
+		await tick();
+		coApi.auth(false, {"c" : "open", "id" : "doc1"});
+		transport.reply({"type" : "license", "license" : {"type" : 3, "mode" : 0, "rights" : 1, "buildVersion" : "9.3.8", "buildNumber" : 1}});
+		transport.reply({
+			"type" : "auth",
+			"result" : 1,
+			"sessionId" : "s1",
+			"participants" : [participant("u1", 1)],
+			"locks" : [],
+			"indexUser" : 1,
+			"buildVersion" : "9.3.8",
+			"buildNumber" : 1,
+			"licenseType" : 3
+		});
+		await tick();
+		transport.sent = [];
+		return {coApi : coApi, transport : transport, docsCoApi : coApi._CoAuthoringApi};
 	}
 
 	QUnit.test("Registration", function (assert)
@@ -84,19 +134,22 @@ $(function () {
 		assert.strictEqual(AscCommon.getLocalSessionTransport(), null, "transport is cleared");
 	});
 
-	QUnit.test("Auth goes through the transport and replies reach the api", function (assert)
+	QUnit.test("Auth goes through the transport and replies reach the api", async function (assert)
 	{
 		var transport = createFakeTransport();
 		var events = [];
 		var coApi = createCoApi(transport, {
 			onFirstConnect : function () { events.push("firstConnect"); },
 			onLicense : function (license) { events.push("license:" + license["type"]); },
-			onAuthParticipantsChanged : function (participants, userId) { events.push("participants:" + Object.keys(participants).length); },
+			onAuthParticipantsChanged : function (participants, userId) { events.push("participants:" + Object.keys(participants).length + ":" + userId); },
 			onDocumentOpen : function (data) { events.push("documentOpen:" + data["data"]["data"]["Editor.bin"]); }
 		});
 
 		assert.ok(transport.handlers, "transport.connect was called");
+		assert.deepEqual(events, [], "onOpen is delivered asynchronously, after init returned");
+		await tick();
 		assert.deepEqual(events, ["firstConnect"], "onOpen triggers onFirstConnect");
+		assert.ok(coApi.get_onlineWork(), "the api works online when onOpen arrives");
 		assert.strictEqual(transport.sent.length, 0, "nothing is sent before auth");
 
 		coApi.auth(true, {"c" : "open", "id" : "doc1"});
@@ -104,20 +157,20 @@ $(function () {
 		var auth = transport.sent[0];
 		assert.strictEqual(auth["type"], "auth", "message type is auth");
 		assert.strictEqual(auth["docid"], "doc1", "auth carries the document id");
-		assert.strictEqual(auth["user"]["id"], "u10", "auth carries the user id");
+		assert.strictEqual(auth["user"]["id"], "u1", "auth carries the user id");
 		assert.strictEqual(auth["mode"], "view", "auth carries the mode");
 		assert.strictEqual(auth["openCmd"]["c"], "open", "auth carries the open command");
 
-		transport.handlers["onMessage"]({
+		transport.reply({
 			"type" : "license",
 			"license" : {"type" : 3, "mode" : 0, "rights" : 1, "buildVersion" : "9.3.8", "buildNumber" : 1}
 		});
-		transport.handlers["onMessage"]({"type" : "authChanges", "changes" : []});
-		transport.handlers["onMessage"]({
+		transport.reply({"type" : "authChanges", "changes" : []});
+		transport.reply({
 			"type" : "auth",
 			"result" : 1,
 			"sessionId" : "s1",
-			"participants" : [{"id" : "u10", "idOriginal" : "u1", "username" : "Alice", "indexUser" : 0, "view" : true}],
+			"participants" : [participant("u1", 0, true)],
 			"locks" : [],
 			"changes" : [],
 			"changesIndex" : 0,
@@ -126,15 +179,18 @@ $(function () {
 			"buildNumber" : 1,
 			"licenseType" : 3
 		});
-		assert.ok(coApi.get_isAuth(), "api is authorized after the auth reply");
-		assert.ok(events.indexOf("license:3") !== -1, "license reply reached onLicense");
-		assert.ok(events.indexOf("participants:1") !== -1, "participants reached onAuthParticipantsChanged");
-
-		transport.handlers["onMessage"]({
+		transport.reply({
 			"type" : "documentOpen",
 			"data" : {"type" : "open", "status" : "ok", "data" : {"Editor.bin" : "blob:editor-bin"}}
 		});
+		assert.notOk(coApi.get_isAuth(), "replies are not handled inside the transport call");
+		await tick();
+		assert.ok(coApi.get_isAuth(), "api is authorized after the auth reply");
+		assert.ok(events.indexOf("license:3") !== -1, "license reply reached onLicense");
+		assert.ok(events.indexOf("participants:1:u10") !== -1, "participants reached onAuthParticipantsChanged with the user id + indexUser");
 		assert.ok(events.indexOf("documentOpen:blob:editor-bin") !== -1, "documentOpen reached onDocumentOpen");
+		assert.deepEqual(events.slice(1), ["license:3", "participants:1:u10", "documentOpen:blob:editor-bin"], "replies are delivered in order");
+		assert.strictEqual(transport.sentOfType("authChangesAck").length, 1, "authChanges is acknowledged");
 
 		coApi.disconnect(AscCommon.c_oCloseCode.quiet, "done");
 		assert.strictEqual(transport.closed, 1, "disconnect closes the transport");
@@ -142,22 +198,28 @@ $(function () {
 		AscCommon.setLocalSessionTransport(null);
 	});
 
-	QUnit.test("Messages sent before auth are buffered", function (assert)
+	QUnit.test("Messages sent before the connection opens are buffered", async function (assert)
 	{
 		var transport = createFakeTransport();
 		var coApi = createCoApi(transport, {});
+		coApi.sendMessage("early");
+		assert.strictEqual(transport.sent.length, 0, "a message sent before onOpen is buffered");
+		await tick();
 		coApi.sendMessage("hello");
-		assert.strictEqual(transport.sent.length, 1, "state WaitAuth already sends through the transport");
+		assert.deepEqual(transport.sent, [{"type" : "message", "message" : "hello"}], "state WaitAuth sends through the transport");
 		AscCommon.setLocalSessionTransport(null);
 	});
 
-	QUnit.test("Closing the adapter closes the transport without reconnecting", function (assert)
+	QUnit.test("Closing the adapter closes the transport and ignores its later callbacks", async function (assert)
 	{
 		var transport = createFakeTransport();
 		var disconnects = [];
+		var messages = [];
 		var coApi = createCoApi(transport, {
-			onDisconnect : function (reason, code) { disconnects.push(code); }
+			onDisconnect : function (reason, code) { disconnects.push(code); },
+			onMessage : function (m) { messages.push(m); }
 		});
+		await tick();
 		var socket = coApi._CoAuthoringApi.socketio;
 		assert.ok(socket, "adapter is used as the socket");
 
@@ -171,8 +233,49 @@ $(function () {
 		assert.strictEqual(transport.closed, 1, "closing again is a no-op");
 
 		transport.handlers["onClose"](false);
-		assert.strictEqual(coApi._CoAuthoringApi.get_state(), AscCommon.ConnectionState.Reconnect, "an unexpected close reports Reconnect state to the api");
-		assert.strictEqual(disconnects.length, 2, "an unexpected close reports a disconnect");
+		transport.handlers["onDisconnect"]("gone", AscCommon.c_oCloseCode.drop);
+		transport.handlers["onMessage"]({"type" : "message", "messages" : ["late"]});
+		transport.handlers["onOpen"]();
+		await tick();
+		assert.strictEqual(coApi._CoAuthoringApi.get_state(), AscCommon.ConnectionState.ClosedAll, "callbacks after an explicit close do not start a reconnect");
+		assert.strictEqual(disconnects.length, 1, "no further disconnect is reported");
+		assert.strictEqual(transport.connects, 1, "the transport is not reopened");
+		assert.strictEqual(coApi._CoAuthoringApi.socketio.queue.length, 0, "nothing is queued");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Messages queued before an explicit close are dropped", async function (assert)
+	{
+		var transport = createFakeTransport();
+		var opened = 0;
+		var coApi = createCoApi(transport, {onFirstConnect : function () { opened++; }});
+		coApi.disconnect(AscCommon.c_oCloseCode.quiet, "done");
+		await tick();
+		assert.strictEqual(opened, 0, "a queued onOpen is not delivered after close");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("The host can drop and reopen its connection", async function (assert)
+	{
+		var t = await createAuthorizedCoApi({});
+		var disconnects = [];
+		var opens = 0;
+		t.coApi.onDisconnect = function (reason, code) { disconnects.push(code); };
+		t.coApi.onFirstConnect = function () { opens++; };
+
+		t.transport.handlers["onClose"](false);
+		await tick();
+		assert.strictEqual(t.docsCoApi.get_state(), AscCommon.ConnectionState.Reconnect, "an unexpected close reports Reconnect state to the api");
+		assert.deepEqual(disconnects, [undefined], "an unexpected close reports a disconnect without a code");
+
+		t.transport.handlers["onOpen"]();
+		await tick();
+		assert.strictEqual(opens, 1, "onOpen after a drop reaches onFirstConnect again, so the api re-authenticates");
+		assert.strictEqual(t.docsCoApi.get_state(), AscCommon.ConnectionState.WaitAuth, "state is WaitAuth again");
+		assert.strictEqual(t.transport.connects, 1, "sdkjs did not reconnect on its own");
+
+		t.coApi.disconnect(AscCommon.c_oCloseCode.quiet, "done");
+		assert.strictEqual(t.transport.closed, 1, "the reopened connection can be closed");
 		AscCommon.setLocalSessionTransport(null);
 	});
 

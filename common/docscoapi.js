@@ -48,11 +48,20 @@
   }
 
   // Adapter exposing the subset of the socket.io client surface that DocsCoApi uses, on top of a
-  // local session transport. Reconnection never happens: the transport is closed explicitly.
+  // local session transport. The adapter never reconnects on its own: the host may reopen a
+  // connection it dropped by calling onOpen again, and DocsCoApi.connect() opens a new one.
+  //
+  // Transport callbacks are delivered asynchronously and in order, like socket.io events, so a host
+  // that answers inside transport.send() does not re-enter DocsCoApi or the editor in the middle of
+  // a state change (e.g. CWordCollaborativeEditing.OnEnd_CheckLock sets the global lock after
+  // askLock returns). Callbacks of a connection that sdkjs closed are ignored.
   function CLocalTransportSocket(transport, coApi) {
     this.transport = transport;
     this.coApi = coApi;
     this.connected = false;
+    this.connection = null;
+    this.queue = [];
+    this.isFlushScheduled = false;
     this["auth"] = {};
     this.io = {
       "opts": {},
@@ -65,42 +74,78 @@
     };
   }
   CLocalTransportSocket.prototype.connect = function() {
-    if (this.connected) {
+    if (this.connection && this.connected) {
       return;
     }
     var t = this;
+    var connection = this.connection = {closed: false};
     this.connected = true;
     this.transport.connect({
       "onOpen": function() {
-        t.coApi._onServerOpen();
+        t._deliver(connection, function() {
+          t.connected = true;
+          t.coApi._onServerOpen();
+        });
       },
       "onMessage": function(data) {
-        t.coApi._onServerMessage(data);
+        t._deliver(connection, function() {
+          t.coApi._onServerMessage(data);
+        });
       },
       "onClose": function(explicit) {
-        t.connected = false;
-        t.coApi._onServerClose(!!explicit);
-        if (!explicit) {
-          t.coApi.onDisconnect();
-        }
+        t._deliver(connection, function() {
+          t.connected = false;
+          t.coApi._onServerClose(!!explicit);
+          if (!explicit) {
+            t.coApi.onDisconnect();
+          }
+        });
       },
       "onDisconnect": function(reason, code) {
-        t.connected = false;
-        t.coApi._onServerClose(true);
-        t.coApi.onDisconnect(reason, code);
+        t._deliver(connection, function() {
+          t.connected = false;
+          t.coApi._onServerClose(true);
+          t.coApi.onDisconnect(reason, code);
+        });
       }
     });
   };
+  CLocalTransportSocket.prototype._deliver = function(connection, fn) {
+    if (connection.closed) {
+      return;
+    }
+    this.queue.push({connection: connection, fn: fn});
+    if (this.isFlushScheduled) {
+      return;
+    }
+    this.isFlushScheduled = true;
+    var t = this;
+    Promise.resolve().then(function() {
+      t._flush();
+    });
+  };
+  CLocalTransportSocket.prototype._flush = function() {
+    this.isFlushScheduled = false;
+    while (this.queue.length > 0) {
+      var item = this.queue.shift();
+      if (!item.connection.closed) {
+        item.fn();
+      }
+    }
+  };
   CLocalTransportSocket.prototype.emit = function(name, data) {
-    if ("message" === name) {
+    if ("message" === name && this.connection) {
       this.transport.send(data);
     }
   };
   CLocalTransportSocket.prototype.close = function() {
-    if (!this.connected) {
+    if (!this.connection) {
       return;
     }
+    this.connection.closed = true;
+    this.connection = null;
     this.connected = false;
+    this.queue = [];
     this.transport.close();
     // mirrors the explicit "io client disconnect" event of socket.io: no reconnect is attempted
     this.coApi._onServerClose(true);
