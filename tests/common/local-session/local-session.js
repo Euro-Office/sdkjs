@@ -756,6 +756,31 @@ $(function () {
 		AscCommon.setLocalSessionTransport(null);
 	});
 
+	QUnit.test("Image upload by url goes through the transport", function (assert)
+	{
+		var requested = null;
+		AscCommon.setLocalSessionTransport({
+			uploadImageUrls : function (urls, cb)
+			{
+				requested = urls;
+				cb(Asc.c_oAscError.ID.No, [{"path" : "media/image11.png", "url" : "blob:img11"}]);
+			}
+		});
+		var result = null;
+		AscCommon.UploadImageUrls(["http://example.com/a.png"], "doc1", "u1", "", undefined, undefined, undefined, function (data) { result = data; });
+		assert.strictEqual(Asc.c_oAscError.ID.No, 0, "success code is 0");
+		assert.deepEqual(requested, ["http://example.com/a.png"], "transport.uploadImageUrls receives the urls");
+		assert.deepEqual(result, [{"path" : "media/image11.png", "url" : "blob:img11"}], "the DS shaped reply is forwarded");
+		assert.strictEqual(AscCommon.g_oDocumentUrls.getImageLocal("blob:img11"), "image11.png", "the url is mapped to its media path");
+
+		AscCommon.setLocalSessionTransport({
+			uploadImageUrls : function (urls, cb) { cb(Asc.c_oAscError.ID.UplImageUrl); }
+		});
+		AscCommon.UploadImageUrls(["http://example.com/b.png"], "doc1", "u1", "", undefined, undefined, undefined, function (data) { result = data; });
+		assert.deepEqual(result, [], "a transport error yields no urls, like a failed DS upload");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
 	QUnit.test("Image upload fails cleanly without transport support", function (assert)
 	{
 		AscCommon.setLocalSessionTransport({});
