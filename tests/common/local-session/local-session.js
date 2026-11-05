@@ -314,6 +314,219 @@ $(function () {
 
 	QUnit.module("Local session editing");
 
+	QUnit.test("Word lock: getLock request and reply keyed by block id", async function (assert)
+	{
+		var acquired = [];
+		var t = await createAuthorizedCoApi({onLocksAcquired : function (lock) { acquired.push(lock); }});
+		assert.strictEqual(t.docsCoApi.getUserConnectionId(), "u11", "own user id is user.id + indexUser");
+
+		var results = [];
+		var returned = false;
+		t.transport.onSend = function (msg)
+		{
+			if ("getLock" === msg["type"])
+			{
+				var locks = {};
+				msg["block"].forEach(function (b) { locks[b] = {"time" : 1, "user" : "u11", "block" : b}; });
+				t.transport.reply({"type" : "getLock", "locks" : locks});
+			}
+		};
+		t.coApi.askLock(["p1", "p2"], function (res)
+		{
+			results.push({returned : returned, res : res});
+		});
+		returned = true;
+		assert.deepEqual(t.transport.sent, [{"type" : "getLock", "block" : ["p1", "p2"]}], "getLock carries the block ids");
+		assert.strictEqual(results.length, 0, "a reply sent inside transport.send is not handled before askLock returns");
+		await tick();
+		assert.strictEqual(results.length, 1, "the lock callback is called once");
+		assert.ok(results[0].returned, "the callback runs after askLock returned");
+		assert.strictEqual(results[0].res["lock"]["state"], 2, "the lock is ours");
+		assert.strictEqual(acquired.length, 2, "onLocksAcquired is raised for every block");
+		assert.strictEqual(t.docsCoApi._lockCallbacksErrorTimerId["p1"], undefined, "the lock timeout is cleared");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Spreadsheet lock: reply keyed by block.guid, foreign lock refused", async function (assert)
+	{
+		var t = await createAuthorizedCoApi({}, AscCommon.c_oEditorId.Spreadsheet);
+		var block = {"sheetId" : "1", "type" : 1, "rangeOrObjectId" : {"c1" : 0, "r1" : 0, "c2" : 0, "r2" : 0}, "guid" : "g1"};
+		var results = [];
+		t.coApi.askLock([block], function (res) { results.push(res); });
+		assert.deepEqual(t.transport.sent[0]["block"], [block], "getLock carries the block objects");
+		t.transport.reply({"type" : "getLock", "locks" : {"g1" : {"time" : 1, "user" : "u11", "block" : block}}});
+		await tick();
+		assert.ok(results[0]["lock"], "own lock is granted");
+		assert.strictEqual(t.docsCoApi.getLocks()["g1"]["state"], 2, "lock is stored under block.guid");
+
+		var block2 = {"sheetId" : "1", "type" : 1, "rangeOrObjectId" : {"c1" : 1, "r1" : 1, "c2" : 1, "r2" : 1}, "guid" : "g2"};
+		t.coApi.askLock([block2], function (res) { results.push(res); });
+		t.transport.reply({"type" : "getLock", "locks" : {"g2" : {"time" : 1, "user" : "u21", "block" : block2}}});
+		await tick();
+		assert.strictEqual(results[1]["error"], "Already locked by u21", "a lock of another user is refused");
+		assert.strictEqual(t.docsCoApi.getLocks()["g2"]["state"], 3, "the foreign lock is recorded");
+
+		t.transport.reply({"type" : "releaseLock", "locks" : [{"block" : block2, "user" : "u21", "time" : 2, "changes" : null}]});
+		await tick();
+		assert.strictEqual(t.docsCoApi.getLocks()["g2"]["state"], 0, "releaseLock frees the block");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Lock -> edit -> chunked save -> unSaveLock", async function (assert)
+	{
+		var unSaveLocks = 0;
+		var t = await createAuthorizedCoApi({onUnSaveLock : function () { unSaveLocks++; }});
+		var docsCoApi = t.docsCoApi;
+		var session = {changes : [], index : 0};
+		t.transport.onSend = function (msg)
+		{
+			switch (msg["type"])
+			{
+				case "getLock":
+					var locks = {};
+					msg["block"].forEach(function (b) { locks[b] = {"time" : 1, "user" : "u11", "block" : b}; });
+					t.transport.reply({"type" : "getLock", "locks" : locks});
+					break;
+				case "isSaveLock":
+					t.transport.reply({"type" : "saveLock", "saveLock" : false});
+					break;
+				case "saveChanges":
+					var startIndex = session.index;
+					var changes = JSON.parse(msg["changes"]);
+					session.changes = session.changes.concat(changes);
+					session.index += changes.length;
+					var changesIndex = msg["startSaveChanges"] ? startIndex : -1;
+					if (msg["endSaveChanges"])
+						t.transport.reply({"type" : "unSaveLock", "index" : changesIndex, "time" : 1000, "syncChangesIndex" : session.index});
+					else
+						t.transport.reply({"type" : "savePartChanges", "changesIndex" : changesIndex, "syncChangesIndex" : session.index});
+					break;
+			}
+		};
+
+		var lockResult = null;
+		t.coApi.askLock(["p1"], function (res) { lockResult = res; });
+		await tick();
+		assert.ok(lockResult && lockResult["lock"], "lock acquired");
+
+		var saveLock = null;
+		t.coApi.askSaveChanges(function (e) { saveLock = e; });
+		assert.strictEqual(docsCoApi.get_state(), AscCommon.ConnectionState.AskSaveChanges, "state is AskSaveChanges while waiting");
+		assert.deepEqual(t.transport.sentOfType("isSaveLock"), [{"type" : "isSaveLock", "syncChangesIndex" : 0}], "isSaveLock carries syncChangesIndex");
+
+		var buffered = null;
+		t.coApi.askLock(["p2"], function (res) { buffered = res; });
+		assert.strictEqual(t.transport.sentOfType("getLock").length, 1, "a lock asked during the save is buffered");
+
+		await tick();
+		assert.deepEqual(saveLock, {"type" : "saveLock", "saveLock" : false}, "saveLock reply reaches the callback");
+		assert.strictEqual(docsCoApi.get_state(), AscCommon.ConnectionState.AskSaveChanges, "state stays until the changes are sent");
+
+		docsCoApi.websocketMaxPayloadSize = 10;
+		var edits = ["change-1-xx", "change-2-xx", "c3"];
+		t.coApi.saveChanges(edits, null, null, false, false);
+		assert.strictEqual(docsCoApi.get_state(), AscCommon.ConnectionState.SaveChanges, "state is SaveChanges");
+		await tick();
+		await tick();
+		await tick();
+
+		var saves = t.transport.sentOfType("saveChanges");
+		assert.strictEqual(saves.length, 3, "the changes are sent in three chunks");
+		assert.deepEqual(saves.map(function (m) { return [m["startSaveChanges"], m["endSaveChanges"]]; }), [[true, false], [false, false], [false, true]], "start/end flags mark the chunks");
+		assert.deepEqual(session.changes, edits, "all changes arrive in order");
+		assert.strictEqual(typeof saves[0]["changes"], "string", "changes are a JSON string without binaryChanges");
+		assert.strictEqual(saves[0]["isExcel"], false, "isExcel flag");
+		assert.strictEqual(saves[0]["isCoAuthoring"], false, "isCoAuthoring flag");
+		assert.strictEqual(saves[0]["unlock"], false, "unlock flag");
+		assert.strictEqual(saves[0]["releaseLocks"], false, "releaseLocks flag");
+		assert.strictEqual(unSaveLocks, 1, "onUnSaveLock raised once");
+		assert.strictEqual(docsCoApi.get_state(), AscCommon.ConnectionState.Authorized, "state back to Authorized");
+		assert.strictEqual(docsCoApi.changesIndex, 0, "changesIndex from the first chunk");
+		assert.strictEqual(docsCoApi.syncChangesIndex, 3, "syncChangesIndex from unSaveLock");
+		assert.strictEqual(docsCoApi.lastOwnSaveTime, 1000, "own save time from unSaveLock");
+		assert.strictEqual(docsCoApi.saveCallbackErrorTimeOutId, null, "the save timeout is cleared");
+		assert.strictEqual(docsCoApi.getLocks()["p1"], undefined, "own locks are dropped with the last chunk");
+		assert.ok(buffered && buffered["lock"], "the buffered lock is asked and granted after the save");
+
+		t.transport.sent = [];
+		t.coApi.askSaveChanges(function () {});
+		assert.deepEqual(t.transport.sent[0], {"type" : "isSaveLock", "syncChangesIndex" : 3}, "the next save sends the new syncChangesIndex");
+		await tick();
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Emergency unSaveLock is answered and its retry timer cleared", async function (assert)
+	{
+		var unSaveLocks = 0;
+		var t = await createAuthorizedCoApi({onUnSaveLock : function () { unSaveLocks++; }});
+		t.transport.onSend = function (msg)
+		{
+			if ("unSaveLock" === msg["type"])
+				t.transport.reply({"type" : "unSaveLock", "index" : -1, "time" : -1, "syncChangesIndex" : -1});
+		};
+		t.coApi.unSaveLock();
+		assert.deepEqual(t.transport.sent, [{"type" : "unSaveLock"}], "unSaveLock request");
+		await tick();
+		assert.strictEqual(unSaveLocks, 1, "onUnSaveLock raised");
+		assert.strictEqual(t.docsCoApi.unSaveLockCallbackErrorTimeOutId, null, "retry timer cleared");
+		assert.strictEqual(t.docsCoApi.lastOwnSaveTime, -1, "time -1 leaves the save time");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Incoming saveChanges of another participant, in chunks", async function (assert)
+	{
+		var applied = [];
+		var released = [];
+		var indexes = [];
+		var recalc = 0;
+		var t = await createAuthorizedCoApi({
+			onSaveChanges : function (change, userId) { applied.push([change, userId]); },
+			onLocksReleased : function (lock, bChanges) { released.push([lock["block"], bChanges]); },
+			onChangesIndex : function (index) { indexes.push(index); },
+			onRecalcLocks : function () { recalc++; }
+		});
+		var entry = function (change) { return {"docid" : "doc1", "change" : JSON.stringify(change), "time" : 2000, "user" : "u21", "useridoriginal" : "u2"}; };
+		t.transport.reply({"type" : "saveChanges", "changes" : [entry("r1")], "changesIndex" : 1, "syncChangesIndex" : 1, "endSaveChanges" : false, "locks" : []});
+		await tick();
+		assert.strictEqual(applied.length, 0, "a partial chunk is buffered");
+		t.transport.reply({
+			"type" : "saveChanges", "changes" : [entry("r2")], "changesIndex" : 2, "syncChangesIndex" : 2, "endSaveChanges" : true,
+			"locks" : [{"block" : "p9", "user" : "u21", "time" : 2000, "changes" : null}], "excelAdditionalInfo" : null
+		});
+		await tick();
+		assert.deepEqual(applied, [["r1", "u2"], ["r2", "u2"]], "both chunks are applied in order with the original user id");
+		assert.deepEqual(released, [["p9", true]], "the sender's locks are released with changes");
+		assert.deepEqual(indexes, [2], "changes index reported");
+		assert.strictEqual(t.docsCoApi.syncChangesIndex, 2, "syncChangesIndex updated");
+		assert.strictEqual(t.docsCoApi.lastOtherSaveTime, 2000, "lastOtherSaveTime from the change time");
+		assert.strictEqual(recalc, 1, "onRecalcLocks raised");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("connectState from the host starts and ends co-authoring", async function (assert)
+	{
+		var events = [];
+		var t = await createAuthorizedCoApi({
+			onStartCoAuthoring : function (isStart, isWaitAuth) { events.push("start:" + isStart + ":" + !!isWaitAuth); },
+			onEndCoAuthoring : function (isStart) { events.push("end:" + isStart); },
+			onParticipantsChanged : function (users) { events.push("participants:" + Object.keys(users).length); },
+			onConnectionStateChanged : function (user) { events.push("user:" + user.asc_getId() + ":" + user.asc_getState()); }
+		});
+		t.transport.reply({"type" : "connectState", "participantsTimestamp" : 10, "participants" : [participant("u1", 1), participant("u2", 1)], "waitAuth" : false});
+		await tick();
+		assert.deepEqual(events, ["start:false:false", "participants:2", "user:u21:true"], "a second editor starts co-authoring");
+
+		events = [];
+		t.transport.reply({"type" : "connectState", "participantsTimestamp" : 9, "participants" : [participant("u1", 1)], "waitAuth" : false});
+		await tick();
+		assert.deepEqual(events, [], "an older participantsTimestamp is ignored");
+
+		t.transport.reply({"type" : "connectState", "participantsTimestamp" : 11, "participants" : [participant("u1", 1)], "waitAuth" : false});
+		await tick();
+		assert.deepEqual(events, ["end:false", "participants:1", "user:u21:false"], "the editor leaving ends co-authoring");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
 	QUnit.test("Forcesave in a local session does not wait for the host", async function (assert)
 	{
 		var forceSaves = [];
@@ -346,6 +559,43 @@ $(function () {
 		docsCoApi.socketio = {emit : function (name, data) { sent.push(data); }};
 		assert.strictEqual(docsCoApi.forceSave(), true, "forceSave returns true");
 		assert.deepEqual(sent, [{"type" : "forceSaveStart"}], "forceSaveStart sent");
+	});
+
+	QUnit.test("rpc requests go through the transport", async function (assert)
+	{
+		var t = await createAuthorizedCoApi({});
+		var results = [];
+		t.transport.onSend = function (msg)
+		{
+			if ("rpc" === msg["type"])
+				t.transport.reply({"type" : "rpc", "responseKey" : msg["responseKey"], "data" : {"status" : "ok", "data" : ["blob:img9"]}});
+		};
+		t.coApi.callPRC({"type" : "pathurls", "data" : ["media/image9.png"]}, 1000, function (isTimeout, res) { results.push([isTimeout, res]); });
+		assert.deepEqual(t.transport.sent[0]["data"], {"type" : "pathurls", "data" : ["media/image9.png"]}, "rpc carries the request");
+		await tick();
+		assert.deepEqual(results, [[false, {"status" : "ok", "data" : ["blob:img9"]}]], "the reply reaches the callback");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("imgurls (paste, insert by url) go through the transport", async function (assert)
+	{
+		var t = await createAuthorizedCoApi({});
+		var api = new AscCommon.baseEditorsApi({});
+		api.documentId = "doc1";
+		api.CoAuthoringApi = t.coApi;
+		api.isOpenedFrameEditor = true;
+		api.frameManager = {isFrameEditor : function () { return false; }};
+		var result = null;
+		AscCommon.sendImgUrls(api, ["data:image/png;base64,AAAA"], function (data) { result = data; });
+		var msg = t.transport.sent[0];
+		assert.strictEqual(msg["type"], "openDocument", "imgurls is sent as openDocument");
+		assert.strictEqual(msg["message"]["c"], "imgurls", "command imgurls");
+		assert.deepEqual(msg["message"]["data"], ["data:image/png;base64,AAAA"], "with the image sources");
+
+		api.fCurCallback({"type" : "imgurls", "status" : "ok", "data" : {"urls" : [{"path" : "media/image5.png", "url" : "blob:img5"}], "error" : 0}});
+		assert.deepEqual(result, [{"path" : "media/image5.png", "url" : "blob:img5"}], "the documentOpen reply shape reaches the caller");
+		assert.strictEqual(AscCommon.g_oDocumentUrls.getImageLocal("blob:img5"), "image5.png", "the url is mapped to its media path");
+		AscCommon.setLocalSessionTransport(null);
 	});
 
 	QUnit.module("Local session download and upload");
