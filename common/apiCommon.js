@@ -1842,6 +1842,71 @@ function (window, undefined) {
 			oLogicDocument.Recalculate();
 		}
 	};
+	asc_ChartSettings.prototype.setErrorBarsCustom = function (sPlus, sMinus) {
+		if (!this.chartSpace) {
+			return;
+		}
+
+		const selectedSeriesOnly = true;
+		const selectedSeries = selectedSeriesOnly && this.chartSpace.getSelectedSeries();
+		const seriesToProcess = selectedSeries ? [selectedSeries] : this.chartSpace.getAllSeries();
+		if (!seriesToProcess.length) {
+			return;
+		}
+
+		AscCommon.History.Create_NewPoint(AscDFH.historyitem_type_ChartSpace);
+		seriesToProcess.forEach(function (ser) {
+			if (!ser.errBars || !ser.errBars.length) {
+				ser.createAllErrBars(AscFormat.st_errvaltypeCUST);
+			}
+			for (let i = 0; i < ser.errBars.length; ++i) {
+				ser.errBars[i].setCustomValues(sPlus, sMinus);
+			}
+		});
+
+		this.updateChart();
+		const oLogicDocument = Asc.editor.getLogicDocument();
+		if (oLogicDocument) {
+			oLogicDocument.Recalculate();
+		}
+	};
+	asc_ChartSettings.prototype.getErrorBarsCustom = function () {
+		if (!this.chartSpace) {
+			return { plus: "={1}", minus: "={1}", plusValues: "1", minusValues: "1" };
+		}
+
+		const selectedSeries = this.chartSpace.getSelectedSeries();
+		const allSeries = this.chartSpace.getAllSeries();
+		const ser = selectedSeries || (allSeries && allSeries[0]);
+		if (ser && ser.errBars && ser.errBars.length && ser.errBars[0].errValType === AscFormat.st_errvaltypeCUST) {
+			const errBar = ser.errBars[0];
+			const aPlusVals = errBar.getCustomPlusValues();
+			const aMinusVals = errBar.getCustomMinusValues();
+			return {
+				plus: errBar.getCustomPlusFormula() || "={1}",
+				minus: errBar.getCustomMinusFormula() || "={1}",
+				plusValues: Array.isArray(aPlusVals) && aPlusVals.length ? aPlusVals.join("; ") : "1",
+				minusValues: Array.isArray(aMinusVals) && aMinusVals.length ? aMinusVals.join("; ") : "1"
+			};
+		}
+		return { plus: "={1}", minus: "={1}", plusValues: "1", minusValues: "1" };
+	};
+	asc_ChartSettings.prototype.getErrorBarsValueType = function () {
+		if (!this.chartSpace) {
+			return null;
+		}
+
+		const selectedSeries = this.chartSpace.getSelectedSeries();
+		const allSeries = this.chartSpace.getAllSeries();
+		const ser = selectedSeries || (allSeries && allSeries[0]);
+		if (ser && ser.errBars && ser.errBars.length) {
+			return ser.errBars[0].errValType;
+		}
+		return null;
+	};
+	asc_ChartSettings.prototype.isValidErrorBarsCustom = function (sVal) {
+		return AscFormat.CErrBars.prototype.isValidCustomValue(sVal);
+	};
 	asc_ChartSettings.prototype.setDisplayGridlines = function (bShowHorMajor, bShowVerMajor, bShowHorMinor, bShowVerMinor) {
 		if (!this.chartSpace) {
 			return;
@@ -8496,6 +8561,10 @@ function (window, undefined) {
 	prot["setDisplayDataLabels"] = prot.setDisplayDataLabels;
 	prot["setDisplayDataTable"] = prot.setDisplayDataTable;
 	prot["setDisplayErrorBars"] = prot.setDisplayErrorBars;
+	prot["setErrorBarsCustom"] = prot.setErrorBarsCustom;
+	prot["getErrorBarsCustom"] = prot.getErrorBarsCustom;
+	prot["getErrorBarsValueType"] = prot.getErrorBarsValueType;
+	prot["isValidErrorBarsCustom"] = prot.isValidErrorBarsCustom;
 	prot["setDisplayGridlines"] = prot.setDisplayGridlines;
 	prot["setDisplayLegend"] = prot.setDisplayLegend;
 	prot["setDisplayTrendlines"] = prot.setDisplayTrendlines;
