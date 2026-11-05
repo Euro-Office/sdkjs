@@ -1042,7 +1042,9 @@
 		if (this._lastForceSaveButtonTime < newForceSaveButtonTime) {
 			this._lastForceSaveButtonTime = newForceSaveButtonTime;
 			this._send({'type': 'forceSaveStart'});
-            res = true;
+			// A local session host may not answer forceSaveStart/forceSave at all, so the editor must not
+			// keep its save action open waiting for them; replies that do arrive are still handled.
+			res = !(this.socketio instanceof CLocalTransportSocket);
 		}
 		return res;
 	};

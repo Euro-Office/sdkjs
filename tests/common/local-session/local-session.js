@@ -312,6 +312,42 @@ $(function () {
 		}
 	});
 
+	QUnit.module("Local session editing");
+
+	QUnit.test("Forcesave in a local session does not wait for the host", async function (assert)
+	{
+		var forceSaves = [];
+		var t = await createAuthorizedCoApi({onForceSave : function (e) { forceSaves.push(e); }});
+		assert.strictEqual(t.coApi.forceSave(), false, "forceSave does not ask the editor to wait");
+		assert.deepEqual(t.transport.sent, [{"type" : "forceSaveStart"}], "forceSaveStart is still sent to the host");
+		assert.strictEqual(t.coApi.forceSave(), false, "a second forcesave without a new save");
+		assert.strictEqual(t.transport.sent.length, 1, "is not sent again");
+
+		var Button = AscCommon.c_oAscForceSaveTypes.Button;
+		t.transport.reply({"type" : "forceSaveStart", "messages" : {"code" : AscCommon.c_oAscServerCommandErrors.NoError, "time" : 5}});
+		t.transport.reply({"type" : "forceSave", "messages" : {"type" : Button, "time" : 5, "success" : true}});
+		await tick();
+		assert.deepEqual(forceSaves, [{type : Button, start : true}, {type : Button, success : true}], "host replies are still reported");
+
+		var api = new AscCommon.baseEditorsApi({});
+		api.CoAuthoringApi = t.coApi;
+		api.getViewMode = function () { return false; };
+		t.docsCoApi.lastOwnSaveTime = 6;
+		assert.strictEqual(api.forceSave(), false, "api.forceSave returns false so the Save action is ended on unSaveLock");
+		assert.strictEqual(t.transport.sentOfType("forceSaveStart").length, 2, "after a new save forceSaveStart is sent again");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("Forcesave over socket.io still waits for the server", function (assert)
+	{
+		var docsCoApi = new AscCommon.CDocsCoApi()._CoAuthoringApi;
+		var sent = [];
+		docsCoApi._state = AscCommon.ConnectionState.Authorized;
+		docsCoApi.socketio = {emit : function (name, data) { sent.push(data); }};
+		assert.strictEqual(docsCoApi.forceSave(), true, "forceSave returns true");
+		assert.deepEqual(sent, [{"type" : "forceSaveStart"}], "forceSaveStart sent");
+	});
+
 	QUnit.module("Local session download and upload");
 
 	function createApi()
