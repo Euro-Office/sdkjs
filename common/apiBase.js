@@ -2633,7 +2633,6 @@
 		if (transport && transport.convert)
 		{
 			// Local session: the host converts in the browser instead of the DS "downloadas" service.
-			var fLocalCallback = options.callback || this.fCurCallback;
 			transport.convert({
 				"data": dataContainer.data,
 				"fileType": oAdditionalData["outputformat"],
@@ -2655,7 +2654,15 @@
 					input["status"] = "err";
 					input["data"] = AscCommon.c_oAscServerError.Convert;
 				}
-				fLocalCallback && fLocalCallback(input, 200);
+				// Like the server path: options.callback gets the request reply and may set fCurCallback,
+				// which the DS would call with the conversion result (documentOpen); here both are the same.
+				if (options.callback)
+				{
+					options.callback(input, 200);
+				}
+				var fResultCallback = t.fCurCallback;
+				t.fCurCallback = null;
+				fResultCallback && fResultCallback(input, 200);
 			});
 			return;
 		}

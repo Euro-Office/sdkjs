@@ -756,6 +756,30 @@ $(function () {
 		AscCommon.setLocalSessionTransport(null);
 	});
 
+	QUnit.test("downloadAs finishes the fCurCallback a caller callback sets (asc_onSaveDocument)", function (assert)
+	{
+		AscCommon.setLocalSessionTransport({
+			convert : function (request, cb) { cb({"status" : "ok", "data" : "blob:saved", "filetype" : "docx"}); }
+		});
+		var api = createApi();
+		var calls = [];
+		var d = createDownloadData(false);
+		api._downloadAsUsingServer(Asc.c_oAscAsyncAction.DownloadAs, {
+			callback : function (input)
+			{
+				calls.push("request:" + input["status"]);
+				api.fCurCallback = function (res) { calls.push("result:" + res["status"] + ":" + res["data"]); };
+			}
+		}, d.oAdditionalData, d.dataContainer, d.downloadType);
+		assert.deepEqual(calls, ["request:ok", "result:ok:blob:saved"], "the request callback and then the result callback run");
+		assert.strictEqual(api.fCurCallback, null, "fCurCallback is consumed");
+
+		calls = [];
+		api._downloadAsUsingServer(null, {callback : function (input) { calls.push("only:" + input["status"]); }}, d.oAdditionalData, d.dataContainer, d.downloadType);
+		assert.deepEqual(calls, ["only:ok"], "a callback that sets no fCurCallback runs once");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
 	QUnit.test("Image upload by url goes through the transport", function (assert)
 	{
 		var requested = null;
