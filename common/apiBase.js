@@ -2629,6 +2629,43 @@
 				}
 			};
 		}
+		var transport = AscCommon.getLocalSessionTransport ? AscCommon.getLocalSessionTransport() : null;
+		if (transport && transport.convert)
+		{
+			// Local session: the host converts in the browser instead of the DS "downloadas" service.
+			transport.convert({
+				"data": dataContainer.data,
+				"fileType": oAdditionalData["outputformat"],
+				"format": AscCommon.getExtentionByFormat(oAdditionalData["outputformat"]),
+				"title": oAdditionalData["title"],
+				"isPrint": DownloadType.Print === downloadType,
+				"options": oAdditionalData
+			}, function(result)
+			{
+				var input = {"type": oAdditionalData["c"]};
+				if (result && "ok" === result["status"] && result["data"])
+				{
+					input["status"] = "ok";
+					input["data"] = result["data"];
+					input["filetype"] = result["filetype"];
+				}
+				else
+				{
+					input["status"] = "err";
+					input["data"] = AscCommon.c_oAscServerError.Convert;
+				}
+				// Like the server path: options.callback gets the request reply and may set fCurCallback,
+				// which the DS would call with the conversion result (documentOpen); here both are the same.
+				if (options.callback)
+				{
+					options.callback(input, 200);
+				}
+				var fResultCallback = t.fCurCallback;
+				t.fCurCallback = null;
+				fResultCallback && fResultCallback(input, 200);
+			});
+			return;
+		}
 		AscCommon.saveWithParts(function(fCallback1, oAdditionalData1, dataContainer1) {
 			AscCommon.sendCommand(t, fCallback1, oAdditionalData1, dataContainer1);
 		}, this.fCurCallback, options.callback, oAdditionalData, dataContainer);
@@ -6036,7 +6073,11 @@
 	baseEditorsApi.prototype.initBroadcastChannel = function() {
 		if (!this.broadcastChannel) {
 			if (typeof BroadcastChannel !== "undefined") {
-				this.broadcastChannel = new BroadcastChannel("onlyofficeChannel");
+				try {
+					this.broadcastChannel = new BroadcastChannel("onlyofficeChannel");
+				} catch (e) {
+					// Tor Browser throws here instead of leaving BroadcastChannel undefined
+				}
 			}
 		}
 	};
