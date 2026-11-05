@@ -461,6 +461,51 @@ $(function () {
 		AscCommon.setLocalSessionTransport(null);
 	});
 
+	QUnit.test("Image upload with a media map registers the media path", function (assert)
+	{
+		AscCommon.setLocalSessionTransport({
+			uploadImages : function (files, cb)
+			{
+				cb(Asc.c_oAscError.ID.No, {"media/image7.png" : "blob:img7", "media/image8.png" : "blob:img8"});
+			}
+		});
+		var result = null;
+		AscCommon.UploadImageFiles([{name : "a.png"}, {name : "b.png"}], "doc1", "u1", "", undefined, undefined, undefined, function (error, urls)
+		{
+			result = {error : error, urls : urls};
+		});
+		assert.deepEqual(result, {error : Asc.c_oAscError.ID.No, urls : ["blob:img7", "blob:img8"]}, "the urls are forwarded in order");
+		assert.strictEqual(AscCommon.g_oDocumentUrls.getImageLocal("blob:img7"), "image7.png", "the url is saved as its media path");
+		assert.strictEqual(AscCommon.g_oDocumentUrls.getImageUrl("image8.png"), "blob:img8", "the media path resolves to the url");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
+	QUnit.test("asc_addImage upload path inserts the transport urls", function (assert)
+	{
+		var uploaded = null;
+		AscCommon.setLocalSessionTransport({
+			uploadImages : function (files, cb)
+			{
+				uploaded = files;
+				cb(Asc.c_oAscError.ID.No, {"media/image3.png" : "blob:img3"});
+			}
+		});
+		var api = createApi();
+		api.CoAuthoringApi = new AscCommon.CDocsCoApi();
+		var actions = [];
+		var inserted = null;
+		api.sync_StartAction = function (type, id) { actions.push("start:" + id); };
+		api.sync_EndAction = function (type, id) { actions.push("end:" + id); };
+		api.sendEvent = function () {};
+		api._addImageUrl = function (urls) { inserted = urls; };
+		var files = [{name : "c.png"}];
+		api._uploadCallback(Asc.c_oAscError.ID.No, files, {});
+		assert.strictEqual(uploaded, files, "the chosen files reach transport.uploadImages");
+		assert.deepEqual(inserted, ["blob:img3"], "the image is inserted with the transport url");
+		assert.deepEqual(actions, ["start:" + Asc.c_oAscAsyncAction.UploadImage, "end:" + Asc.c_oAscAsyncAction.UploadImage], "the upload action is ended");
+		AscCommon.setLocalSessionTransport(null);
+	});
+
 	QUnit.test("Image upload fails cleanly without transport support", function (assert)
 	{
 		AscCommon.setLocalSessionTransport({});

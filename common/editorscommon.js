@@ -2490,7 +2490,23 @@
 			// Local session: there is no DS upload service; the host may provide its own storage.
 			if (transport.uploadImages)
 			{
-				transport.uploadImages(files, callback);
+				transport.uploadImages(files, function(error, urls)
+				{
+					// The host may answer like the DS upload service, {"media/<name>": url}, so the
+					// inserted image is saved as media/<name> and not as its (page local) url.
+					if (urls && !Array.isArray(urls))
+					{
+						g_oDocumentUrls.addUrls(urls);
+						var aUrls = [];
+						for (var sPath in urls)
+						{
+							if (urls.hasOwnProperty(sPath))
+								aUrls.push(urls[sPath]);
+						}
+						urls = aUrls;
+					}
+					callback(error, urls);
+				});
 			}
 			else
 			{
