@@ -414,6 +414,141 @@
 			}
 		};
 
+		// A paste runs as one task and the tab doesn't respond until it's done; with no response for 20-45 s the server's
+		// ping timeout drops the connection. HTML is parsed into a DOM first and is 10-20 times slower per cell than text
+		// or the editor's own format, so each format has its own limits, measured on a 10-column paste:
+		//   ConfirmCells: above this the user is asked first (about 3 s at full speed)
+		//   MaxCells: above this the paste is refused (about 9 s at full speed; 34-41 s with the CPU throttled 4x)
+		//   CellsPerSecond: fastest measured rate, so the "at least" time shown to the user holds
+		//   ChangeBytesPerCell: changes sent to the server per pasted cell, checked against maxChangesSize
+		var c_nPasteHtmlConfirmCells = 50000;
+		var c_nPasteHtmlMaxCells = 150000;
+		var c_nPasteHtmlCellsPerSecond = 17000;
+		var c_nPasteHtmlChangeBytesPerCell = 500;
+		// Copied from the editor itself. Not confirmed: at the cell limit it freezes for about 5 s at full speed and no single
+		// task exceeds 15 s with the CPU throttled 4x; the default maxChangesSize refuses it from about 384,000 cells
+		var c_nPasteInternalConfirmCells = 500000;
+		var c_nPasteInternalMaxCells = 500000;
+		var c_nPasteInternalCellsPerSecond = 125000;
+		var c_nPasteInternalChangeBytesPerCell = 410;
+		var c_nPasteTextConfirmCells = 780000;
+		var c_nPasteTextMaxCells = 2340000;
+		var c_nPasteTextCellsPerSecond = 260000;
+		var c_nPasteTextChangeBytesPerCell = 210;
+		// Smaller pastes are left to the existing checkChangesSize after the paste, so a session already near
+		// maxChangesSize isn't refused a handful of cells as too large
+		var c_nPasteChangesCheckCells = 50000;
+		// Size of the editor's own clipboard data per cell, for when it arrives without a text copy to count
+		var c_nPasteInternalBytesPerCell = 45;
+
+		// One place for the limits, so they can be overridden from server settings like maxChangesSize
+		var c_oPasteSizeLimits = {
+			html: {
+				confirmCells: c_nPasteHtmlConfirmCells,
+				maxCells: c_nPasteHtmlMaxCells,
+				cellsPerSecond: c_nPasteHtmlCellsPerSecond,
+				changeBytesPerCell: c_nPasteHtmlChangeBytesPerCell
+			},
+			internal: {
+				confirmCells: c_nPasteInternalConfirmCells,
+				maxCells: c_nPasteInternalMaxCells,
+				cellsPerSecond: c_nPasteInternalCellsPerSecond,
+				changeBytesPerCell: c_nPasteInternalChangeBytesPerCell
+			},
+			text: {
+				confirmCells: c_nPasteTextConfirmCells,
+				maxCells: c_nPasteTextMaxCells,
+				cellsPerSecond: c_nPasteTextCellsPerSecond,
+				changeBytesPerCell: c_nPasteTextChangeBytesPerCell
+			}
+		};
+
+		function getPasteSizeLimits(format) {
+			switch (format) {
+				case AscCommon.c_oAscClipboardDataFormat.HtmlElement:
+					return c_oPasteSizeLimits.html;
+				case AscCommon.c_oAscClipboardDataFormat.Internal:
+					return c_oPasteSizeLimits.internal;
+				case AscCommon.c_oAscClipboardDataFormat.Text:
+					return c_oPasteSizeLimits.text;
+				default:
+					return null;
+			}
+		}
+
+		var c_oAscPasteSizeAction = {
+			Paste: 0,
+			Confirm: 1,
+			Refuse: 2
+		};
+
+		function countOccurrences(text, search) {
+			var count = 0;
+			for (var pos = text.indexOf(search); -1 !== pos; pos = text.indexOf(search, pos + search.length)) {
+				count++;
+			}
+			return count;
+		}
+
+		// Every line holds its tabs plus one cells, so ragged rows count exactly. Lines break on \r\n, \r or \n, as the
+		// paste does, and a final line break doesn't start another line.
+		function getTextCellCount(text) {
+			if (typeof text !== "string" || !text.length) {
+				return 0;
+			}
+			var breaks = countOccurrences(text, "\n") + countOccurrences(text, "\r") - countOccurrences(text, "\r\n");
+			var last = text.charAt(text.length - 1);
+			var lines = breaks + ("\n" === last || "\r" === last ? 0 : 1);
+			return lines + countOccurrences(text, "\t");
+		}
+
+		// Counted from the clipboard data as received, before any of it is converted
+		function getPasteCellCount(format, data, textData) {
+			switch (format) {
+				// HTML without a table (paragraphs, line breaks) still becomes one cell per line, as its text copy shows
+				case AscCommon.c_oAscClipboardDataFormat.HtmlElement: {
+					var tableCells = data && data.getElementsByTagName ?
+						data.getElementsByTagName("td").length + data.getElementsByTagName("th").length : 0;
+					return Math.max(tableCells, getTextCellCount(textData));
+				}
+				case AscCommon.c_oAscClipboardDataFormat.Text:
+					return getTextCellCount(data);
+				case AscCommon.c_oAscClipboardDataFormat.Internal: {
+					var cells = getTextCellCount(textData);
+					if (!cells && typeof data === "string") {
+						cells = Math.floor(data.length / c_nPasteInternalBytesPerCell);
+					}
+					return cells;
+				}
+				default:
+					return 0;
+			}
+		}
+
+		// getChangesSize walks the session's unsaved changes, so it is only called for a paste large enough to check
+		function getPasteSizeAction(format, cellCount, maxChangesSize, getChangesSize) {
+			var limits = getPasteSizeLimits(format);
+			if (!limits) {
+				return c_oAscPasteSizeAction.Paste;
+			}
+			if (cellCount > limits.maxCells) {
+				return c_oAscPasteSizeAction.Refuse;
+			}
+			if (cellCount > c_nPasteChangesCheckCells && maxChangesSize > 0 &&
+				getChangesSize() + cellCount * limits.changeBytesPerCell > maxChangesSize) {
+				return c_oAscPasteSizeAction.Refuse;
+			}
+			if (cellCount > limits.confirmCells) {
+				return c_oAscPasteSizeAction.Confirm;
+			}
+			return c_oAscPasteSizeAction.Paste;
+		}
+
+		function getPasteMinSeconds(format, cellCount) {
+			var limits = getPasteSizeLimits(format);
+			return Math.max(1, Math.floor(cellCount / (limits ? limits.cellsPerSecond : 1)));
+		}
+
 		Clipboard.prototype.pasteData = function (ws, _format, data1, data2, text_data, bIsSpecialPaste, doNotShowButton, isPasteAll, callback) {
 			var t = this;
 			var wb = window["Asc"]["editor"].wb;
@@ -5424,6 +5559,10 @@
 		var g_clipboardExcel = new Clipboard();
 		window['AscCommonExcel'] = window['AscCommonExcel'] || {};
 		window['AscCommonExcel'].g_clipboardExcel = g_clipboardExcel;
+		window['AscCommonExcel'].c_oAscPasteSizeAction = c_oAscPasteSizeAction;
+		window['AscCommonExcel'].getPasteCellCount = getPasteCellCount;
+		window['AscCommonExcel'].getPasteSizeAction = getPasteSizeAction;
+		window['AscCommonExcel'].getPasteMinSeconds = getPasteMinSeconds;
 
 		window["Asc"]["SpecialPasteProps"] = window["Asc"].SpecialPasteProps = CSpecialPasteProps;
 		prot = CSpecialPasteProps.prototype;

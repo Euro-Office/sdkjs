@@ -343,6 +343,209 @@ $(function () {
 		});
 	});
 
+	QUnit.test("Test: paste size is counted from the clipboard data", function (assert) {
+		let html = document.createElement("div");
+		html.innerHTML = "<table><tr><th>a</th><th>b</th></tr><tr><td>1</td><td>2</td></tr><tr><td>3</td><td>4</td></tr></table>";
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.HtmlElement, html), 6, "HTML table cells");
+
+		let paragraph = document.createElement("div");
+		paragraph.innerHTML = "<p>a</p><p>b</p><p>c</p>";
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.HtmlElement, paragraph), 0, "HTML without a table or text copy");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.HtmlElement, paragraph, "a\nb\nc"), 3, "HTML without a table counted from its text copy");
+
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Text, "a\tb\tc\n1\t2\t3\n"), 6, "Tab-separated text with a trailing newline");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Text, "single"), 1, "One cell of text");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Text, "a\tb\r\n1\t2\r\n"), 4, "Lines ending in CRLF");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Text, "a\tb\r1\t2\r3"), 5, "Lines ending in a lone CR");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Text, "a\n\t\t\t\n\t\n"), 7, "Ragged rows counted line by line");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Text, "\t".repeat(1000000)), 1000001, "One line of many cells");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Internal, "binary", "a\tb\n1\t2\n"), 4, "Internal paste counted from its text copy");
+		assert.strictEqual(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Internal, "x".repeat(450), ""), 10, "Internal paste without a text copy estimated from its size");
+	});
+
+	QUnit.test("Test: paste size decides between pasting, confirming and refusing", function (assert) {
+		let action = AscCommonExcel.c_oAscPasteSizeAction;
+		let format = AscCommon.c_oAscClipboardDataFormat;
+		let maxChangesSize = 150 * 1024 * 1024;
+		let size = function (fmt, cells, max, changes) {
+			return AscCommonExcel.getPasteSizeAction(fmt, cells, max, function () {
+				return changes;
+			});
+		};
+
+		assert.strictEqual(size(format.HtmlElement, 50000, maxChangesSize, 0), action.Paste, "HTML up to the confirm threshold");
+		assert.strictEqual(size(format.HtmlElement, 50001, maxChangesSize, 0), action.Confirm, "HTML over the confirm threshold");
+		assert.strictEqual(size(format.HtmlElement, 150000, maxChangesSize, 0), action.Confirm, "HTML up to the cell limit");
+		assert.strictEqual(size(format.HtmlElement, 150001, maxChangesSize, 0), action.Refuse, "HTML over the cell limit");
+		assert.strictEqual(size(format.HtmlElement, 150001, 0, 0), action.Refuse, "HTML over the cell limit without maxChangesSize");
+		assert.strictEqual(size(format.HtmlElement, 100000, maxChangesSize, maxChangesSize - 1024), action.Refuse, "HTML over maxChangesSize with the session's changes");
+		assert.strictEqual(size(format.HtmlElement, 100000, 1024 * 1024, 0), action.Refuse, "HTML over a lower maxChangesSize");
+
+		assert.strictEqual(size(format.Internal, 380000, maxChangesSize, 0), action.Paste, "Internal under the default maxChangesSize, not confirmed");
+		assert.strictEqual(size(format.Internal, 390000, maxChangesSize, 0), action.Refuse, "Internal over the default maxChangesSize");
+		assert.strictEqual(size(format.Internal, 500000, 0, 0), action.Paste, "Internal up to its cell limit without maxChangesSize, not confirmed");
+		assert.strictEqual(size(format.Internal, 500001, 0, 0), action.Refuse, "Internal over its cell limit without maxChangesSize");
+		assert.strictEqual(size(format.Internal, 300000, maxChangesSize, 50 * 1024 * 1024), action.Refuse, "Internal over maxChangesSize with the session's changes");
+
+		assert.strictEqual(size(format.Text, 700000, maxChangesSize, 0), action.Paste, "Text under maxChangesSize, not confirmed");
+		assert.strictEqual(size(format.Text, 760000, maxChangesSize, 0), action.Refuse, "Text over the default maxChangesSize");
+		assert.strictEqual(size(format.Text, 780000, 0, 0), action.Paste, "Text up to the confirm threshold without maxChangesSize");
+		assert.strictEqual(size(format.Text, 780001, 0, 0), action.Confirm, "Text over the confirm threshold without maxChangesSize");
+		assert.strictEqual(size(format.Text, 2340001, 0, 0), action.Refuse, "Text over the cell limit");
+
+		assert.strictEqual(size(format.Text, 50000, maxChangesSize, maxChangesSize), action.Paste, "Small paste into a full session is left to checkChangesSize");
+		assert.strictEqual(size(format.Rtf, 10000000, maxChangesSize, 0), action.Paste, "Formats without limits aren't checked");
+
+		let changesRead = false;
+		AscCommonExcel.getPasteSizeAction(format.Text, 50000, maxChangesSize, function () {
+			changesRead = true;
+			return 0;
+		});
+		assert.notOk(changesRead, "The session's changes aren't measured for a small paste");
+	});
+
+	QUnit.test("Test: paste time is a lower bound in whole seconds", function (assert) {
+		let format = AscCommon.c_oAscClipboardDataFormat;
+		assert.strictEqual(AscCommonExcel.getPasteMinSeconds(format.HtmlElement, 50001), 2, "HTML at the confirm threshold");
+		assert.strictEqual(AscCommonExcel.getPasteMinSeconds(format.HtmlElement, 100000), 5, "HTML, 100,000 cells");
+		assert.strictEqual(AscCommonExcel.getPasteMinSeconds(format.HtmlElement, 150000), 8, "HTML at the cell limit");
+		assert.strictEqual(AscCommonExcel.getPasteMinSeconds(format.Text, 780001), 3, "Text at the confirm threshold");
+		assert.strictEqual(AscCommonExcel.getPasteMinSeconds(format.Text, 1), 1, "Never less than a second");
+	});
+
+	QUnit.test("Test: large paste over maxChangesSize is refused", function (assert) {
+		let done = assert.async();
+		let largeText = "x\n".repeat(100000) + "x";
+		let errors = [];
+		let onError = function (id) {
+			errors.push(id);
+		};
+		let maxChangesSize = api.maxChangesSize;
+		api.maxChangesSize = 1024;
+		api.asc_registerCallback("asc_onError", onError);
+		api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Text, largeText, undefined, undefined, undefined, function (success) {
+			api.asc_unregisterCallback("asc_onError", onError);
+			api.maxChangesSize = maxChangesSize;
+			assert.notOk(success, "Paste not done");
+			assert.deepEqual(errors, [Asc.c_oAscError.ID.PasteSizeLimitError], "Size limit error sent");
+			done();
+		});
+	});
+
+	QUnit.test("Test: large paste is not done when the confirm is declined", function (assert) {
+		let done = assert.async();
+		// Text is only confirmed without maxChangesSize
+		let largeText = "x\n".repeat(800000) + "x";
+		let maxChangesSize = api.maxChangesSize;
+		api.maxChangesSize = 0;
+		let confirmedCells = null;
+		let confirmedSeconds = null;
+		let onConfirm = function (cellCount, minSeconds, answer) {
+			confirmedCells = cellCount;
+			confirmedSeconds = minSeconds;
+			answer(false);
+		};
+		api.asc_registerCallback("asc_onConfirmLargePaste", onConfirm);
+		api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Text, largeText, undefined, undefined, undefined, function (success) {
+			api.asc_unregisterCallback("asc_onConfirmLargePaste", onConfirm);
+			api.maxChangesSize = maxChangesSize;
+			assert.notOk(success, "Paste not done");
+			assert.strictEqual(confirmedCells, 800001, "Confirm asked with the cell count");
+			assert.strictEqual(confirmedSeconds, 3, "Confirm asked with the minimum time");
+			done();
+		});
+	});
+
+	// Forces the size decision for a small paste, so the confirm paths run without pasting a large range
+	function withPasteSizeAction(action, run) {
+		let getPasteSizeAction = AscCommonExcel.getPasteSizeAction;
+		AscCommonExcel.getPasteSizeAction = function () {
+			return action;
+		};
+		try {
+			run();
+		} finally {
+			AscCommonExcel.getPasteSizeAction = getPasteSizeAction;
+		}
+	}
+
+	QUnit.test("Test: large paste is done when the confirm is accepted, once", function (assert) {
+		let done = assert.async();
+		let pastes = 0;
+		let onConfirm = function (cellCount, minSeconds, answer) {
+			answer(true);
+			answer(true);
+		};
+		api.asc_registerCallback("asc_onConfirmLargePaste", onConfirm);
+		withPasteSizeAction(AscCommonExcel.c_oAscPasteSizeAction.Confirm, function () {
+			api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Text, "accepted", undefined, undefined, undefined, function (success) {
+				pastes++;
+				assert.ok(success, "Paste done");
+			});
+		});
+		api.asc_unregisterCallback("asc_onConfirmLargePaste", onConfirm);
+		setTimeout(function () {
+			assert.strictEqual(pastes, 1, "A second answer doesn't paste again");
+			done();
+		}, 0);
+	});
+
+	QUnit.test("Test: large paste goes ahead when no UI listens for the confirm", function (assert) {
+		// Without the fallback nothing answers, so fail rather than wait
+		assert.timeout(5000);
+		let done = assert.async();
+		withPasteSizeAction(AscCommonExcel.c_oAscPasteSizeAction.Confirm, function () {
+			api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Text, "no listener", undefined, undefined, undefined, function (success) {
+				assert.ok(success, "Pasted without asking");
+				done();
+			});
+		});
+	});
+
+	QUnit.test("Test: confirmed HTML paste shows its parsing iframe while it runs", function (assert) {
+		let done = assert.async();
+		let clipboard = AscCommon.g_clipboardBase;
+		let commonIframe = clipboard.CommonIframe;
+		let frame = {style: {display: "none", width: "100px"}, blur: function () {}};
+		clipboard.CommonIframe = frame;
+		let html = document.createElement("div");
+		html.innerHTML = "<table><tr><td>1</td></tr></table>";
+		let onConfirm = function (cellCount, minSeconds, answer) {
+			answer(true);
+		};
+		api.asc_registerCallback("asc_onConfirmLargePaste", onConfirm);
+		withPasteSizeAction(AscCommonExcel.c_oAscPasteSizeAction.Confirm, function () {
+			api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.HtmlElement, html, frame, undefined, undefined, function () {
+				assert.strictEqual(frame.style.display, "block", "Shown during the paste");
+			});
+		});
+		api.asc_unregisterCallback("asc_onConfirmLargePaste", onConfirm);
+		clipboard.CommonIframe = commonIframe;
+		assert.strictEqual(frame.style.display, "none", "Hidden again afterwards");
+		assert.strictEqual(frame.style.width, "100px", "Narrowed again afterwards");
+		done();
+	});
+
+	QUnit.test("Test: internal paste with a cut pending isn't refused", function (assert) {
+		let done = assert.async();
+		let binaryData = AscCommonExcel.g_clipboardExcel.copyProcessor.getBinaryForCopy(ws, wsView.objectRender);
+		let cutIdSheet = api.wb.cutIdSheet;
+		let errors = [];
+		let onError = function (id) {
+			errors.push(id);
+		};
+		api.asc_registerCallback("asc_onError", onError);
+		api.wb.cutIdSheet = ws.getId();
+		withPasteSizeAction(AscCommonExcel.c_oAscPasteSizeAction.Refuse, function () {
+			api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Internal, binaryData, undefined, undefined, undefined, function () {
+			});
+		});
+		api.wb.cutIdSheet = cutIdSheet;
+		api.asc_unregisterCallback("asc_onError", onError);
+		assert.strictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Not refused for size");
+		done();
+	});
+
 	/**
 	 * Test suite for parseText CSV parsing functionality
 	 */
