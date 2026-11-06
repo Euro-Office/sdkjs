@@ -1244,6 +1244,10 @@
 							oThis.handlers.trigger("selectRowsByRange");
 							nRetValue = keydownresult_PreventAll;
 						}
+						if (!bIsSelectColumns && !bIsSelect && oThis.canEdit() &&
+							oThis.handlers.trigger("toggleActiveCellCheckbox")) {
+							nRetValue = keydownresult_PreventAll;
+						}
 						break;
 					case 33: // PageUp
 						nDeltaRow = -0.5;
@@ -1710,6 +1714,7 @@
 				}
 			}
 
+
 			// do not work with drawings in selection dialog mode
 			if (!this.getSelectionDialogMode()) {
 				if (asc["editor"].isStartAddShape || asc["editor"].isInkDrawerOn() || graphicsInfo) {
@@ -1790,7 +1795,9 @@
 						return;
 					} else if (t.targetInfo.target === c_oTargetType.FilterObject) {
 						if (0 === button) {
-							if (t.targetInfo.isDataValidation) {
+							if (t.targetInfo.isCheckbox) {
+								this.handlers.trigger("checkboxClick", t.targetInfo.col, t.targetInfo.row);
+							} else if (t.targetInfo.isDataValidation) {
 								this.handlers.trigger('onDataValidation');
 							} else if (t.targetInfo.idPivot) {
 								this.handlers.trigger("pivotFiltersClick", t.targetInfo.idPivot);
@@ -1801,10 +1808,12 @@
 							} else {
 								this.handlers.trigger("autoFiltersClick", t.targetInfo.idFilter);
 							}
+							event.preventDefault && event.preventDefault();
+							event.stopPropagation && event.stopPropagation();
+							return;
 						}
-						event.preventDefault && event.preventDefault();
-						event.stopPropagation && event.stopPropagation();
-						return;
+						// Right-click on FilterObject (checkbox, filter): fall through
+						// to the normal right-click path so the context menu opens.
 					} else if (t.targetInfo.commentIndexes) {
 						t._commentCellClick(event);
 					} else if (t.targetInfo.target === c_oTargetType.MoveResizeRange && this.canEdit()) {
