@@ -2178,11 +2178,41 @@ function BinarySigTableWriter(memory)
         this.memory.WriteLong(AscCommon.c_oSerFormat.Version);
     }
 };
+var g_oDefaultStylesForWrite = null;
+function GetDefaultStylesForWrite()
+{
+	// Built once and kept out of the history and the TableId, it is never part of a document
+	if (!g_oDefaultStylesForWrite)
+		g_oDefaultStylesForWrite = AscFormat.ExecuteNoHistory(function(){return new AscWord.CStyles();}, this, []);
+
+	return g_oDefaultStylesForWrite;
+}
+function IsStyleEqualToDefault(oStyle, oNameToId, oDefaultStyle, oDefaultStyles)
+{
+	// CStyle.Is_Equal compares BasedOn/Next/Link by id, which differ between two CStyles,
+	// so compare against a view of the default style with these links remapped by name
+	var oDefaultView = Object.create(oDefaultStyle);
+	var arrLinks = ["BasedOn", "Next", "Link"];
+	for (var nIndex = 0, nCount = arrLinks.length; nIndex < nCount; ++nIndex)
+	{
+		var sLinkId = oDefaultStyle[arrLinks[nIndex]];
+		if (null == sLinkId)
+			continue;
+
+		var oLinkStyle = oDefaultStyles.Get(sLinkId);
+		if (!oLinkStyle || undefined === oNameToId[oLinkStyle.Name])
+			return false;
+
+		oDefaultView[arrLinks[nIndex]] = oNameToId[oLinkStyle.Name];
+	}
+	return oStyle.Is_Equal(oDefaultView);
+}
 function BinaryStyleTableWriter(memory, doc, oNumIdMap, copyParams, saveParams)
 {
     this.memory = memory;
     this.Document = doc;
 	this.copyParams = copyParams;
+	this.saveParams = saveParams;
     this.bs = new BinaryCommonWriter(this.memory);
 	this.btblPrs = new Binary_tblPrWriter(this.memory, oNumIdMap, saveParams);
     this.bpPrs = new Binary_pPrWriter(this.memory, oNumIdMap, null, saveParams);
@@ -2212,16 +2242,73 @@ function BinaryStyleTableWriter(memory, doc, oNumIdMap, copyParams, saveParams)
 		var oStyleToWrite = styles.Style;
 		if(this.copyParams && this.copyParams.oUsedStyleMap)
 			oStyleToWrite = this.copyParams.oUsedStyleMap;
+		var oSkipStyles = this.copyParams ? null : this.GetSkippedTableStyles(styles);
         for(var styleId in oStyleToWrite)
         {
 			var style = styles.Style[styleId];
-			if (!style) {
+			if (!style || (oSkipStyles && oSkipStyles[styleId])) {
 				continue;
 			}
 			var bDefault = styles.Is_StyleDefaultOOXML(style.Name);
             this.bs.WriteItem(c_oSer_sts.Style, function(){oThis.WriteStyle(styleId, style, bDefault);});
         }
     };
+	// Built-in table styles that nothing uses and that match the ones every new CStyles creates are
+	// not written: they are recreated on open anyway, and writing them adds over a hundred styles to every file.
+	this.GetSkippedTableStyles = function(styles)
+	{
+		var oDefaultStyles = GetDefaultStylesForWrite();
+		var oNameToId = {}, oDefaultNameToId = {}, styleId;
+		for (styleId in styles.Style)
+			oNameToId[styles.Style[styleId].Name] = styleId;
+		for (styleId in oDefaultStyles.Style)
+			oDefaultNameToId[oDefaultStyles.Style[styleId].Name] = styleId;
+
+		var oSkip = {};
+		for (styleId in styles.Style)
+		{
+			var oStyle = styles.Style[styleId];
+			if (!oStyle.IsTableStyle()
+				|| styleId === styles.Get_Default_Table()
+				|| styleId === styles.Get_Default_TableGrid())
+				continue;
+
+			var oDefaultStyle = oDefaultStyles.Get(oDefaultNameToId[oStyle.Name]);
+			if (oDefaultStyle && IsStyleEqualToDefault(oStyle, oNameToId, oDefaultStyle, oDefaultStyles))
+				oSkip[styleId] = true;
+		}
+
+		// Styles are written before the document body, so collect the used ones beforehand
+		var arrTables = this.Document.GetAllTables();
+		var arrDocParts = this.saveParams && this.saveParams.docParts;
+		if (arrDocParts)
+		{
+			for (var nIndex = 0, nCount = arrDocParts.length; nIndex < nCount; ++nIndex)
+				arrDocParts[nIndex].GetAllTables(undefined, arrTables);
+		}
+		for (var nTable = 0, nTablesCount = arrTables.length; nTable < nTablesCount; ++nTable)
+		{
+			var sTableStyle = arrTables[nTable].Get_TableStyle();
+			if (sTableStyle)
+				delete oSkip[sTableStyle];
+		}
+
+		// Keep the whole BasedOn chain of every style that is written
+		for (styleId in styles.Style)
+		{
+			if (oSkip[styleId])
+				continue;
+
+			var oBasedOn = styles.Get(styles.Style[styleId].BasedOn);
+			for (var nDepth = 0; oBasedOn && nDepth < 100; ++nDepth)
+			{
+				delete oSkip[oBasedOn.GetId()];
+				oBasedOn = styles.Get(oBasedOn.BasedOn);
+			}
+		}
+
+		return oSkip;
+	};
     this.WriteStyle = function(id, style, bDefault)
     {
         var oThis = this;

@@ -430,7 +430,6 @@ function (window, undefined)
 	window["AscCommon"].CDocumentMacros = CDocumentMacros;
 	window['AscCommon'].VbaProject = VbaProject;
 
-	var _safe_eval_closure = new Function("Function", "Api", "window", "AscDesktopEditor", "alert", "document", "XMLHttpRequest", "self", "globalThis", "setTimeout", "setInterval", "value", "return eval(\"\\\"use strict\\\";\\r\\n\" + value)");
 	function _safePluginEval(value) {
 		let protoFunc = Object.getPrototypeOf(function(){});
 		// for minimization we use eval!!!
@@ -482,10 +481,89 @@ function (window, undefined)
 			return value;
 		}
 		value = _sanitizeCode(value);
-		const result = _safe_eval_closure.call(null, {}, Api, {}, {}, function(){}, {}, customXMLHttpRequest, {}, {}, timeout, interval, value);
-		protoFunc.constructor = normalConstructor;
-		if (protoFuncGen)
-			protoFuncGen.prototype.next = generatorNext;
+
+		const allParams = {
+			"Function":         {},
+			"window":           {},
+			"AscDesktopEditor": {},
+			"alert":            function(){},
+			"document":         {},
+			"XMLHttpRequest":   customXMLHttpRequest,
+			"self":             {},
+			"globalThis":       {},
+			"setTimeout":       timeout,
+			"setInterval":      interval,
+
+			"Api":              Api,
+			"App":              Api,
+			"ThisApplication":  Api
+		};
+
+		switch (window.g_asc_plugins.api.editorId)
+		{
+			case AscCommon.c_oEditorId.Word:
+			{
+				allParams["ThisDocument"] = Api.GetDocument();
+				break;
+			}
+			case AscCommon.c_oEditorId.Presentation:
+			{
+				allParams["ThisPresentation"] = Api.GetPresentation();
+				break;
+			}
+			case AscCommon.c_oEditorId.Spreadsheet:
+			{
+				allParams["ThisWorkbook"] = Api;
+				break;
+			}
+			default:
+				break;
+		}
+
+		const names  = Object.keys(allParams).concat("value");
+		const values = Object.values(allParams).concat(value);
+
+		// Replace window.eval via property getter so the macro can use direct eval once,
+		// then turn it into a stub. Direct eval requires the identifier `eval` to resolve
+		// to %eval% itself; returning the real eval from the getter on first read keeps
+		// direct-eval semantics for our own wrapper call (user code runs in the wrapper's
+		// scope with this===null). All later reads return a stub, so `var e = eval; e(...)`
+		// can't escape to global scope.
+		const prevEvalDesc = Object.getOwnPropertyDescriptor(window, 'eval');
+		const realEval = window.eval;
+		let evalCallsLeft = 1;
+		const evalStub = function(){};
+		Object.defineProperty(window, 'eval', {
+			configurable: true,
+			get: function() {
+				if (evalCallsLeft > 0) {
+					evalCallsLeft--;
+					return realEval;
+				}
+				return evalStub;
+			},
+			set: function(){} // for IE
+		});
+
+		let result;
+		try {
+			const _safe_eval_closure = Function.apply(
+				null,
+				names.concat("\"use strict\"; return eval(\"\\\"use strict\\\";\\r\\n\" + value)")
+			);
+			result = _safe_eval_closure.apply(null, values);
+		} finally {
+			if (prevEvalDesc) {
+				Object.defineProperty(window, 'eval', prevEvalDesc);
+			} else {
+				delete window.eval;
+				window.eval = realEval;
+			}
+			protoFunc.constructor = normalConstructor;
+			if (protoFuncGen)
+				protoFuncGen.prototype.next = generatorNext;
+		}
+
 		return result;
 	};
 	window['AscCommon'].safePluginEval = function(value){

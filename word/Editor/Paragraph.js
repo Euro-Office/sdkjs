@@ -11230,14 +11230,6 @@ Paragraph.prototype.Internal_CompiledParaPrPresentation = function(Lvl, bNoMerge
 		Pr.TextPr.Merge(TableStyle.TextPr);
 	}
 	Pr.ParaPr.StyleTabs = ( Pr.ParaPr.Tabs ? Pr.ParaPr.Tabs.Copy() : new CParaTabs() );
-	if(Pr.ParaPr.LnSpcReduction !== undefined && Pr.ParaPr.LnSpcReduction !== null)
-	{
-		let Spacing = Pr.ParaPr.Spacing;
-		if(Spacing.LineRule === Asc.linerule_Auto)
-		{
-			Spacing.Line = Spacing.Line - Pr.ParaPr.LnSpcReduction;
-		}
-	}
 
 	if(!(bNoMergeDefault === true))
 	{
