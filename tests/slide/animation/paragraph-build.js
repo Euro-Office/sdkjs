@@ -135,6 +135,38 @@ $(function ()
 		logicDocument.Document_Undo();
 	}
 
+	function Redo()
+	{
+		logicDocument.Document_Redo();
+	}
+
+	function GetHistoryItemCounts()
+	{
+		return AscCommon.History.Points.map(function (point) {return point.Items.length;});
+	}
+
+	// Backspace at the start of paragraph nParagraph (merges it into the previous one)
+	function MergeWithPrevious(slide, shape, nParagraph)
+	{
+		const docContent = shape.getDocContent();
+		SelectShape(slide, shape);
+		docContent.SetThisElementCurrent();
+		logicDocument.MoveCursorToEndPos();
+		docContent.RemoveSelection();
+		docContent.CurPos.ContentPos = nParagraph;
+		docContent.Content[nParagraph].MoveCursorToStartPos(false);
+		logicDocument.Remove(-1, true, false, false, false);
+	}
+
+	function FindEffectByRangeStart(slide, nSt)
+	{
+		return slide.timing.getAllAnimEffects().find(function (effect)
+		{
+			const range = effect.getParagraphRange();
+			return range && range.st === nSt;
+		});
+	}
+
 	QUnit.module("Animation: text by paragraph");
 
 	QUnit.test("Paragraph ranges", function (assert)
@@ -745,5 +777,124 @@ $(function ()
 			threw = e;
 		}
 		assert.strictEqual(threw, null, "Replace with a family item does not throw" + (threw ? ": " + threw.message : ""));
+	});
+
+	QUnit.test("Merging paragraphs drops the effect of the merged paragraph", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
+		const timing = AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1], [2, 2]], "One effect per paragraph");
+
+		// distinct settings on the effect of C, to check that it stays on C
+		timing.resetSelection();
+		FindEffectByRangeStart(slide, 2).select();
+		const props = timing.getAnimProperties();
+		props.asc_putSubtype(8);
+		logicDocument.SetAnimationProperties(props, false);
+
+		MergeWithPrevious(slide, shape, 1);
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [2, [[0, 0], [1, 1]]], "Backspace at the start of B: B's effect is dropped, no duplicate range");
+		assert.strictEqual(FindEffectByRangeStart(slide, 1).cTn.presetSubtype, 8, "C keeps its effect settings");
+		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p");
+
+		Undo();
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [3, [[0, 0], [1, 1], [2, 2]]], "One undo restores text and effects");
+		assert.strictEqual(FindEffectByRangeStart(slide, 2).cTn.presetSubtype, 8, "Undo: C keeps its effect settings");
+	});
+
+	QUnit.test("Removing paragraphs of a multi-paragraph range", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3], [4, 4]], "Point B and its sub point form one range");
+
+		logicDocument.StartAction(0);
+		docContent.Internal_Content_Remove(3, 1);
+		logicDocument.FinalizeAction();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 2], [3, 3]], "Removing the sub point shrinks the range of Point B");
+		Undo();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3], [4, 4]], "Undo");
+
+		logicDocument.StartAction(0);
+		docContent.Internal_Content_Remove(2, 2);
+		logicDocument.FinalizeAction();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 2]], "Removing Point B with its sub point drops their effect, C moves up");
+		Undo();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3], [4, 4]], "Undo");
+	});
+
+	QUnit.test("Undo and redo of a text edit do not sync again", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+
+		MergeWithPrevious(slide, shape, 1);
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1]], "Backspace");
+		const itemCounts = GetHistoryItemCounts();
+
+		for (let i = 0; i < 3; ++i)
+		{
+			Undo();
+			assert.deepEqual([docContent.Content.length, GetRanges(slide)], [3, [[0, 0], [1, 1], [2, 2]]], "Undo " + (i + 1));
+			Redo();
+			assert.deepEqual([docContent.Content.length, GetRanges(slide)], [2, [[0, 0], [1, 1]]], "Redo " + (i + 1));
+		}
+		assert.deepEqual(GetHistoryItemCounts(), itemCounts, "Undo and redo add no changes to the history");
+
+		// typing: every character is an own history point
+		SelectShape(slide, shape);
+		docContent.SetThisElementCurrent();
+		logicDocument.MoveCursorToEndPos();
+		logicDocument.AddNewParagraph();
+		logicDocument.EnterText("D".codePointsArray());
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1], [2, 2]], "Typing into a new paragraph adds an effect");
+		const typedCounts = GetHistoryItemCounts();
+		Undo();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1]], "Undo typing");
+		Redo();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1], [2, 2]], "Redo typing");
+		assert.deepEqual(GetHistoryItemCounts(), typedCounts, "Undo and redo of typing add no changes to the history");
+	});
+
+	QUnit.test("Replayed changes (co-editing) do not sync again", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+
+		MergeWithPrevious(slide, shape, 1);
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1]], "Backspace");
+		const history = AscCommon.History;
+		const changes = history.Points[history.Index].Items.map(function (item) {return item.Data;});
+		const itemCounts = GetHistoryItemCounts();
+
+		// the changes of an edit reach co-editors (and collaborative undo) together with its timing changes:
+		// replay them like CCollaborativeEditingBase does, outside of the local undo/redo
+		const coEditing = AscCommon.CollaborativeEditing;
+		coEditing.private_ReplayChanges(function ()
+		{
+			for (let i = changes.length - 1; i >= 0; --i)
+				changes[i].Undo();
+		});
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [3, [[0, 0], [1, 1], [2, 2]]], "Reverted changes restore text and effects");
+		coEditing.private_ReplayChanges(function ()
+		{
+			for (let i = 0; i < changes.length; ++i)
+				changes[i].Redo();
+		});
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [2, [[0, 0], [1, 1]]], "Applied changes give the same text and effects");
+		assert.deepEqual(GetHistoryItemCounts(), itemCounts, "Replaying adds no changes to the history");
+		assert.notOk(coEditing.IsReplayingChanges(), "Replay flag is reset");
 	});
 });

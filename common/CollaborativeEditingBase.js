@@ -172,6 +172,7 @@
         this.m_aUsers       = []; // Список текущих пользователей, редактирующих данный документ
         this.m_aChanges     = []; // Массив с изменениями других пользователей
 		this.m_nUndoBeforeApply = 0; // The number of changes we need to undo before the other changes can be accepted
+		this.m_nReplayChanges   = 0; // > 0 while recorded changes are replayed (other users' changes, collaborative undo)
 
         this.m_aNeedUnlock  = []; // Массив со списком залоченных объектов(которые были залочены другими пользователями)
         this.m_aNeedUnlock2 = []; // Массив со списком залоченных объектов(которые были залочены на данном клиенте)
@@ -351,9 +352,12 @@
     {
 		if (this.m_nUndoBeforeApply)
 		{
-			let state   = this._PreUndo();
-			let changes = this.CoHistory.UndoGlobalChanges(this.m_nUndoBeforeApply);
-			this._PostUndo(state, changes);
+			this.private_ReplayChanges(function()
+			{
+				let state   = this._PreUndo();
+				let changes = this.CoHistory.UndoGlobalChanges(this.m_nUndoBeforeApply);
+				this._PostUndo(state, changes);
+			});
 			this.m_nUndoBeforeApply = 0;
 		}
 		
@@ -369,7 +373,7 @@
             var DocState = this.private_SaveDocumentState();
             this.Clear_NewImages();
 
-            this.Apply_OtherChanges();
+            this.private_ReplayChanges(this.Apply_OtherChanges);
 
             // После того как мы приняли чужие изменения, мы должны залочить новые объекты, которые были залочены
             this.Lock_NeedLock();
@@ -503,7 +507,10 @@
 
 				if (this.private_AddOverallChange(change))
 				{
-					change.Load(color);
+					this.private_ReplayChanges(function()
+					{
+						change.Load(color);
+					});
 					change.CheckNeedRecalculate();
 				}
 
@@ -1306,18 +1313,24 @@
 		}
 		else
 		{
-			let state   = this.PreUndo();
-			let changes = this.CoHistory.UndoGlobalChanges(count);
-			this.PostUndo(state, changes);
+			this.private_ReplayChanges(function()
+			{
+				let state   = this.PreUndo();
+				let changes = this.CoHistory.UndoGlobalChanges(count);
+				this.PostUndo(state, changes);
+			});
 		}
 	};
 	CCollaborativeEditingBase.prototype.UndoGlobalPoint = function()
 	{
 		// TODO: Handle unaccepted changes from this.m_aChanges
 		
-		let state   = this.PreUndo();
-		let changes = this.CoHistory.UndoGlobalPoint();
-		this.PostUndo(state, changes);
+		this.private_ReplayChanges(function()
+		{
+			let state   = this.PreUndo();
+			let changes = this.CoHistory.UndoGlobalPoint();
+			this.PostUndo(state, changes);
+		});
 	};
 	CCollaborativeEditingBase.prototype.Undo = function()
 	{
@@ -1326,9 +1339,37 @@
 		
 		// TODO: Handle unaccepted changes from this.m_aChanges
 
-		let state   = this.PreUndo();
-		let changes = this.CoHistory.UndoOwnPoint();
-		this.PostUndo(state, changes);
+		this.private_ReplayChanges(function()
+		{
+			let state   = this.PreUndo();
+			let changes = this.CoHistory.UndoOwnPoint();
+			this.PostUndo(state, changes);
+		});
+	};
+	/**
+	 * Runs fAction while recorded changes are replayed (other users' changes, collaborative undo). Code that
+	 * reacts to model changes with further changes of its own must not do so here: the replayed changes
+	 * already contain them.
+	 * @param {Function} fAction
+	 */
+	CCollaborativeEditingBase.prototype.private_ReplayChanges = function(fAction)
+	{
+		this.m_nReplayChanges++;
+		try
+		{
+			fAction.call(this);
+		}
+		finally
+		{
+			this.m_nReplayChanges--;
+		}
+	};
+	/**
+	 * @returns {boolean} true while recorded changes are replayed (see private_ReplayChanges)
+	 */
+	CCollaborativeEditingBase.prototype.IsReplayingChanges = function()
+	{
+		return this.m_nReplayChanges > 0;
 	};
 	CCollaborativeEditingBase.prototype.CanUndoMultipleActions = function()
 	{

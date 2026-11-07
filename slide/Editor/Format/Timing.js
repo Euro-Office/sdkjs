@@ -3079,7 +3079,9 @@
             const nBldLvl = oParagraphBuildLevels[sKey];
             const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), nBldLvl);
             // shift the stored ranges by the structural delta, so they stay in the new paragraph index space
+            const oRemoved = {};
             if (oDelta && oBuilds[sKey].spid === oDelta.spid) {
+                const nRemovedEnd = oDelta.pos + oDelta.count;
                 for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
                     const oEffect = aEffects[nIdx];
                     const oRange = oEffect.getParagraphRange();
@@ -3091,13 +3093,20 @@
                     if (oDelta.add) {
                         if (nSt >= oDelta.pos) nSt += oDelta.count;
                         if (nEnd >= oDelta.pos) nEnd += oDelta.count;
-                    } else if (nSt >= oDelta.pos + oDelta.count) {
+                    } else if (nSt >= nRemovedEnd) {
                         nSt -= oDelta.count;
                         nEnd -= oDelta.count;
                     } else if (nEnd >= oDelta.pos) {
-                        // the range overlaps the removed paragraphs
-                        if (nSt >= oDelta.pos) nSt = oDelta.pos;
-                        nEnd = Math.max(nSt, nEnd - oDelta.count);
+                        if (nSt >= oDelta.pos && nEnd < nRemovedEnd) {
+                            // all paragraphs of the range are removed (e.g. merged into the previous one):
+                            // drop the effect. Clamping its range would make it collide with the range of
+                            // the next paragraph, which then starts at oDelta.pos.
+                            oRemoved[nIdx] = true;
+                            continue;
+                        }
+                        // the range keeps paragraphs before and/or after the removed ones
+                        if (nSt > oDelta.pos) nSt = oDelta.pos;
+                        nEnd = nEnd >= nRemovedEnd ? nEnd - oDelta.count : oDelta.pos - 1;
                     }
                     if (nSt !== oRange.st || nEnd !== oRange.end) {
                         oEffect.setParagraphRange(nSt, nEnd);
@@ -3116,7 +3125,7 @@
             for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
                 const oEffect = aEffects[nIdx];
                 const oRange = oEffect.getParagraphRange();
-                const oNew = oRange && oBySt[oRange.st];
+                const oNew = !oRemoved[nIdx] && oRange && oBySt[oRange.st];
                 if (oNew) {
                     if (oRange.end !== oNew.end) {
                         oEffect.setParagraphRange(oNew.st, oNew.end);

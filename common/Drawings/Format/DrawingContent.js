@@ -946,6 +946,10 @@
 			const oParent = oShape.parent;
 			if (!oParent || !oParent.timing || !oParent.timing.hasParagraphBuild(oShape.GetId()))
 				return;
+			// undo/redo and changes from co-editors are replayed together with the timing changes that were
+			// recorded with the text change: syncing again while they are applied would duplicate them
+			if (this.isReplayingChanges())
+				return;
 			// syncing changes the timing, so it needs the timing lock (taken when free): skip it
 			// while someone else edits the animations of the slide
 			const oPresentation = oParent.presentation;
@@ -953,6 +957,14 @@
 				return;
 			const oDelta = nPos >= 0 ? {spid: oShape.GetId(), pos: nPos, count: nCount, add: bAdd} : null;
 			oParent.timing.syncParagraphBuildsFor(oShape.GetId(), oDelta);
+		}
+		CDrawingDocContent.prototype.isReplayingChanges = function()
+		{
+			const oHistory = AscCommon.History;
+			if (oHistory && oHistory.UndoRedoInProgress)
+				return true;
+			const oCoEditing = AscCommon.CollaborativeEditing;
+			return !!(oCoEditing && oCoEditing.IsReplayingChanges && oCoEditing.IsReplayingChanges());
 		}
 		CDrawingDocContent.prototype.getCharContentLength = function () {
 			let nContentLength = 0;
