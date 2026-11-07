@@ -737,9 +737,12 @@ CShape.prototype.OnContentReDraw = function(){
         return 0;
     };
 		CShape.prototype.onRemoveContent = function () {
-			const oPresentation = this.getLogicDocument();
-			if (oPresentation && oPresentation.timing) {
-				oPresentation.timing.onRemoveContent(this.GetId());
+			// the timing belongs to the slide (layout, master), not to the presentation
+			const oParent = this.parent;
+			// clamping the text targets changes the timing: skip it while someone else edits the animations
+			// (the player clamps the ranges itself, the paragraph build sync catches up with the timing lock)
+			if (oParent && oParent.timing && !(oParent.timingLock && oParent.timingLock.Lock.Is_Locked())) {
+				oParent.timing.onRemoveContent(this.GetId());
 			}
 		};
     //--------------------------------------------------------export----------------------------------------------------

@@ -1948,8 +1948,12 @@
         this.removeObjectAnimation(sObjectId);
     };
 		CTiming.prototype.onRemoveContent = function (sObjectId) {
+			// the traversal also visits the timing itself, lists and CTxEl (which expects the object)
 			this.traverse(function (oNode) {
-				oNode.handleRemoveContent(sObjectId);
+				if (oNode.getObjectType() === AscDFH.historyitem_type_SpTgt) {
+					oNode.handleRemoveContent(sObjectId);
+				}
+				return false;
 			});
 		};
     CTiming.prototype.removeObjectAnimation = function (sObjectId) {
@@ -2335,19 +2339,25 @@
                         oEffect = aSeq[nEffectIdx];
                         if (oEffect.isSelected()) {
                             sObjectId = oEffect.getObjectId();
+                            var oRange = oEffect.getParagraphRange();
+                            var sKey = oRange ? (sObjectId + "_" + oEffect.cTn.grpId + "_" + oRange.st) : sObjectId;
                             if (bNeedRemoveExtra) {
-                                if (oMapOfObjects[sObjectId]) {
+                                if (oMapOfObjects[sKey]) {
                                     aSeq.splice(nEffectIdx, 1);
                                     nEffectIdx--;
                                     continue;
                                 } else {
-                                    oMapOfObjects[sObjectId] = true;
+                                    oMapOfObjects[sKey] = true;
                                 }
                             }
                             oNewEffect = this.createEffect(sObjectId, nPresetClass, nPresetId, nPresetSubtype, oColor);
                             if (oNewEffect) {
                                 oNewEffect.cTn.setNodeType(oEffect.cTn.nodeType);
                                 oNewEffect.cTn.changeDelay(oEffect.cTn.getDelay());
+                                if (oRange) {
+                                    oNewEffect.cTn.setGrpId(oEffect.cTn.grpId);
+                                    oNewEffect.setParagraphRange(oRange.st, oRange.end);
+                                }
                                 oNewEffect.select();
                                 aSeq[nEffectIdx] = oNewEffect;
                                 bNeedRebuild = true;
@@ -2641,6 +2651,7 @@
             }
         }
         this.updateNodesIDs();
+        this.updateBldLst();
         return aAddedEffects;
     };
     CTiming.prototype.setAnimationProperties = function (oPr) {
@@ -2669,9 +2680,23 @@
             return;
         }
 
+        // like the start type above: the effect options send the text sequence alone, other properties
+        // in the same call are dropped because the selected effects are split or merged here.
+        // Only an explicit asc_putTextSequence switches the text sequence: a props object read from
+        // the current effects (e.g. a timeline drag) must not split or collapse the build.
+        let nTextSequence = oPr.textSequence;
+        if (AscFormat.isRealNumber(nTextSequence) && nTextSequence !== oCurPr.asc_getTextSequence()) {
+            oPr.textSequence = undefined;
+            this.changeTextSequence(nTextSequence);
+            return;
+        }
 
-        if (oPr.asc_getTriggerClickSequence() !== oCurPr.asc_getTriggerClickSequence()
-            || oPr.asc_getTriggerObjectClick() !== oCurPr.asc_getTriggerObjectClick()) {
+
+        // like the text sequence above: only an explicit asc_putTrigger... moves effects between
+        // sequences; a props object read from the current effects (e.g. a timeline drag) must not
+        const bTriggerPut = oPr.triggerClickSequence !== undefined || oPr.triggerObjectClick !== undefined;
+        if (bTriggerPut && (oPr.asc_getTriggerClickSequence() !== oCurPr.asc_getTriggerClickSequence()
+            || oPr.asc_getTriggerObjectClick() !== oCurPr.asc_getTriggerObjectClick())) {
             aSeqs = this.getEffectsSequences();
 
             let sSeqId;
@@ -2739,7 +2764,9 @@
         if (oPr.asc_getDuration() !== oCurPr.asc_getDuration() && iN(oPr.asc_getDuration())) {
             nDuration = oPr.asc_getDuration();
         }
-        if (oPr.asc_getSubtype() !== oCurPr.asc_getSubtype()) {
+        // a subtype belongs to one effect family; with a mixed selection (different presets selected)
+        // it must not be applied to effects of another family
+        if (!oCurPr.isMultipleEffect() && oPr.asc_getSubtype() !== oCurPr.asc_getSubtype()) {
             nSubtype = oPr.asc_getSubtype();
         }
         if (oPr.asc_getRepeatCount() !== oCurPr.asc_getRepeatCount() && iN(oPr.asc_getRepeatCount())) {
@@ -2799,6 +2826,373 @@
             }
         });
         return aEffects;
+    };
+    CTiming.prototype.getFreeGrpId = function (sObjectId) {
+        let nMaxGrpId = -1;
+        const aEffects = this.getObjectEffects(sObjectId);
+        for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+            if (AscFormat.isRealNumber(aEffects[nIdx].cTn.grpId)) {
+                nMaxGrpId = Math.max(nMaxGrpId, aEffects[nIdx].cTn.grpId);
+            }
+        }
+        if (this.bldLst) {
+            for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+                const oBld = this.bldLst.list[nIdx];
+                if (oBld.spid === sObjectId && AscFormat.isRealNumber(oBld.grpId)) {
+                    nMaxGrpId = Math.max(nMaxGrpId, oBld.grpId);
+                }
+            }
+        }
+        return nMaxGrpId + 1;
+    };
+    CTiming.prototype.changeTextSequence = function (nTextSequence) {
+        const bByParagraph = (nTextSequence === AscFormat.TEXT_SEQUENCE_BY_PARAGRAPH);
+        const aSeqs = this.getEffectsSequences();
+        const oNextGrpId = {};
+        const oDoneGroups = {};
+        let bChanged = false;
+        for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+            const aSeq = aSeqs[nSeq];
+            for (let nEffect = 1; nEffect < aSeq.length; ++nEffect) {
+                const oEffect = aSeq[nEffect];
+                if (!oEffect.isSelected() || bByParagraph === !!oEffect.getParagraphRange()) {
+                    continue;
+                }
+                const sObjectId = oEffect.getObjectId();
+                if (bByParagraph) {
+                    const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(sObjectId), PARAGRAPH_BUILD_LEVEL);
+                    if (aRanges.length === 0) {
+                        continue;
+                    }
+                    if (!AscFormat.isRealNumber(oNextGrpId[sObjectId])) {
+                        oNextGrpId[sObjectId] = this.getFreeGrpId(sObjectId);
+                    }
+                    oEffect.cTn.setGrpId(oNextGrpId[sObjectId]++);
+                    const aCopies = [];
+                    for (let nRange = 1; nRange < aRanges.length; ++nRange) {
+                        const oCopy = oEffect.createDuplicate();
+                        oCopy.setParagraphRange(aRanges[nRange].st, aRanges[nRange].end);
+                        oCopy.select();
+                        aCopies.push(oCopy);
+                    }
+                    oEffect.setParagraphRange(aRanges[0].st, aRanges[0].end);
+                    aSeq.splice.apply(aSeq, [nEffect + 1, 0].concat(aCopies));
+                    nEffect += aCopies.length;
+                } else {
+                    // collapse the whole paragraph build into its first effect (in sequence order),
+                    // so the whole-object effect keeps the position and timing of the build's first effect
+                    const sGroupKey = sObjectId + "_" + oEffect.cTn.grpId;
+                    if (oDoneGroups[sGroupKey]) {
+                        continue;
+                    }
+                    oDoneGroups[sGroupKey] = true;
+                    let oFirst = null;
+                    for (let nSeq2 = 0; nSeq2 < aSeqs.length && !oFirst; ++nSeq2) {
+                        const aSeq2 = aSeqs[nSeq2];
+                        for (let nEffect2 = 1; nEffect2 < aSeq2.length; ++nEffect2) {
+                            const oOther = aSeq2[nEffect2];
+                            if (oOther.getObjectId() === sObjectId
+                                && oOther.cTn.grpId === oEffect.cTn.grpId && oOther.getParagraphRange()) {
+                                oFirst = oOther;
+                                break;
+                            }
+                        }
+                    }
+                    if (!oFirst) {
+                        continue;
+                    }
+                    for (let nSeq2 = aSeqs.length - 1; nSeq2 >= 0; --nSeq2) {
+                        const aSeq2 = aSeqs[nSeq2];
+                        for (let nEffect2 = aSeq2.length - 1; nEffect2 > 0; --nEffect2) {
+                            const oOther = aSeq2[nEffect2];
+                            if (oOther !== oFirst && oOther.getObjectId() === sObjectId
+                                && oOther.cTn.grpId === oFirst.cTn.grpId && oOther.getParagraphRange()) {
+                                aSeq2.splice(nEffect2, 1);
+                                if (aSeq2 === aSeq && nEffect2 < nEffect) {
+                                    --nEffect;
+                                }
+                            }
+                        }
+                    }
+                    oFirst.setParagraphRange(null, null);
+                    oFirst.select();
+                }
+                bChanged = true;
+            }
+        }
+        if (bChanged) {
+            this.buildTree(aSeqs);
+        }
+    };
+    // paragraph builds of this timing: "spid_grpId" -> {spid, grpId, effects (sequence order)}
+    CTiming.prototype.getParagraphBuilds = function () {
+        const oBuilds = {};
+        const aAllEffects = this.getAllAnimEffects();
+        // imported files may lack grpId on the effects; fall back to the grpId of the shape's bldLst entry
+        const oGrpIdsBySpid = {};
+        if (this.bldLst) {
+            for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+                const oBld = this.bldLst.list[nIdx];
+                if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && AscFormat.isRealNumber(oBld.grpId)) {
+                    (oGrpIdsBySpid[oBld.spid] = oGrpIdsBySpid[oBld.spid] || []).push(oBld.grpId);
+                }
+            }
+        }
+        for (let nIdx = 0; nIdx < aAllEffects.length; ++nIdx) {
+            const oEffect = aAllEffects[nIdx];
+            if (oEffect.getParagraphRange()) {
+                const sObjectId = oEffect.getObjectId();
+                let nGrpId = AscFormat.isRealNumber(oEffect.cTn.grpId) ? oEffect.cTn.grpId : 0;
+                if (!AscFormat.isRealNumber(oEffect.cTn.grpId)) {
+                    const aGrpIds = oGrpIdsBySpid[sObjectId];
+                    if (aGrpIds && aGrpIds.length === 1) {
+                        nGrpId = aGrpIds[0];
+                    }
+                }
+                const sKey = sObjectId + "_" + nGrpId;
+                if (!oBuilds[sKey]) {
+                    oBuilds[sKey] = {spid: sObjectId, grpId: nGrpId, effects: []};
+                }
+                oBuilds[sKey].effects.push(oEffect);
+            }
+        }
+        return oBuilds;
+    };
+    // bldLst is only read by PowerPoint; the player works with the text targets of the effects
+    CTiming.prototype.updateBldLst = function () {
+        const oParagraphBuilds = this.getParagraphBuilds();
+        // builds with other text targets (e.g. character ranges from imported files) stay untouched
+        const oUsedBuilds = {};
+        const oOtherTextBuilds = {};
+        const aAllEffects = this.getAllAnimEffects();
+        for (let nIdx = 0; nIdx < aAllEffects.length; ++nIdx) {
+            const oEffect = aAllEffects[nIdx];
+            const nGrpId = AscFormat.isRealNumber(oEffect.cTn.grpId) ? oEffect.cTn.grpId : 0;
+            const sKey = oEffect.getObjectId() + "_" + nGrpId;
+            oUsedBuilds[sKey] = true;
+            if (!oEffect.getParagraphRange() && oEffect.hasTextTarget()) {
+                oOtherTextBuilds[sKey] = true;
+            }
+        }
+        const fGetBuildType = function (oBuild, nBldLvl) {
+            const oDrawing = AscCommon.g_oTableId.Get_ById(oBuild.spid);
+            const aRanges = getParagraphBuildRanges(oDrawing, nBldLvl);
+            return isSameParagraphRanges(oBuild.effects, aRanges) ? ParaBuildType_p : ParaBuildType_cust;
+        };
+        if (this.bldLst) {
+            for (let nIdx = this.bldLst.list.length - 1; nIdx > -1; --nIdx) {
+                const oBld = this.bldLst.list[nIdx];
+                if (oBld.getObjectType() !== AscDFH.historyitem_type_BldP) {
+                    continue;
+                }
+                const sKey = oBld.spid + "_" + oBld.grpId;
+                const oBuild = oParagraphBuilds[sKey];
+                const bParagraphBuildType = (oBld.build === ParaBuildType_p || oBld.build === ParaBuildType_cust);
+                if (oBuild) {
+                    const nBuild = fGetBuildType(oBuild, getParagraphBuildLevel(oBld));
+                    if (oBld.build !== nBuild && (bParagraphBuildType || oBld.build === null || oBld.build === ParaBuildType_whole)) {
+                        oBld.setBuild(nBuild);
+                    }
+                    delete oParagraphBuilds[sKey];
+                } else if (!oUsedBuilds[sKey] || (bParagraphBuildType && !oOtherTextBuilds[sKey])) {
+                    this.bldLst.removeFromLst(nIdx);
+                }
+            }
+        }
+        for (let sKey in oParagraphBuilds) {
+            if (!oParagraphBuilds.hasOwnProperty(sKey)) {
+                continue;
+            }
+            if (!this.bldLst) {
+                this.setBldLst(new CBldLst());
+            }
+            const oBldP = new CBldP();
+            oBldP.setSpid(oParagraphBuilds[sKey].spid);
+            oBldP.setGrpId(oParagraphBuilds[sKey].grpId);
+            oBldP.setBuild(fGetBuildType(oParagraphBuilds[sKey], PARAGRAPH_BUILD_LEVEL));
+            this.bldLst.push(oBldP);
+        }
+        if (this.bldLst && this.bldLst.isEmpty()) {
+            this.setBldLst(null);
+        }
+    };
+    // "by paragraph" builds (build="p") whose effects no longer match the paragraph ranges of the text
+    CTiming.prototype.getOutdatedParagraphBuilds = function () {
+        const aResult = [];
+        if (!this.bldLst) {
+            return aResult;
+        }
+        const oParagraphBuildLevels = {};
+        let bHasParagraphBuild = false;
+        for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+            const oBld = this.bldLst.list[nIdx];
+            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p) {
+                oParagraphBuildLevels[oBld.spid + "_" + oBld.grpId] = getParagraphBuildLevel(oBld);
+                bHasParagraphBuild = true;
+            }
+        }
+        if (!bHasParagraphBuild) {
+            return aResult;
+        }
+        const oBuilds = this.getParagraphBuilds();
+        for (let sKey in oBuilds) {
+            if (!oBuilds.hasOwnProperty(sKey) || !oParagraphBuildLevels.hasOwnProperty(sKey)) {
+                continue;
+            }
+            const aEffects = oBuilds[sKey].effects;
+            const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), oParagraphBuildLevels[sKey]);
+            if (!isSameParagraphRanges(aEffects, aRanges)) {
+                aResult.push({effects: aEffects, ranges: aRanges});
+            }
+        }
+        return aResult;
+    };
+    // keeps "by paragraph" builds in sync with the text: each effect keeps the paragraph it was
+    // built for (matched by its current range start), not by index, so edits to other paragraphs
+    // never move an effect's settings onto a different paragraph.
+    // oDelta = {spid, pos, count, add} describes a structural paragraph edit that already happened;
+    // the stored ranges are shifted by it before re-matching.
+    CTiming.prototype.syncParagraphBuilds = function (oDelta) {
+        if (!this.bldLst) {
+            return;
+        }
+        const oParagraphBuildLevels = {};
+        let bHasParagraphBuild = false;
+        for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+            const oBld = this.bldLst.list[nIdx];
+            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p) {
+                oParagraphBuildLevels[oBld.spid + "_" + oBld.grpId] = getParagraphBuildLevel(oBld);
+                bHasParagraphBuild = true;
+            }
+        }
+        if (!bHasParagraphBuild) {
+            return;
+        }
+        const oBuilds = this.getParagraphBuilds();
+        const aSeqs = this.getEffectsSequences();
+        let bChanged = false;
+        for (let sKey in oBuilds) {
+            if (!oBuilds.hasOwnProperty(sKey) || !oParagraphBuildLevels.hasOwnProperty(sKey)) {
+                continue;
+            }
+            const aEffects = oBuilds[sKey].effects;
+            const nBldLvl = oParagraphBuildLevels[sKey];
+            const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), nBldLvl);
+            // shift the stored ranges by the structural delta, so they stay in the new paragraph index space
+            if (oDelta && oBuilds[sKey].spid === oDelta.spid) {
+                for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+                    const oEffect = aEffects[nIdx];
+                    const oRange = oEffect.getParagraphRange();
+                    if (!oRange) {
+                        continue;
+                    }
+                    let nSt = oRange.st;
+                    let nEnd = oRange.end;
+                    if (oDelta.add) {
+                        if (nSt >= oDelta.pos) nSt += oDelta.count;
+                        if (nEnd >= oDelta.pos) nEnd += oDelta.count;
+                    } else if (nSt >= oDelta.pos + oDelta.count) {
+                        nSt -= oDelta.count;
+                        nEnd -= oDelta.count;
+                    } else if (nEnd >= oDelta.pos) {
+                        // the range overlaps the removed paragraphs
+                        if (nSt >= oDelta.pos) nSt = oDelta.pos;
+                        nEnd = Math.max(nSt, nEnd - oDelta.count);
+                    }
+                    if (nSt !== oRange.st || nEnd !== oRange.end) {
+                        oEffect.setParagraphRange(nSt, nEnd);
+                        bChanged = true;
+                    }
+                }
+            }
+            // re-match by range start: an effect keeps its paragraph even when paragraphs around
+            // it were added, removed or emptied
+            const oBySt = {};
+            for (let nIdx = 0; nIdx < aRanges.length; ++nIdx) {
+                oBySt[aRanges[nIdx].st] = aRanges[nIdx];
+            }
+            const oMatched = {};
+            const aKeep = [];
+            for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+                const oEffect = aEffects[nIdx];
+                const oRange = oEffect.getParagraphRange();
+                const oNew = oRange && oBySt[oRange.st];
+                if (oNew) {
+                    if (oRange.end !== oNew.end) {
+                        oEffect.setParagraphRange(oNew.st, oNew.end);
+                        bChanged = true;
+                    }
+                    oMatched[oNew.st] = true;
+                    aKeep.push(oEffect);
+                } else if (aRanges.length === 0 && nIdx === 0) {
+                    // no text left: keep one effect for the whole object
+                    oEffect.setParagraphRange(null, null);
+                    bChanged = true;
+                    aKeep.push(oEffect);
+                } else {
+                    // its paragraph is gone (removed or emptied): drop the effect
+                    for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+                        const nPos = aSeqs[nSeq].indexOf(oEffect);
+                        if (nPos > 0) {
+                            aSeqs[nSeq].splice(nPos, 1);
+                            break;
+                        }
+                    }
+                    bChanged = true;
+                }
+            }
+            // one effect per new paragraph range, inserted at its position in the sequence
+            for (let nIdx = 0; nIdx < aRanges.length; ++nIdx) {
+                if (oMatched[aRanges[nIdx].st]) {
+                    continue;
+                }
+                let oPrev = null;
+                for (let nKeep = aKeep.length - 1; nKeep >= 0; --nKeep) {
+                    const oKeepRange = aKeep[nKeep].getParagraphRange();
+                    if (oKeepRange && oKeepRange.end < aRanges[nIdx].st) {
+                        oPrev = aKeep[nKeep];
+                        break;
+                    }
+                }
+                const oTemplate = oPrev || aKeep[0] || aEffects[0];
+                if (!oTemplate) {
+                    continue;
+                }
+                const oCopy = oTemplate.createDuplicate();
+                oCopy.setParagraphRange(aRanges[nIdx].st, aRanges[nIdx].end);
+                for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+                    const nPos = aSeqs[nSeq].indexOf(oTemplate);
+                    if (nPos > 0) {
+                        aSeqs[nSeq].splice(oPrev ? nPos + 1 : nPos, 0, oCopy);
+                        break;
+                    }
+                }
+                aKeep.push(oCopy);
+                bChanged = true;
+            }
+        }
+        if (bChanged) {
+            this.buildTree(aSeqs);
+        }
+    };
+    CTiming.prototype.hasParagraphBuild = function (sObjectId) {
+        if (!this.bldLst) {
+            return false;
+        }
+        for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+            const oBld = this.bldLst.list[nIdx];
+            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p && oBld.spid === sObjectId) {
+                return true;
+            }
+        }
+        return false;
+    };
+    // syncs the "by paragraph" builds of one shape after its text changed (typing, IME, replace all,
+    // paragraph add/remove) - in the same history point as the text change, so undo restores both
+    CTiming.prototype.syncParagraphBuildsFor = function (sObjectId, oDelta) {
+        if (this.hasParagraphBuild(sObjectId)) {
+            this.syncParagraphBuilds(oDelta);
+        }
     };
     CTiming.prototype.getAnimEffect = function (sObjectId) {
         var aEffects = this.getObjectEffects(sObjectId);
@@ -3901,6 +4295,54 @@
     const ParaBuildType_cust = 1;
     const ParaBuildType_p = 2;
     const ParaBuildType_whole = 3;
+
+    // PowerPoint "By paragraph" = "By 1st level paragraphs": deeper levels join their parent
+    const PARAGRAPH_BUILD_LEVEL = 1;
+
+    // "By 2nd/3rd... level paragraphs" are build="p" with bldLvl 2, 3...; bldLvl defaults to 1
+    function getParagraphBuildLevel(oBld) {
+        return (AscFormat.isRealNumber(oBld.bldLvl) && oBld.bldLvl > 0) ? oBld.bldLvl : PARAGRAPH_BUILD_LEVEL;
+    }
+
+    function getParagraphBuildRanges(oDrawing, nBldLvl) {
+        const aRanges = [];
+        // CGraphicFrame.getDocContent returns the current table cell, so only shapes take part
+        if (!oDrawing || oDrawing.getObjectType() !== AscDFH.historyitem_type_Shape) {
+            return aRanges;
+        }
+        const oDocContent = oDrawing.getDocContent();
+        if (!oDocContent) {
+            return aRanges;
+        }
+        let oLastRange = null;
+        for (let nPara = 0; nPara < oDocContent.Content.length; ++nPara) {
+            const oParagraph = oDocContent.Content[nPara];
+            if (oParagraph.IsEmpty()) {
+                continue;
+            }
+            const nLvl = AscFormat.isRealNumber(oParagraph.Pr.Lvl) ? oParagraph.Pr.Lvl : 0;
+            if (oLastRange && nLvl >= nBldLvl) {
+                oLastRange.end = nPara;
+            } else {
+                oLastRange = {st: nPara, end: nPara};
+                aRanges.push(oLastRange);
+            }
+        }
+        return aRanges;
+    }
+
+    function isSameParagraphRanges(aEffects, aRanges) {
+        if (aEffects.length !== aRanges.length) {
+            return false;
+        }
+        for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+            const oRange = aEffects[nIdx].getParagraphRange();
+            if (!oRange || oRange.st !== aRanges[nIdx].st || oRange.end !== aRanges[nIdx].end) {
+                return false;
+            }
+        }
+        return true;
+    }
 
     function CBldP() {
         CBldOleChart.call(this);
@@ -5733,6 +6175,11 @@
             if (sObjectId !== null) {
                 var oNewEffect = CTiming.prototype.createEffect(sObjectId, this.presetClass, this.presetID, v, null);
                 if (oNewEffect) {
+                    // the preset children have no text target, keep the animated paragraphs
+                    var oEffect = this.parent;
+                    var oRange = (oEffect && oEffect.getParagraphRange) ? oEffect.getParagraphRange() : null;
+                    var nSt = oRange ? oRange.st : null;
+                    var nEnd = oRange ? oRange.end : null;
                     var oNewCTn = oNewEffect.cTn;
                     if (this.getEffectDuration() !== oNewCTn.getEffectDuration()) {
                         oNewCTn.changeEffectDuration(this.getEffectDuration());
@@ -5740,6 +6187,9 @@
                     this.setPresetSubtype(v);
                     this.childTnLst.clear();
                     oNewCTn.childTnLst.fillObject(this.childTnLst, {});
+                    if (oRange) {
+                        oEffect.setParagraphRange(nSt, nEnd);
+                    }
                 }
             }
         }
@@ -9024,6 +9474,63 @@
         }
         return false;
     };
+    CTimeNodeContainer.prototype.getParagraphRange = function () {
+        const sObjectId = this.getObjectId();
+        let oRange = null;
+        this.traverse(function (oChild) {
+            if (oChild.getObjectType() === AscDFH.historyitem_type_SpTgt && oChild.spid === sObjectId) {
+                const oTxEl = oChild.getTargetTextOptions();
+                if (oTxEl && oTxEl.pRg) {
+                    oRange = oTxEl.pRg;
+                    return true;
+                }
+            }
+            return false;
+        });
+        return oRange;
+    };
+    CTimeNodeContainer.prototype.hasTextTarget = function () {
+        const sObjectId = this.getObjectId();
+        let bResult = false;
+        this.traverse(function (oChild) {
+            if (oChild.getObjectType() === AscDFH.historyitem_type_SpTgt && oChild.spid === sObjectId && oChild.txEl) {
+                bResult = true;
+                return true;
+            }
+            return false;
+        });
+        return bResult;
+    };
+    CTimeNodeContainer.prototype.setParagraphRange = function (nStart, nEnd) {
+        // every behavior (set, animEffect, anim...) has its own target
+        const sObjectId = this.getObjectId();
+        const bSet = AscFormat.isRealNumber(nStart) && AscFormat.isRealNumber(nEnd);
+        this.traverse(function (oChild) {
+            if (oChild.getObjectType() === AscDFH.historyitem_type_SpTgt && oChild.spid === sObjectId) {
+                if (bSet) {
+                    const oPRg = new CIndexRg();
+                    oPRg.setSt(nStart);
+                    oPRg.setEnd(nEnd);
+                    const oTxEl = new CTxEl();
+                    oTxEl.setPRg(oPRg);
+                    oChild.setTxEl(oTxEl);
+                } else if (oChild.txEl) {
+                    oChild.setTxEl(null);
+                }
+            }
+            return false;
+        });
+    };
+    CTimeNodeContainer.prototype.getTextSequence = function () {
+        if (this.getParagraphRange()) {
+            return AscFormat.TEXT_SEQUENCE_BY_PARAGRAPH;
+        }
+        const oDrawing = AscCommon.g_oTableId.Get_ById(this.getObjectId());
+        if (getParagraphBuildRanges(oDrawing, PARAGRAPH_BUILD_LEVEL).length > 0) {
+            return AscFormat.TEXT_SEQUENCE_AS_ONE_OBJECT;
+        }
+        return null;
+    };
     CTimeNodeContainer.prototype.merge = function (oTNContainer) {
         AscFormat.ExecuteNoHistory(function () {
             if (oTNContainer === this) {
@@ -9195,6 +9702,16 @@
     CTimeNodeContainer.prototype.getObjectText = function () {
         const sObjectId = this.getObjectId();
         const oObject = AscCommon.g_oTableId.Get_ById(sObjectId);
+        const oRange = this.getParagraphRange();
+        const oDocContent = oRange && oObject && oObject.getDocContent && oObject.getDocContent();
+        if (oDocContent) {
+            const aTexts = [];
+            const nEnd = Math.min(oRange.end, oDocContent.Content.length - 1);
+            for (let nPara = oRange.st; nPara <= nEnd; ++nPara) {
+                aTexts.push(oDocContent.Content[nPara].GetText({ParaSeparator: ""}));
+            }
+            return aTexts.join(" ");
+        }
 				if (oObject && oObject.getText) {
 					let sText = oObject.getText();
 					if (typeof sText === 'string') {
@@ -9421,6 +9938,28 @@
         this.triggerObjectClick = v;
     };
     CTimeNodeContainer.prototype["asc_putTriggerObjectClick"] = CTimeNodeContainer.prototype.asc_putTriggerObjectClick;
+    // null: not applicable (no text), undefined: mixed selection
+    CTimeNodeContainer.prototype.asc_getTextSequence = function () {
+        if (this.textSequence !== undefined) {
+            return this.textSequence;
+        }
+        const aEffects = (Array.isArray(this.merged) && this.merged.length > 0) ? this.merged : [this];
+        let nResult = null;
+        for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+            const nCur = aEffects[nIdx].getTextSequence();
+            if (nIdx === 0) {
+                nResult = nCur;
+            } else if (nCur !== nResult) {
+                return undefined;
+            }
+        }
+        return nResult;
+    };
+    CTimeNodeContainer.prototype["asc_getTextSequence"] = CTimeNodeContainer.prototype.asc_getTextSequence;
+    CTimeNodeContainer.prototype.asc_putTextSequence = function (v) {
+        this.textSequence = v;
+    };
+    CTimeNodeContainer.prototype["asc_putTextSequence"] = CTimeNodeContainer.prototype.asc_putTextSequence;
     CTimeNodeContainer.prototype.isEqualProperties = function (oPr) {
         if (!oPr) {
             return false;
@@ -9453,6 +9992,9 @@
             return false;
         }
         if (this.asc_getTriggerObjectClick() !== oPr.asc_getTriggerObjectClick()) {
+            return false;
+        }
+        if (this.asc_getTextSequence() !== oPr.asc_getTextSequence()) {
             return false;
         }
         return true;
@@ -15100,4 +15642,5 @@
     window['AscFormat'].ParaBuildType_cust = ParaBuildType_cust;
     window['AscFormat'].ParaBuildType_p = ParaBuildType_p;
     window['AscFormat'].ParaBuildType_whole = ParaBuildType_whole;
+    window['AscFormat'].getParagraphBuildRanges = getParagraphBuildRanges;
 }(window))
