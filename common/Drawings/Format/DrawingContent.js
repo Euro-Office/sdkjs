@@ -944,19 +944,26 @@
 				return;
 			// the timing belongs to the slide (layout, master), not to the presentation
 			const oParent = oShape.parent;
-			if (!oParent || !oParent.timing || !oParent.timing.hasParagraphBuild(oShape.GetId()))
+			const sShapeId = oShape.GetId();
+			const oTiming = oParent && oParent.timing;
+			if (!oTiming || !oTiming.hasParagraphBuild(sShapeId))
 				return;
 			// undo/redo and changes from co-editors are replayed together with the timing changes that were
 			// recorded with the text change: syncing again while they are applied would duplicate them
 			if (this.isReplayingChanges())
 				return;
-			// syncing changes the timing, so it needs the timing lock (taken when free): skip it
-			// while someone else edits the animations of the slide
-			const oPresentation = oParent.presentation;
-			if (oPresentation && oPresentation.IsSelectionLocked(AscCommon.changestype_Timing))
+			const oDelta = nPos >= 0 ? {spid: sShapeId, pos: nPos, count: nCount, add: bAdd} : null;
+			// most edits (typing inside a paragraph) leave the paragraph ranges as they are: they must not
+			// touch the timing or take its lock
+			if (!oTiming.isParagraphBuildSyncNeeded(sShapeId, oDelta))
 				return;
-			const oDelta = nPos >= 0 ? {spid: oShape.GetId(), pos: nPos, count: nCount, add: bAdd} : null;
-			oParent.timing.syncParagraphBuildsFor(oShape.GetId(), oDelta);
+			// syncing changes the timing, so it needs the timing lock of the shape's slide (taken when free),
+			// which need not be the current slide (e.g. replace all): skip it while someone else edits the
+			// animations of that slide
+			const oPresentation = oParent.presentation;
+			if (oPresentation && oPresentation.IsSelectionLocked(AscCommon.changestype_Timing, [oParent]))
+				return;
+			oTiming.syncParagraphBuildsFor(sShapeId, oDelta);
 		}
 		CDrawingDocContent.prototype.isReplayingChanges = function()
 		{

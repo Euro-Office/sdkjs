@@ -3052,24 +3052,27 @@
     // never move an effect's settings onto a different paragraph.
     // oDelta = {spid, pos, count, add} describes a structural paragraph edit that already happened;
     // the stored ranges are shifted by it before re-matching.
-    CTiming.prototype.syncParagraphBuilds = function (oDelta) {
+    // sObjectId limits the sync to the builds of one shape (all shapes when not set).
+    // bCheckOnly: change nothing, only return whether the sync would change the timing.
+    CTiming.prototype.syncParagraphBuilds = function (oDelta, sObjectId, bCheckOnly) {
         if (!this.bldLst) {
-            return;
+            return false;
         }
         const oParagraphBuildLevels = {};
         let bHasParagraphBuild = false;
         for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
             const oBld = this.bldLst.list[nIdx];
-            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p) {
+            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p
+                && (!sObjectId || oBld.spid === sObjectId)) {
                 oParagraphBuildLevels[oBld.spid + "_" + oBld.grpId] = getParagraphBuildLevel(oBld);
                 bHasParagraphBuild = true;
             }
         }
         if (!bHasParagraphBuild) {
-            return;
+            return false;
         }
         const oBuilds = this.getParagraphBuilds();
-        const aSeqs = this.getEffectsSequences();
+        const aSeqs = bCheckOnly ? null : this.getEffectsSequences();
         let bChanged = false;
         for (let sKey in oBuilds) {
             if (!oBuilds.hasOwnProperty(sKey) || !oParagraphBuildLevels.hasOwnProperty(sKey)) {
@@ -3078,82 +3081,61 @@
             const aEffects = oBuilds[sKey].effects;
             const nBldLvl = oParagraphBuildLevels[sKey];
             const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), nBldLvl);
-            // shift the stored ranges by the structural delta, so they stay in the new paragraph index space
-            const oRemoved = {};
-            if (oDelta && oBuilds[sKey].spid === oDelta.spid) {
-                const nRemovedEnd = oDelta.pos + oDelta.count;
+            const bDelta = !!oDelta && oBuilds[sKey].spid === oDelta.spid;
+            // the target range of every effect (null: drop the effect)
+            const aTargets = [];
+            const oMatched = {};
+            if (aRanges.length === 0) {
+                // no text left: the first effect stays as a placeholder on the first paragraph, so the
+                // build stays "by paragraph" and new text gets its paragraph effects again
                 for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
-                    const oEffect = aEffects[nIdx];
-                    const oRange = oEffect.getParagraphRange();
-                    if (!oRange) {
-                        continue;
-                    }
-                    let nSt = oRange.st;
-                    let nEnd = oRange.end;
-                    if (oDelta.add) {
-                        if (nSt >= oDelta.pos) nSt += oDelta.count;
-                        if (nEnd >= oDelta.pos) nEnd += oDelta.count;
-                    } else if (nSt >= nRemovedEnd) {
-                        nSt -= oDelta.count;
-                        nEnd -= oDelta.count;
-                    } else if (nEnd >= oDelta.pos) {
-                        if (nSt >= oDelta.pos && nEnd < nRemovedEnd) {
-                            // all paragraphs of the range are removed (e.g. merged into the previous one):
-                            // drop the effect. Clamping its range would make it collide with the range of
-                            // the next paragraph, which then starts at oDelta.pos.
-                            oRemoved[nIdx] = true;
-                            continue;
-                        }
-                        // the range keeps paragraphs before and/or after the removed ones
-                        if (nSt > oDelta.pos) nSt = oDelta.pos;
-                        nEnd = nEnd >= nRemovedEnd ? nEnd - oDelta.count : oDelta.pos - 1;
-                    }
-                    if (nSt !== oRange.st || nEnd !== oRange.end) {
-                        oEffect.setParagraphRange(nSt, nEnd);
-                        bChanged = true;
+                    aTargets.push(nIdx === 0 ? {st: 0, end: 0} : null);
+                }
+            } else {
+                // re-match by range start (in the new paragraph index space): an effect keeps its
+                // paragraph even when paragraphs around it were added, removed or emptied
+                const oBySt = {};
+                for (let nIdx = 0; nIdx < aRanges.length; ++nIdx) {
+                    oBySt[aRanges[nIdx].st] = aRanges[nIdx];
+                }
+                for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+                    const oRange = aEffects[nIdx].getParagraphRange();
+                    const oShifted = bDelta ? shiftParagraphRange(oRange, oDelta) : oRange;
+                    const oNew = oShifted && oBySt[oShifted.st];
+                    if (oNew && !oMatched[oNew.st]) {
+                        oMatched[oNew.st] = true;
+                        aTargets.push(oNew);
+                    } else {
+                        // its paragraphs are gone (removed or emptied), or another effect already
+                        // animates this paragraph: drop the effect
+                        aTargets.push(null);
                     }
                 }
             }
-            // re-match by range start: an effect keeps its paragraph even when paragraphs around
-            // it were added, removed or emptied
-            const oBySt = {};
-            for (let nIdx = 0; nIdx < aRanges.length; ++nIdx) {
-                oBySt[aRanges[nIdx].st] = aRanges[nIdx];
-            }
-            const oMatched = {};
             const aKeep = [];
             for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
-                const oEffect = aEffects[nIdx];
-                const oRange = oEffect.getParagraphRange();
-                const oNew = !oRemoved[nIdx] && oRange && oBySt[oRange.st];
-                if (oNew) {
-                    if (oRange.end !== oNew.end) {
-                        oEffect.setParagraphRange(oNew.st, oNew.end);
-                        bChanged = true;
+                const oTarget = aTargets[nIdx];
+                if (!oTarget) {
+                    continue;
+                }
+                const oRange = aEffects[nIdx].getParagraphRange();
+                if (oRange.st !== oTarget.st || oRange.end !== oTarget.end) {
+                    if (bCheckOnly) {
+                        return true;
                     }
-                    oMatched[oNew.st] = true;
-                    aKeep.push(oEffect);
-                } else if (aRanges.length === 0 && nIdx === 0) {
-                    // no text left: keep one effect for the whole object
-                    oEffect.setParagraphRange(null, null);
-                    bChanged = true;
-                    aKeep.push(oEffect);
-                } else {
-                    // its paragraph is gone (removed or emptied): drop the effect
-                    for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
-                        const nPos = aSeqs[nSeq].indexOf(oEffect);
-                        if (nPos > 0) {
-                            aSeqs[nSeq].splice(nPos, 1);
-                            break;
-                        }
-                    }
+                    aEffects[nIdx].setParagraphRange(oTarget.st, oTarget.end);
                     bChanged = true;
                 }
+                aKeep.push(aEffects[nIdx]);
             }
-            // one effect per new paragraph range, inserted at its position in the sequence
+            // one effect per new paragraph range, inserted at its position in the sequence (before the
+            // dropped effects are removed, so a dropped effect can still give the position)
             for (let nIdx = 0; nIdx < aRanges.length; ++nIdx) {
                 if (oMatched[aRanges[nIdx].st]) {
                     continue;
+                }
+                if (bCheckOnly) {
+                    return true;
                 }
                 let oPrev = null;
                 for (let nKeep = aKeep.length - 1; nKeep >= 0; --nKeep) {
@@ -3179,10 +3161,27 @@
                 aKeep.push(oCopy);
                 bChanged = true;
             }
+            for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+                if (aTargets[nIdx]) {
+                    continue;
+                }
+                if (bCheckOnly) {
+                    return true;
+                }
+                for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+                    const nPos = aSeqs[nSeq].indexOf(aEffects[nIdx]);
+                    if (nPos > 0) {
+                        aSeqs[nSeq].splice(nPos, 1);
+                        break;
+                    }
+                }
+                bChanged = true;
+            }
         }
         if (bChanged) {
             this.buildTree(aSeqs);
         }
+        return bChanged;
     };
     CTiming.prototype.hasParagraphBuild = function (sObjectId) {
         if (!this.bldLst) {
@@ -3196,12 +3195,15 @@
         }
         return false;
     };
+    // whether a text edit of the shape (oDelta: see syncParagraphBuilds) changes its "by paragraph"
+    // builds; most edits (typing inside a paragraph) do not and need neither the timing nor its lock
+    CTiming.prototype.isParagraphBuildSyncNeeded = function (sObjectId, oDelta) {
+        return this.syncParagraphBuilds(oDelta, sObjectId, true);
+    };
     // syncs the "by paragraph" builds of one shape after its text changed (typing, IME, replace all,
     // paragraph add/remove) - in the same history point as the text change, so undo restores both
     CTiming.prototype.syncParagraphBuildsFor = function (sObjectId, oDelta) {
-        if (this.hasParagraphBuild(sObjectId)) {
-            this.syncParagraphBuilds(oDelta);
-        }
+        this.syncParagraphBuilds(oDelta, sObjectId, false);
     };
     CTiming.prototype.getAnimEffect = function (sObjectId) {
         var aEffects = this.getObjectEffects(sObjectId);
@@ -4340,7 +4342,36 @@
         return aRanges;
     }
 
+    // the range of a paragraph build effect after a structural paragraph edit (see syncParagraphBuilds),
+    // null when all paragraphs of the range were removed (e.g. merged into the previous paragraph)
+    function shiftParagraphRange(oRange, oDelta) {
+        let nSt = oRange.st;
+        let nEnd = oRange.end;
+        const nRemovedEnd = oDelta.pos + oDelta.count;
+        if (oDelta.add) {
+            if (nSt >= oDelta.pos) nSt += oDelta.count;
+            if (nEnd >= oDelta.pos) nEnd += oDelta.count;
+        } else if (nSt >= nRemovedEnd) {
+            nSt -= oDelta.count;
+            nEnd -= oDelta.count;
+        } else if (nEnd >= oDelta.pos) {
+            if (nSt >= oDelta.pos && nEnd < nRemovedEnd) {
+                // dropping the effect: clamping its range would make it collide with the range of
+                // the next paragraph, which then starts at oDelta.pos
+                return null;
+            }
+            // the range keeps paragraphs before and/or after the removed ones
+            if (nSt > oDelta.pos) nSt = oDelta.pos;
+            nEnd = nEnd >= nRemovedEnd ? nEnd - oDelta.count : oDelta.pos - 1;
+        }
+        return {st: nSt, end: nEnd};
+    }
+
     function isSameParagraphRanges(aEffects, aRanges) {
+        if (aRanges.length === 0) {
+            // no text: one placeholder effect keeps the build "by paragraph" (see syncParagraphBuilds)
+            return aEffects.length === 1 && !!aEffects[0].getParagraphRange();
+        }
         if (aEffects.length !== aRanges.length) {
             return false;
         }

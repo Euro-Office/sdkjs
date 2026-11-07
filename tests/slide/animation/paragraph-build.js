@@ -145,8 +145,8 @@ $(function ()
 		return AscCommon.History.Points.map(function (point) {return point.Items.length;});
 	}
 
-	// Backspace at the start of paragraph nParagraph (merges it into the previous one)
-	function MergeWithPrevious(slide, shape, nParagraph)
+	// puts the cursor at the start (or end) of paragraph nParagraph of the shape
+	function MoveCursorToParagraph(slide, shape, nParagraph, isEnd)
 	{
 		const docContent = shape.getDocContent();
 		SelectShape(slide, shape);
@@ -154,7 +154,16 @@ $(function ()
 		logicDocument.MoveCursorToEndPos();
 		docContent.RemoveSelection();
 		docContent.CurPos.ContentPos = nParagraph;
-		docContent.Content[nParagraph].MoveCursorToStartPos(false);
+		if (isEnd)
+			docContent.Content[nParagraph].MoveCursorToEndPos(false);
+		else
+			docContent.Content[nParagraph].MoveCursorToStartPos(false);
+	}
+
+	// Backspace at the start of paragraph nParagraph (merges it into the previous one)
+	function MergeWithPrevious(slide, shape, nParagraph)
+	{
+		MoveCursorToParagraph(slide, shape, nParagraph, false);
 		logicDocument.Remove(-1, true, false, false, false);
 	}
 
@@ -896,5 +905,82 @@ $(function ()
 		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [2, [[0, 0], [1, 1]]], "Applied changes give the same text and effects");
 		assert.deepEqual(GetHistoryItemCounts(), itemCounts, "Replaying adds no changes to the history");
 		assert.notOk(coEditing.IsReplayingChanges(), "Replay flag is reset");
+	});
+
+	QUnit.test("Replacing all text keeps the build by paragraph", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+
+		SelectShape(slide, shape);
+		docContent.SetThisElementCurrent();
+		logicDocument.SelectAll();
+		logicDocument.EnterText("X".codePointsArray());
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [1, [[0, 0]]], "Select all + type: one effect on the new text");
+		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p");
+		logicDocument.AddNewParagraph();
+		logicDocument.EnterText("Y".codePointsArray());
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1]], "A new paragraph gets its own effect again");
+
+		logicDocument.SelectAll();
+		logicDocument.Remove(-1, true, false, false, false);
+		assert.deepEqual([docContent.Content.length, docContent.Content[0].IsEmpty(), GetRanges(slide)], [1, true, [[0, 0]]], "Deleting all text keeps one placeholder effect");
+		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p without text");
+		assert.strictEqual(slide.timing.getAllAnimEffects()[0].asc_getTextSequence(), BY_PARAGRAPH, "Effect options still show by paragraph");
+		logicDocument.EnterText("Z".codePointsArray());
+		logicDocument.AddNewParagraph();
+		logicDocument.EnterText("W".codePointsArray());
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1]], "Typing new text gives one effect per paragraph again");
+	});
+
+	QUnit.test("Typing inside a paragraph does not take the timing lock", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const lock = slide.timingLock.Lock;
+		lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+
+		MoveCursorToParagraph(slide, shape, 0, true);
+		logicDocument.EnterText("x".codePointsArray());
+		assert.deepEqual([lock.Get_Type(), GetRanges(slide)], [AscCommon.c_oAscLockTypes.kLockTypeNone, [[0, 0], [1, 1], [2, 2]]], "Typing a character: the ranges stay, the timing lock stays free");
+		logicDocument.MoveCursorToEndPos();
+		logicDocument.AddNewParagraph();
+		assert.strictEqual(lock.Get_Type(), AscCommon.c_oAscLockTypes.kLockTypeNone, "Enter at the end (empty paragraph): the timing lock stays free");
+		logicDocument.EnterText("D".codePointsArray());
+		assert.deepEqual([lock.Get_Type(), GetRanges(slide)], [AscCommon.c_oAscLockTypes.kLockTypeMine, [[0, 0], [1, 1], [2, 2], [3, 3]]], "A new paragraph range: synced with the timing lock");
+	});
+
+	QUnit.test("Text edits on another slide need the timing lock of that slide", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const current = CreateTextShape(["Other"]).slide;
+		logicDocument.Set_CurPage(logicDocument.GetSlidesCount() - 1);
+		assert.strictEqual(logicDocument.GetCurrentSlide(), current, "Another slide is the current one");
+		const lock = slide.timingLock.Lock;
+		const currentLock = current.timingLock.Lock;
+		currentLock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+		const docContent = shape.getDocContent();
+
+		lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeOther, false);
+		logicDocument.StartAction(0);
+		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point D"));
+		logicDocument.FinalizeAction();
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [4, [[0, 0], [1, 1], [2, 2]]], "Animations of the edited slide locked by someone else: the effects stay");
+		assert.strictEqual(currentLock.Get_Type(), AscCommon.c_oAscLockTypes.kLockTypeNone, "The timing lock of the current slide is not taken");
+
+		lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+		logicDocument.StartAction(0);
+		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point E"));
+		logicDocument.FinalizeAction();
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], "Lock free again: synced");
+		assert.deepEqual([lock.Get_Type(), currentLock.Get_Type()], [AscCommon.c_oAscLockTypes.kLockTypeMine, AscCommon.c_oAscLockTypes.kLockTypeNone], "The timing lock of the edited slide is taken, not the one of the current slide");
 	});
 });

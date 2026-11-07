@@ -10289,8 +10289,9 @@ CPresentation.prototype.Document_Is_SelectionLocked = function (CheckType, Addit
 		fCheckSlides(function (slide) {return slide.layoutLock;}, selected_slides);
 	}
 	if (CheckType === AscCommon.changestype_Timing) {
-		const oSlide = this.GetCurrentSlide();
-		fCheckSlides(function (slide) {return slide.timingLock;}, [oSlide]);
+		// AdditionalData: the slides (layouts, masters) whose timing changes, the current slide by default
+		const aSlides = Array.isArray(AdditionalData) ? AdditionalData : [this.GetCurrentSlide()];
+		fCheckSlides(function (slide) {return slide.timingLock;}, aSlides);
 	}
 	if (CheckType === AscCommon.changestype_ColorScheme) {
 		var check_obj =
