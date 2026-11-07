@@ -549,4 +549,201 @@ $(function ()
 			done();
 		})();
 	});
+
+	function AddTextShapeToSlide(slideIndex, aTexts)
+	{
+		const apiSlide = builderApi.GetPresentation().GetSlideByIndex(slideIndex);
+		const fill = builderApi.CreateSolidFill(builderApi.CreateRGBColor(200, 200, 200));
+		const stroke = builderApi.CreateStroke(0, builderApi.CreateNoFill());
+		const apiShape = builderApi.CreateShape("rect", 300 * 36000, 150 * 36000, fill, stroke);
+		apiSlide.AddObject(apiShape);
+		const apiContent = apiShape.GetDocContent();
+		apiContent.RemoveAllElements();
+		for (let i = 0; i < aTexts.length; ++i)
+		{
+			const apiParagraph = builderApi.CreateParagraph();
+			if (aTexts[i])
+				apiParagraph.AddText(aTexts[i]);
+			apiContent.Push(apiParagraph);
+		}
+		apiContent.RemoveElement(0);
+		return apiShape.Shape;
+	}
+
+
+	QUnit.module("Animation: text by paragraph (review fixes)");
+
+	QUnit.test("Timeline drag with a mixed selection keeps the build", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		const slideIndex = logicDocument.GetSlidesCount() - 1;
+		const timing = AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const shape2 = AddTextShapeToSlide(slideIndex, ["Solo"]);
+		SelectShape(slide, shape2);
+		logicDocument.AddAnimation(AscFormat.PRESET_CLASS_ENTR, AscFormat.ENTRANCE_FADE, 0, null, false, false);
+
+		timing.resetSelection();
+		timing.getAllAnimEffects().forEach(function (effect) {effect.select();});
+		const plain = timing.getAllAnimEffects().find(function (effect) {return !effect.getParagraphRange();});
+		assert.ok(plain, "Plain effect exists");
+		const props = plain.createDuplicate();
+		props.asc_putDuration(2000);
+		logicDocument.SetAnimationProperties(props, false);
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3], [4, 4], null], "Ranges unchanged by the drag");
+		assert.ok(timing.getAllAnimEffects().every(function (effect) {return effect.asc_getDuration() === 2000;}), "Duration applied to every selected effect: " + timing.getAllAnimEffects().map(function (e) {return e.asc_getDuration();}).join(",") + " oPr=" + props.asc_getDuration() + " oCur=" + timing.getAnimProperties().asc_getDuration() + " start=" + props.asc_getStartType() + "/" + timing.getAnimProperties().asc_getStartType() + " sel=" + timing.getSelectedEffects().length + " trig=" + props.asc_getTriggerClickSequence() + "/" + timing.getAnimProperties().asc_getTriggerClickSequence());
+		const bld = timing.bldLst && timing.bldLst.list[0];
+		assert.ok(bld && bld.build === AscFormat.ParaBuildType_p, "Build stays p");
+	});
+
+	QUnit.test("Emptying a paragraph keeps the other effects on their paragraphs", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		const timing = AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+
+		timing.resetSelection();
+		const mid = timing.getAllAnimEffects().find(function (effect)
+		{
+			const range = effect.getParagraphRange();
+			return range && range.st === 2;
+		});
+		mid.select();
+		const props = timing.getAnimProperties();
+		props.asc_putSubtype(8);
+		logicDocument.SetAnimationProperties(props, false);
+
+		logicDocument.StartAction(0);
+		docContent.Content[0].GetElement(0).ClearContent();
+		logicDocument.FinalizeAction();
+		assert.deepEqual(GetRanges(slide), [[2, 3], [4, 4]], "Ranges after emptying paragraph 0");
+		const midAfter = timing.getAllAnimEffects().find(function (effect)
+		{
+			const range = effect.getParagraphRange();
+			return range && range.st === 2;
+		});
+		assert.ok(midAfter && midAfter.cTn.presetSubtype === 8, "Effect settings stay on their paragraph");
+	});
+
+	QUnit.test("Edits without FinalizeAction sync in the same history point", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		const timing = AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+
+		AscCommon.History.Create_NewPoint(0);
+		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point D"));
+		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3], [4, 4], [5, 5]], "Synced without FinalizeAction");
+		const bld = timing.bldLst && timing.bldLst.list[0];
+		assert.ok(bld && bld.build === AscFormat.ParaBuildType_p, "Build stays p");
+		Undo();
+		assert.deepEqual([docContent.Content.length, GetRanges(slide)], [5, [[0, 0], [2, 3], [4, 4]]], "One undo restores text and effects");
+	});
+
+	QUnit.test("rev of a build survives actions and missing effect grpIds", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		const timing = AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const docContent = shape.getDocContent();
+
+		AscCommon.History.Create_NewPoint(0);
+		timing.bldLst.list[0].setRev(true);
+		logicDocument.StartAction(0);
+		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point D"));
+		logicDocument.FinalizeAction();
+		assert.strictEqual(timing.bldLst.list[0].rev, true, "rev kept after text edit sync");
+
+		timing.buildTree(timing.getEffectsSequences());
+		assert.strictEqual(timing.bldLst.list[0].rev, true, "rev kept after buildTree");
+
+		// imported-like: effects without grpId, bldP with grpId + rev
+		const grpId = timing.bldLst.list[0].grpId;
+		AscFormat.ExecuteNoHistory(function ()
+		{
+			timing.getAllAnimEffects().forEach(function (effect) {effect.cTn.grpId = undefined;});
+		}, this, []);
+		timing.buildTree(timing.getEffectsSequences());
+		const bld = timing.bldLst && timing.bldLst.list.find(function (b) {return b.spid === shape.GetId();});
+		assert.ok(bld, "bldP still there");
+		assert.strictEqual(bld.grpId, grpId, "bldP keeps its grpId");
+		assert.strictEqual(bld.rev, true, "rev kept when effect grpIds are missing");
+	});
+
+	QUnit.test("As One Object collapses into the first effect of the build", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		const slideIndex = logicDocument.GetSlidesCount() - 1;
+		const shape2 = AddTextShapeToSlide(slideIndex, ["Solo"]);
+		const timing = AddFade(slide, shape2);
+		SelectShape(slide, shape);
+		logicDocument.AddAnimation(AscFormat.PRESET_CLASS_ENTR, AscFormat.ENTRANCE_FADE, 0, null, false, false);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const effects = timing.getAllAnimEffects();
+		assert.strictEqual(effects.length, 4, "Plain effect plus three paragraph effects");
+
+		// distinct timing on the FIRST paragraph effect of the build
+		timing.resetSelection();
+		effects[1].select();
+		let props = timing.getAnimProperties();
+		props.asc_putDuration(3000);
+		logicDocument.SetAnimationProperties(props, false);
+
+		// collapse via a middle effect of the build only
+		timing.resetSelection();
+		effects[2].select();
+		SetTextSequence(slide, AS_ONE_OBJECT);
+		const remaining = timing.getAllAnimEffects();
+		assert.strictEqual(remaining.length, 2, "Plain effect plus one whole-object effect");
+		const whole = remaining.find(function (e) {return !e.getParagraphRange() && e.getObjectId() === shape.GetId();});
+		assert.ok(whole, "Whole object effect exists");
+		assert.strictEqual(whole.getIndexInSequence(), 2, "The first effect of the build survives at the build's position");
+		assert.strictEqual(whole.asc_getDuration(), 3000, "Keeps the first effect's timing");
+	});
+
+	QUnit.test("Subtype and family items on a mixed selection", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(DEFAULT_TEXTS);
+		const slideIndex = logicDocument.GetSlidesCount() - 1;
+		const timing = AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		const shape2 = AddTextShapeToSlide(slideIndex, ["Solo"]);
+		SelectShape(slide, shape2);
+		logicDocument.AddAnimation(AscFormat.PRESET_CLASS_ENTR, AscFormat.ENTRANCE_FLY_IN_FROM, 4, null, false, false);
+
+		timing.resetSelection();
+		const all = timing.getAllAnimEffects();
+		all[0].select();
+		all[all.length - 1].select();
+		const props = timing.getAnimProperties();
+		assert.strictEqual(props.asc_getType(), AscFormat.ANIM_PRESET_MULTIPLE, "Mixed selection reports multiple");
+		props.asc_putSubtype(2);
+		logicDocument.SetAnimationProperties(props, false);
+		const effects = timing.getAllAnimEffects();
+		const fade = effects.find(function (e) {return e.cTn.presetID === AscFormat.ENTRANCE_FADE && e.getParagraphRange();});
+		assert.ok(fade, "Fade paragraph effect kept");
+		assert.strictEqual(fade.cTn.presetSubtype, 0, "Subtype of the mixed selection is not applied");
+		assert.ok(effects.some(function (e) {return e.cTn.presetID === AscFormat.ENTRANCE_FLY_IN_FROM;}), "Fly In kept");
+		assert.deepEqual(GetRanges(slide).slice(0, 3), [[0, 0], [2, 3], [4, 4]], "Paragraph build intact");
+
+		// family item (different preset) picked while two different effects are selected
+		let threw = null;
+		try
+		{
+			logicDocument.AddAnimation(AscFormat.PRESET_CLASS_ENTR, AscFormat.ENTRANCE_DIAMOND, 0, null, true, false);
+		}
+		catch (e)
+		{
+			threw = e;
+		}
+		assert.strictEqual(threw, null, "Replace with a family item does not throw" + (threw ? ": " + threw.message : ""));
+	});
 });

@@ -2681,16 +2681,22 @@
         }
 
         // like the start type above: the effect options send the text sequence alone, other properties
-        // in the same call are dropped because the selected effects are split or merged here
-        let nTextSequence = oPr.asc_getTextSequence();
+        // in the same call are dropped because the selected effects are split or merged here.
+        // Only an explicit asc_putTextSequence switches the text sequence: a props object read from
+        // the current effects (e.g. a timeline drag) must not split or collapse the build.
+        let nTextSequence = oPr.textSequence;
         if (AscFormat.isRealNumber(nTextSequence) && nTextSequence !== oCurPr.asc_getTextSequence()) {
+            oPr.textSequence = undefined;
             this.changeTextSequence(nTextSequence);
             return;
         }
 
 
-        if (oPr.asc_getTriggerClickSequence() !== oCurPr.asc_getTriggerClickSequence()
-            || oPr.asc_getTriggerObjectClick() !== oCurPr.asc_getTriggerObjectClick()) {
+        // like the text sequence above: only an explicit asc_putTrigger... moves effects between
+        // sequences; a props object read from the current effects (e.g. a timeline drag) must not
+        const bTriggerPut = oPr.triggerClickSequence !== undefined || oPr.triggerObjectClick !== undefined;
+        if (bTriggerPut && (oPr.asc_getTriggerClickSequence() !== oCurPr.asc_getTriggerClickSequence()
+            || oPr.asc_getTriggerObjectClick() !== oCurPr.asc_getTriggerObjectClick())) {
             aSeqs = this.getEffectsSequences();
 
             let sSeqId;
@@ -2758,7 +2764,9 @@
         if (oPr.asc_getDuration() !== oCurPr.asc_getDuration() && iN(oPr.asc_getDuration())) {
             nDuration = oPr.asc_getDuration();
         }
-        if (oPr.asc_getSubtype() !== oCurPr.asc_getSubtype()) {
+        // a subtype belongs to one effect family; with a mixed selection (different presets selected)
+        // it must not be applied to effects of another family
+        if (!oCurPr.isMultipleEffect() && oPr.asc_getSubtype() !== oCurPr.asc_getSubtype()) {
             nSubtype = oPr.asc_getSubtype();
         }
         if (oPr.asc_getRepeatCount() !== oCurPr.asc_getRepeatCount() && iN(oPr.asc_getRepeatCount())) {
@@ -2841,6 +2849,7 @@
         const bByParagraph = (nTextSequence === AscFormat.TEXT_SEQUENCE_BY_PARAGRAPH);
         const aSeqs = this.getEffectsSequences();
         const oNextGrpId = {};
+        const oDoneGroups = {};
         let bChanged = false;
         for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
             const aSeq = aSeqs[nSeq];
@@ -2870,14 +2879,34 @@
                     aSeq.splice.apply(aSeq, [nEffect + 1, 0].concat(aCopies));
                     nEffect += aCopies.length;
                 } else {
-                    // collapse the whole paragraph build into its first effect
-                    const nGrpId = oEffect.cTn.grpId;
-                    for (let nSeq2 = 0; nSeq2 < aSeqs.length; ++nSeq2) {
+                    // collapse the whole paragraph build into its first effect (in sequence order),
+                    // so the whole-object effect keeps the position and timing of the build's first effect
+                    const sGroupKey = sObjectId + "_" + oEffect.cTn.grpId;
+                    if (oDoneGroups[sGroupKey]) {
+                        continue;
+                    }
+                    oDoneGroups[sGroupKey] = true;
+                    let oFirst = null;
+                    for (let nSeq2 = 0; nSeq2 < aSeqs.length && !oFirst; ++nSeq2) {
+                        const aSeq2 = aSeqs[nSeq2];
+                        for (let nEffect2 = 1; nEffect2 < aSeq2.length; ++nEffect2) {
+                            const oOther = aSeq2[nEffect2];
+                            if (oOther.getObjectId() === sObjectId
+                                && oOther.cTn.grpId === oEffect.cTn.grpId && oOther.getParagraphRange()) {
+                                oFirst = oOther;
+                                break;
+                            }
+                        }
+                    }
+                    if (!oFirst) {
+                        continue;
+                    }
+                    for (let nSeq2 = aSeqs.length - 1; nSeq2 >= 0; --nSeq2) {
                         const aSeq2 = aSeqs[nSeq2];
                         for (let nEffect2 = aSeq2.length - 1; nEffect2 > 0; --nEffect2) {
                             const oOther = aSeq2[nEffect2];
-                            if (oOther !== oEffect && oOther.getObjectId() === sObjectId
-                                && oOther.cTn.grpId === nGrpId && oOther.getParagraphRange()) {
+                            if (oOther !== oFirst && oOther.getObjectId() === sObjectId
+                                && oOther.cTn.grpId === oFirst.cTn.grpId && oOther.getParagraphRange()) {
                                 aSeq2.splice(nEffect2, 1);
                                 if (aSeq2 === aSeq && nEffect2 < nEffect) {
                                     --nEffect;
@@ -2885,7 +2914,8 @@
                             }
                         }
                     }
-                    oEffect.setParagraphRange(null, null);
+                    oFirst.setParagraphRange(null, null);
+                    oFirst.select();
                 }
                 bChanged = true;
             }
@@ -2898,11 +2928,27 @@
     CTiming.prototype.getParagraphBuilds = function () {
         const oBuilds = {};
         const aAllEffects = this.getAllAnimEffects();
+        // imported files may lack grpId on the effects; fall back to the grpId of the shape's bldLst entry
+        const oGrpIdsBySpid = {};
+        if (this.bldLst) {
+            for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+                const oBld = this.bldLst.list[nIdx];
+                if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && AscFormat.isRealNumber(oBld.grpId)) {
+                    (oGrpIdsBySpid[oBld.spid] = oGrpIdsBySpid[oBld.spid] || []).push(oBld.grpId);
+                }
+            }
+        }
         for (let nIdx = 0; nIdx < aAllEffects.length; ++nIdx) {
             const oEffect = aAllEffects[nIdx];
             if (oEffect.getParagraphRange()) {
                 const sObjectId = oEffect.getObjectId();
-                const nGrpId = AscFormat.isRealNumber(oEffect.cTn.grpId) ? oEffect.cTn.grpId : 0;
+                let nGrpId = AscFormat.isRealNumber(oEffect.cTn.grpId) ? oEffect.cTn.grpId : 0;
+                if (!AscFormat.isRealNumber(oEffect.cTn.grpId)) {
+                    const aGrpIds = oGrpIdsBySpid[sObjectId];
+                    if (aGrpIds && aGrpIds.length === 1) {
+                        nGrpId = aGrpIds[0];
+                    }
+                }
                 const sKey = sObjectId + "_" + nGrpId;
                 if (!oBuilds[sKey]) {
                     oBuilds[sKey] = {spid: sObjectId, grpId: nGrpId, effects: []};
@@ -3001,27 +3047,90 @@
         }
         return aResult;
     };
-    // keeps "by paragraph" builds in sync with the text: one effect per paragraph range
-    CTiming.prototype.syncParagraphBuilds = function () {
-        const aOutdatedBuilds = this.getOutdatedParagraphBuilds();
-        if (aOutdatedBuilds.length === 0) {
+    // keeps "by paragraph" builds in sync with the text: each effect keeps the paragraph it was
+    // built for (matched by its current range start), not by index, so edits to other paragraphs
+    // never move an effect's settings onto a different paragraph.
+    // oDelta = {spid, pos, count, add} describes a structural paragraph edit that already happened;
+    // the stored ranges are shifted by it before re-matching.
+    CTiming.prototype.syncParagraphBuilds = function (oDelta) {
+        if (!this.bldLst) {
             return;
         }
+        const oParagraphBuildLevels = {};
+        let bHasParagraphBuild = false;
+        for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+            const oBld = this.bldLst.list[nIdx];
+            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p) {
+                oParagraphBuildLevels[oBld.spid + "_" + oBld.grpId] = getParagraphBuildLevel(oBld);
+                bHasParagraphBuild = true;
+            }
+        }
+        if (!bHasParagraphBuild) {
+            return;
+        }
+        const oBuilds = this.getParagraphBuilds();
         const aSeqs = this.getEffectsSequences();
-        for (let nBuild = 0; nBuild < aOutdatedBuilds.length; ++nBuild) {
-            const aEffects = aOutdatedBuilds[nBuild].effects;
-            const aRanges = aOutdatedBuilds[nBuild].ranges;
+        let bChanged = false;
+        for (let sKey in oBuilds) {
+            if (!oBuilds.hasOwnProperty(sKey) || !oParagraphBuildLevels.hasOwnProperty(sKey)) {
+                continue;
+            }
+            const aEffects = oBuilds[sKey].effects;
+            const nBldLvl = oParagraphBuildLevels[sKey];
+            const aRanges = getParagraphBuildRanges(AscCommon.g_oTableId.Get_ById(oBuilds[sKey].spid), nBldLvl);
+            // shift the stored ranges by the structural delta, so they stay in the new paragraph index space
+            if (oDelta && oBuilds[sKey].spid === oDelta.spid) {
+                for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
+                    const oEffect = aEffects[nIdx];
+                    const oRange = oEffect.getParagraphRange();
+                    if (!oRange) {
+                        continue;
+                    }
+                    let nSt = oRange.st;
+                    let nEnd = oRange.end;
+                    if (oDelta.add) {
+                        if (nSt >= oDelta.pos) nSt += oDelta.count;
+                        if (nEnd >= oDelta.pos) nEnd += oDelta.count;
+                    } else if (nSt >= oDelta.pos + oDelta.count) {
+                        nSt -= oDelta.count;
+                        nEnd -= oDelta.count;
+                    } else if (nEnd >= oDelta.pos) {
+                        // the range overlaps the removed paragraphs
+                        if (nSt >= oDelta.pos) nSt = oDelta.pos;
+                        nEnd = Math.max(nSt, nEnd - oDelta.count);
+                    }
+                    if (nSt !== oRange.st || nEnd !== oRange.end) {
+                        oEffect.setParagraphRange(nSt, nEnd);
+                        bChanged = true;
+                    }
+                }
+            }
+            // re-match by range start: an effect keeps its paragraph even when paragraphs around
+            // it were added, removed or emptied
+            const oBySt = {};
+            for (let nIdx = 0; nIdx < aRanges.length; ++nIdx) {
+                oBySt[aRanges[nIdx].st] = aRanges[nIdx];
+            }
+            const oMatched = {};
+            const aKeep = [];
             for (let nIdx = 0; nIdx < aEffects.length; ++nIdx) {
                 const oEffect = aEffects[nIdx];
-                if (nIdx < aRanges.length) {
-                    const oRange = oEffect.getParagraphRange();
-                    if (oRange.st !== aRanges[nIdx].st || oRange.end !== aRanges[nIdx].end) {
-                        oEffect.setParagraphRange(aRanges[nIdx].st, aRanges[nIdx].end);
+                const oRange = oEffect.getParagraphRange();
+                const oNew = oRange && oBySt[oRange.st];
+                if (oNew) {
+                    if (oRange.end !== oNew.end) {
+                        oEffect.setParagraphRange(oNew.st, oNew.end);
+                        bChanged = true;
                     }
-                } else if (nIdx === 0) {
+                    oMatched[oNew.st] = true;
+                    aKeep.push(oEffect);
+                } else if (aRanges.length === 0 && nIdx === 0) {
                     // no text left: keep one effect for the whole object
                     oEffect.setParagraphRange(null, null);
+                    bChanged = true;
+                    aKeep.push(oEffect);
                 } else {
+                    // its paragraph is gone (removed or emptied): drop the effect
                     for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
                         const nPos = aSeqs[nSeq].indexOf(oEffect);
                         if (nPos > 0) {
@@ -3029,24 +3138,61 @@
                             break;
                         }
                     }
+                    bChanged = true;
                 }
             }
-            if (aEffects.length < aRanges.length) {
-                const oLast = aEffects[aEffects.length - 1];
-                for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
-                    let nPos = aSeqs[nSeq].indexOf(oLast);
-                    if (nPos > 0) {
-                        for (let nRange = aEffects.length; nRange < aRanges.length; ++nRange) {
-                            const oCopy = oLast.createDuplicate();
-                            oCopy.setParagraphRange(aRanges[nRange].st, aRanges[nRange].end);
-                            aSeqs[nSeq].splice(++nPos, 0, oCopy);
-                        }
+            // one effect per new paragraph range, inserted at its position in the sequence
+            for (let nIdx = 0; nIdx < aRanges.length; ++nIdx) {
+                if (oMatched[aRanges[nIdx].st]) {
+                    continue;
+                }
+                let oPrev = null;
+                for (let nKeep = aKeep.length - 1; nKeep >= 0; --nKeep) {
+                    const oKeepRange = aKeep[nKeep].getParagraphRange();
+                    if (oKeepRange && oKeepRange.end < aRanges[nIdx].st) {
+                        oPrev = aKeep[nKeep];
                         break;
                     }
                 }
+                const oTemplate = oPrev || aKeep[0] || aEffects[0];
+                if (!oTemplate) {
+                    continue;
+                }
+                const oCopy = oTemplate.createDuplicate();
+                oCopy.setParagraphRange(aRanges[nIdx].st, aRanges[nIdx].end);
+                for (let nSeq = 0; nSeq < aSeqs.length; ++nSeq) {
+                    const nPos = aSeqs[nSeq].indexOf(oTemplate);
+                    if (nPos > 0) {
+                        aSeqs[nSeq].splice(oPrev ? nPos + 1 : nPos, 0, oCopy);
+                        break;
+                    }
+                }
+                aKeep.push(oCopy);
+                bChanged = true;
             }
         }
-        this.buildTree(aSeqs);
+        if (bChanged) {
+            this.buildTree(aSeqs);
+        }
+    };
+    CTiming.prototype.hasParagraphBuild = function (sObjectId) {
+        if (!this.bldLst) {
+            return false;
+        }
+        for (let nIdx = 0; nIdx < this.bldLst.list.length; ++nIdx) {
+            const oBld = this.bldLst.list[nIdx];
+            if (oBld.getObjectType() === AscDFH.historyitem_type_BldP && oBld.build === ParaBuildType_p && oBld.spid === sObjectId) {
+                return true;
+            }
+        }
+        return false;
+    };
+    // syncs the "by paragraph" builds of one shape after its text changed (typing, IME, replace all,
+    // paragraph add/remove) - in the same history point as the text change, so undo restores both
+    CTiming.prototype.syncParagraphBuildsFor = function (sObjectId, oDelta) {
+        if (this.hasParagraphBuild(sObjectId)) {
+            this.syncParagraphBuilds(oDelta);
+        }
     };
     CTiming.prototype.getAnimEffect = function (sObjectId) {
         var aEffects = this.getObjectEffects(sObjectId);
