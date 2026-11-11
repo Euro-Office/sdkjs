@@ -6676,7 +6676,7 @@ function isAllowPasteLink(pastedWb) {
 			}
 		} else if (this._isCheckboxCell(c)) {
 			this._AddClipRect(ctx, x1, y1, w, h);
-			this._drawCellCheckbox(ctx, col, row, offsetX, offsetY);
+			this._drawCellCheckbox(ctx, c, col, row, offsetX, offsetY);
 			this._RemoveClipRect(ctx);
 		} else {
 			this._AddClipRect(ctx, x1, y1, w, h);
@@ -6793,23 +6793,25 @@ function isAllowPasteLink(pastedWb) {
 		return {x: bx, y: by, side: side};
 	};
 
-	WorksheetView.prototype._drawCellCheckbox = function (ctx, col, row, offsetX, offsetY) {
+	var kCheckboxCheckedFill = new CColor(33, 115, 70);
+	var kCheckboxCheckMark = new CColor(255, 255, 255);
+
+	WorksheetView.prototype._drawCellCheckbox = function (ctx, c, col, row, offsetX, offsetY) {
 		var rect = this._getCheckboxRect(col, row, offsetX, offsetY);
 		if (!rect) {
 			return;
 		}
 
-		var c = this._getVisibleCell(col, row);
 		var checked = 1 === c.getNumberValue();
 		var lineW = Math.max(1, Asc.round(rect.side / 9));
 
 		if (checked) {
-			ctx.setFillStyle(new CColor(33, 115, 70));
+			ctx.setFillStyle(kCheckboxCheckedFill);
 			this._fillRect(ctx, rect.x, rect.y, rect.side, rect.side);
 
 			ctx.beginPath();
 			ctx.setLineWidth(lineW);
-			ctx.setStrokeStyle(new CColor(255, 255, 255));
+			ctx.setStrokeStyle(kCheckboxCheckMark);
 			this._moveTo(ctx, rect.x + 0.22 * rect.side, rect.y + 0.55 * rect.side);
 			this._lineTo(ctx, rect.x + 0.42 * rect.side, rect.y + 0.74 * rect.side);
 			this._lineTo(ctx, rect.x + 0.78 * rect.side, rect.y + 0.3 * rect.side);
@@ -6856,7 +6858,18 @@ function isAllowPasteLink(pastedWb) {
 		}
 		var checked = 1 === c.getNumberValue();
 		var range = merged || new asc_Range(col, row, col, row);
-		this._isLockedCells(range, null, function (success) {
+		if (this.model.isIntersectionOtherUserProtectedRanges(range)) {
+			this.model.workbook.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+			return true;
+		}
+		this.checkProtectRangeOnEdit([range], function (isSuccess) {
+			if (isSuccess) {
+				t._isLockedCells(range, null, doToggle);
+			}
+		});
+		return true;
+
+		function doToggle(success) {
 			if (!success) {
 				return;
 			}
@@ -6867,8 +6880,7 @@ function isAllowPasteLink(pastedWb) {
 				new AscCommonExcel.UndoRedoData_CellValueData(null, oCellValue));
 			t._updateRange(range);
 			t.draw();
-		});
-		return true;
+		}
 	};
 
 	WorksheetView.prototype.toggleActiveCellCheckbox = function () {
@@ -13816,7 +13828,8 @@ function isAllowPasteLink(pastedWb) {
 
         var cell_info = new asc_CCellInfo();
         cell_info.xfs = c.getXfs(false).clone();
-        cell_info.checkbox = this._isCheckboxCell(c);
+        var checkboxXfs = c.getXfs(true);
+        cell_info.checkbox = !!(checkboxXfs && checkboxXfs.checkbox);
 
 		AscCommonExcel.g_ActiveCell = new Asc.Range(c1, r1, c1, r1);
         cell_info.text = c.getValueForEdit(true);
@@ -16676,7 +16689,7 @@ function isAllowPasteLink(pastedWb) {
 					case "removeCheckbox":
 						// Only the checkbox format is removed; the TRUE/FALSE value stays
 						// in the cell, like Excel's "Clear Formats".
-						range.setCheckbox(false);
+						range.setCheckbox(null);
 						break;
                     case "rh":
                         range.removeHyperlink(null, true);

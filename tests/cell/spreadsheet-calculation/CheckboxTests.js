@@ -235,4 +235,40 @@ $(function () {
 		assert.strictEqual(getFlag("D1"), true, "D1 checkbox read back");
 		assert.strictEqual(getFlag("D2"), false, "D2 without checkbox read back");
 	});
+
+	QUnit.test("toggle is blocked on a protected sheet for locked cells", function (assert) {
+		reset();
+		select("A1");
+		api.asc_insertCheckbox();
+		var protection = new Asc.CSheetProtection();
+		protection.setDefaultInterface();
+		protection.sheet = true;
+		ws.sheetProtection = protection;
+		try {
+			wsView.toggleCheckbox(0, 0);
+			assert.strictEqual(cell("A1").getValue(), "FALSE", "click does not toggle a locked cell");
+			cell("A1").setValue("FALSE");
+			wsView.toggleActiveCellCheckbox();
+			assert.strictEqual(cell("A1").getValue(), "FALSE", "Space does not toggle a locked cell");
+		} finally {
+			ws.sheetProtection = null;
+		}
+		wsView.toggleCheckbox(0, 0);
+		assert.strictEqual(cell("A1").getValue(), "TRUE", "toggles again once unprotected");
+	});
+
+	QUnit.test("cell info reports the flag on non-boolean cells and remove resets it to default", function (assert) {
+		reset();
+		cell("A2").setValue("x");
+		select("A2");
+		api.asc_insertCheckbox();
+		assert.strictEqual(cellInfoCheckbox(), true, "text cell with checkbox format reported");
+		api.asc_insertCheckbox();
+		assert.strictEqual(hasCheckbox("A2"), false, "second insert removes the flag");
+		var xfs = null;
+		ws.getRange2("A2")._foreachNoEmpty(function (c) {
+			xfs = c.xfs;
+		});
+		assert.strictEqual(xfs ? xfs.checkbox : null, null, "removed flag leaves no checkbox property behind");
+	});
 });
