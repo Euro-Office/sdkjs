@@ -7185,6 +7185,10 @@ var editor;
 			   newPrintOptions.setJson(spreadsheetLayout["sheetsProps"][index]);
 		   } else {
 			   newPrintOptions = ws.PagePrintOptions.clone();
+			   // The copy has no worksheet, so its fit values would ignore sheetPr.FitToPage and fit
+			   // every sheet to one page: take the sheet's effective ones, as asc_getPageOptions does.
+			   newPrintOptions.pageSetup.fitToWidth = ws.PagePrintOptions.pageSetup.asc_getFitToWidth();
+			   newPrintOptions.pageSetup.fitToHeight = ws.PagePrintOptions.pageSetup.asc_getFitToHeight();
 		   }
            //regionalSettings ?
 
