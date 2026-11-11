@@ -438,8 +438,11 @@
 		// Smaller pastes are left to the existing checkChangesSize after the paste, so a session already near
 		// maxChangesSize isn't refused a handful of cells as too large
 		var c_nPasteChangesCheckCells = 50000;
-		// Size of the editor's own clipboard data per cell, for when it arrives without a text copy to count
+		// Size of the spreadsheet's own clipboard data per cell, for when it arrives without a text copy to count
 		var c_nPasteInternalBytesPerCell = 45;
+		// Binaries from the other editors hold no cells, so their size says nothing about how many a paste makes. Found
+		// anywhere in the data, as pasteFromBinary does, so a binary it pastes as cells is always counted as cells.
+		var c_sPasteInternalCellsMarker = "xslData;";
 
 		// One place for the limits, so they can be overridden from server settings like maxChangesSize
 		var c_oPasteSizeLimits = {
@@ -515,7 +518,7 @@
 					return getTextCellCount(data);
 				case AscCommon.c_oAscClipboardDataFormat.Internal: {
 					var cells = getTextCellCount(textData);
-					if (!cells && typeof data === "string") {
+					if (!cells && typeof data === "string" && -1 !== data.indexOf(c_sPasteInternalCellsMarker)) {
 						cells = Math.floor(data.length / c_nPasteInternalBytesPerCell);
 					}
 					return cells;
