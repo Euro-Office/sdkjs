@@ -1433,7 +1433,7 @@ function CEditorPage(api)
 		var _heightPageMM = Page_Height;
 		if (this.m_oDrawingDocument.m_arrPages.length > 0)
 			_heightPageMM = this.m_oDrawingDocument.m_arrPages[0].height_mm;
-		var del = 20 + (g_dKoef_mm_to_pix * _heightPageMM * this.m_nZoomValue / 100 + 0.5) >> 0;
+		var del = this.getPageGapVer() + (g_dKoef_mm_to_pix * _heightPageMM * this.m_nZoomValue / 100 + 0.5) >> 0;
 
 		var delta = Math.abs(newScrollPos - this.m_dScrollY);
 		if (this.m_oDrawingDocument.m_lPagesCount <= 10)
@@ -1682,7 +1682,7 @@ function CEditorPage(api)
 		var lYPos = 0;
 		for (var i = 0; i < page; i++)
 		{
-			lYPos += (20 + (this.m_oDrawingDocument.m_arrPages[i].height_mm * dKoef + 0.5) >> 0);
+			lYPos += (this.getPageGapVer() + (this.m_oDrawingDocument.m_arrPages[i].height_mm * dKoef + 0.5) >> 0);
 		}
 
 		lYPos += y * dKoef;
@@ -3976,7 +3976,7 @@ function CEditorPage(api)
 		var lYPos = 0;
 		for (var i = 0; i < lPageNum; i++)
 		{
-			lYPos += (20 + parseInt(this.m_oDrawingDocument.m_arrPages[i].height_mm * dKoef));
+			lYPos += (this.getPageGapVer() + parseInt(this.m_oDrawingDocument.m_arrPages[i].height_mm * dKoef));
 		}
 
 		drDoc.m_lCurrentPage = lPageNum;

@@ -1,26 +1,6 @@
-/*
- * (c) Copyright Ascensio System SIA 2010-2024
- *
- * This program is a free software product. You can redistribute it and/or
- * modify it under the terms of the GNU Affero General Public License (AGPL)
- * version 3 as published by the Free Software Foundation. In accordance with
- * Section 7(a) of the GNU AGPL its Section 15 shall be amended to the effect
- * that Ascensio System SIA expressly excludes the warranty of non-infringement
- * of any third-party rights.
- *
- * This program is distributed WITHOUT ANY WARRANTY; without even the implied
- * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR  PURPOSE. For
- * details, see the GNU AGPL at: http://www.gnu.org/licenses/agpl-3.0.html
- *
- * The  interactive user interfaces in modified source and object code versions
- * of the Program must display Appropriate Legal Notices, as required under
- * Section 5 of the GNU AGPL version 3.
- *
- * All the Product's GUI elements, including illustrations and icon sets, as
- * well as technical writing content are licensed under the terms of the
- * Creative Commons Attribution-ShareAlike 4.0 International. See the License
- * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
- *
+/**
+ * SPDX-FileCopyrightText: 2026 Euro-Office contributors
+ * SPDX-License-Identifier: AGPL-3.0-only
  */
 
 $(function () {
@@ -96,5 +76,48 @@ $(function () {
 	QUnit.test("SetPagelessMode is safe without a WordControl", function (assert) {
 		proto.SetPagelessMode.call({ WordControl : null }, true);
 		assert.ok(true, "Does not throw when WordControl is missing");
+	});
+
+	QUnit.module("Test pageless view mode (layout)");
+
+	function createWordControl(pageCount) {
+		let wordControl = new AscCommonWord.CEditorPage({ isMobileVersion : false });
+		let pages = [];
+		for (let i = 0; i < pageCount; i++)
+			pages.push({ height_mm : 297 });
+		wordControl.m_oDrawingDocument = { m_arrPages : pages };
+		wordControl.m_nZoomValue = 100;
+		return wordControl;
+	}
+
+	QUnit.test("Page gaps collapse to 0 when pageless", function (assert) {
+		let wordControl = createWordControl(0);
+		assert.strictEqual(wordControl.getPageGapVer(), wordControl.viewBetweenPagesVer, "Vertical gap kept in page view");
+		assert.strictEqual(wordControl.getPageGapHor(), wordControl.viewBetweenPagesHor, "Horizontal gap kept in page view");
+		wordControl.isPagelessMode = true;
+		assert.strictEqual(wordControl.getPageGapVer(), 0, "No vertical gap when pageless");
+		assert.strictEqual(wordControl.getPageGapHor(), 0, "No horizontal gap when pageless");
+	});
+
+	QUnit.test("Scrolling to a later page skips the collapsed gaps", function (assert) {
+		let wordControl = createWordControl(3);
+		let withGaps = wordControl.GetVerticalScrollTo(0, 3);
+		wordControl.isPagelessMode = true;
+		let pageless = wordControl.GetVerticalScrollTo(0, 3);
+		assert.strictEqual(withGaps - pageless, 3 * wordControl.viewBetweenPagesVer, "Scroll target no longer counts one gap per preceding page");
+	});
+
+	QUnit.test("Visible height does not subtract collapsed gaps", function (assert) {
+		let wordControl = createWordControl(3);
+		wordControl.m_oEditor = { HtmlElement : { height : 1000 * AscCommon.AscBrowser.retinaPixelRatio } };
+		let drawingDocument = new AscCommon.CDrawingDocument();
+		drawingDocument.m_oWordControl = wordControl;
+		drawingDocument.m_lDrawingFirst = 0;
+		drawingDocument.m_lDrawingEnd = 2;
+		let withGaps = drawingDocument.GetVisibleMMHeight();
+		wordControl.isPagelessMode = true;
+		let pageless = drawingDocument.GetVisibleMMHeight();
+		assert.strictEqual(pageless, 1000 * g_dKoef_pix_to_mm, "Whole viewport counts as document height at 100% zoom");
+		assert.ok(pageless > withGaps, "Page view still subtracts the gaps between visible pages");
 	});
 });
