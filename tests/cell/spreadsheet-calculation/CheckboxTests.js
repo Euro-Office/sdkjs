@@ -257,6 +257,23 @@ $(function () {
 		assert.strictEqual(cell("A1").getValue(), "TRUE", "toggles again once unprotected");
 	});
 
+	QUnit.test("insert does not write into locked cells on a protected sheet that allows formatting", function (assert) {
+		reset();
+		var protection = new Asc.CSheetProtection();
+		protection.setDefaultInterface();
+		protection.sheet = true;
+		protection.formatCells = false;
+		ws.sheetProtection = protection;
+		try {
+			select("A1");
+			api.asc_insertCheckbox();
+			assert.strictEqual(cell("A1").getValue(), "", "locked blank cell stays blank");
+			assert.strictEqual(hasCheckbox("A1"), false, "no checkbox on a locked cell");
+		} finally {
+			ws.sheetProtection = null;
+		}
+	});
+
 	QUnit.test("cell info reports the flag on non-boolean cells and remove resets it to default", function (assert) {
 		reset();
 		cell("A2").setValue("x");
