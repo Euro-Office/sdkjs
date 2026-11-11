@@ -137,6 +137,9 @@
       this._CoAuthoringApi.onAiPluginSettings = function(res) {
         t.callback_OnAiPluginSettings(res);
       };
+      this._CoAuthoringApi.onAllowLocalNetworkAccess = function(res) {
+        t.callback_OnAllowLocalNetworkAccess(res);
+      };
       this._CoAuthoringApi.onMiscEvent = function(res) {
         t.callback_OnMiscEvent(res);
       };
@@ -545,6 +548,11 @@
   CDocsCoApi.prototype.callback_OnAiPluginSettings = function(res) {
     if (this.onAiPluginSettings) {
       this.onAiPluginSettings(res);
+    }
+  };
+  CDocsCoApi.prototype.callback_OnAllowLocalNetworkAccess = function(res) {
+    if (this.onAllowLocalNetworkAccess) {
+      this.onAllowLocalNetworkAccess(res);
     }
   };
   CDocsCoApi.prototype.callback_OnMiscEvent = function(res) {
@@ -1495,6 +1503,9 @@
       this.onLicense(data['license']);
       if (this.onAiPluginSettings) {
         this.onAiPluginSettings(data['aiPluginSettings']);
+      }
+      if (this.onAllowLocalNetworkAccess) {
+        this.onAllowLocalNetworkAccess(data['allowLocalNetworkAccess']);
       }
     }
   };
