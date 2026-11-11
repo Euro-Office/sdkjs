@@ -4384,10 +4384,10 @@ var editor;
     	//check user protected range. if sheet at least one protected for this user range
     	if (options.isReplaceAll) {
 			if (options.scanOnOnlySheet === Asc.c_oAscSearchBy.Workbook && wb.model.isUserProtectedRangesIntersection()) {
-				this.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+				this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 				return;
 			} else if (options.scanOnOnlySheet === Asc.c_oAscSearchBy.Sheet && ws.model.isUserProtectedRangesIntersection()) {
-				this.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+				this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 				return;
 			}
 		}
@@ -6566,10 +6566,19 @@ var editor;
     }
     var cellInfo = this.asc_getCellInfo();
     var hasCheckbox = cellInfo && cellInfo.asc_getCheckbox && cellInfo.asc_getCheckbox();
+    var ws = this.wb.getWorksheet();
     if (hasCheckbox) {
-      this.wb.getWorksheet().setSelectionInfo("removeCheckbox", true);
+      ws.setSelectionInfo("removeCheckbox", true);
     } else {
-      this.wb.getWorksheet().setSelectionInfo("checkbox", true);
+      // Inserting writes FALSE into blank cells, so it needs the same protection checks as editing
+      var ranges = ws.model.selectionRange.ranges;
+      if (ws.model.isUserProtectedRangesIntersection(ranges)) {
+        this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+        return;
+      }
+      ws.checkProtectRangeOnEdit(ranges, function (isSuccess) {
+        isSuccess && ws.setSelectionInfo("checkbox", true);
+      }, true);
     }
     this.wb.restoreFocus();
   };
@@ -8432,7 +8441,7 @@ var editor;
 		var wsView = this.wb.getWorksheet();
 		var ws = wsView && wsView.model;
 		if (ws && ws.isUserProtectedRangesIntersection(null, null, true)) {
-			this.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+			this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 			return;
 		}
 
