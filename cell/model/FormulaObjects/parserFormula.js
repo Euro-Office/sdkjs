@@ -3412,7 +3412,12 @@ parserHelp.setDigitSeparator(AscCommon.g_oDefaultCultureInfo.NumberDecimalSepara
 		if (cell && !cell.isNullText()) {
 			var type = cell.getType();
 			if (CellValueType.Number === type) {
-				return new cNumber(cell.getNumberValue());
+				var number = cell.getNumberValue();
+				// cell is a Cell or a Range
+				if (null === number && cell.isBlankArrayResult()) {
+					return new cEmpty();
+				}
+				return new cNumber(number);
 			} else {
 				var val = cell.getValueWithoutFormat();
 				if (CellValueType.Bool === type) {
