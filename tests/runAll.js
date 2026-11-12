@@ -102,6 +102,7 @@ const allTests = [
 	'word/copypaste/copy-paste-tests.html',
 
 	'cell/shortcuts/shortcuts.html',
+	'slide/hyperlinks/slideJumpLinks.html',
 	'slide/shortcuts/shortcuts.html',
 	'word/shortcuts/shortcuts.html',
 
