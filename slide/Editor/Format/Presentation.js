@@ -2695,6 +2695,7 @@ CPresentation.prototype.RecalculateByChanges = function(arrChanges, nStartIndex,
 	this.Recalculate(History.Get_RecalcData(null, arrChanges, nStartIndex, nEndIndex));
 };
 CPresentation.prototype.Recalculate = function (RecalcData) {
+	this.renumberSlideLinksAfterReorder();
 	this.DrawingDocument.OnStartRecalculate(this.GetSlidesCount());
 	this.StopAnimationPreview();
 	++this.RecalcId;
@@ -9780,6 +9781,7 @@ CPresentation.prototype.removeSlideByObject = function (oSlide, bNoCheck, pos) {
 					oSlide.removeComment(sId, true);
 				}
 			}
+			this.noteSlideOrderBeforeChange();
 			this.Slides.splice(pos, 1);
 			break;
 		}
@@ -9823,8 +9825,104 @@ CPresentation.prototype.CanRemoveMaster = function(oMaster) {
 	return this.slideMasters.length > 1;
 };
 
+// Links to a slide in the same presentation are stored as "ppaction://hlinksldjumpslide<N>",
+// where N is the target's zero-based position; PPTX gets "slide<N+1>.xml". Positions change
+// when slides are inserted, moved or deleted, so after such a change every link is rewritten
+// to the new position of the slide it pointed at. The rewrite goes into the same history
+// point as the slide change: undo restores both, and co-editors receive both.
+//
+// insertSlide and removeSlideByObject are the only places that change this.Slides for a local
+// edit (undo, redo and remote changes splice the array in the change classes). They note the
+// order before the first change; Recalculate, which runs once the edit is done, rewrites the
+// links. A move is a remove followed by an insert, so the old order must be kept until then.
+CPresentation.prototype.noteSlideOrderBeforeChange = function () {
+	if (!this.slideOrderBeforeChange)
+		this.slideOrderBeforeChange = this.Slides.slice();
+};
+CPresentation.prototype.renumberSlideLinksAfterReorder = function () {
+	const oldOrder = this.slideOrderBeforeChange;
+	this.slideOrderBeforeChange = null;
+	if (!oldOrder || !oldOrder.length)
+		return;
+
+	const slides = this.Slides;
+	if (oldOrder.length === slides.length && oldOrder.every(function (slide, i) {return slide === slides[i];}))
+		return;
+
+	const newPosition = new Map();
+	slides.forEach(function (slide, i) {newPosition.set(slide, i);});
+
+	this.forEachSlideJumpLink(function (value, setValue) {
+		const oldPosition = AscCommonSlide.GetSlideJumpPosition(value);
+		const target = (oldPosition !== null) ? oldOrder[oldPosition] : undefined;
+		// A link to a deleted slide keeps its number, as before.
+		if (!target || !newPosition.has(target))
+			return;
+
+		const position = newPosition.get(target);
+		if (position !== oldPosition)
+			setValue(AscCommonSlide.SLIDE_JUMP_PREFIX + position);
+	});
+};
+// Calls callback(value, setValue) for every link to a slide on the slides and their notes.
+// setValue writes the new value through the history.
+CPresentation.prototype.forEachSlideJumpLink = function (callback) {
+	function visitParagraphContent(items) {
+		for (let i = 0; i < items.length; ++i) {
+			const item = items[i];
+			if (!item || item instanceof AscCommonWord.ParaRun)
+				continue;
+			if (item instanceof AscCommonWord.ParaHyperlink && null !== AscCommonSlide.GetSlideJumpPosition(item.GetValue()))
+				callback(item.GetValue(), function (value) {item.SetValue(value);});
+			if (Array.isArray(item.Content))
+				visitParagraphContent(item.Content);
+		}
+	}
+	function visitShapeLink(getLink, setLink) {
+		const link = getLink();
+		if (link && null !== AscCommonSlide.GetSlideJumpPosition(link.id)) {
+			callback(link.id, function (value) {
+				const changed = link.createDuplicate();
+				changed.id = value;
+				setLink(changed);
+			});
+		}
+	}
+	function visitDrawing(drawing) {
+		if (!drawing)
+			return;
+
+		const nvPr = drawing.getCNvProps && drawing.getCNvProps();
+		if (nvPr) {
+			visitShapeLink(function () {return nvPr.hlinkClick;}, function (link) {nvPr.setHlinkClick(link);});
+			visitShapeLink(function () {return nvPr.hlinkHover;}, function (link) {nvPr.setHlinkHover(link);});
+		}
+
+		// A table frame's getDocContent() returns only the cell with the cursor.
+		let paragraphs = null;
+		if (drawing.graphicObject && drawing.graphicObject.GetAllParagraphs)
+			paragraphs = drawing.graphicObject.GetAllParagraphs(undefined, []);
+		else if (drawing.getDocContent && drawing.getDocContent())
+			paragraphs = drawing.getDocContent().GetAllParagraphs(undefined, []);
+		if (paragraphs) {
+			for (let i = 0; i < paragraphs.length; ++i)
+				visitParagraphContent(paragraphs[i].Content);
+		}
+
+		if (Array.isArray(drawing.spTree))
+			drawing.spTree.forEach(visitDrawing);
+	}
+
+	for (let i = 0; i < this.Slides.length; ++i) {
+		const slide = this.Slides[i];
+		slide.cSld.spTree.forEach(visitDrawing);
+		if (slide.notes && slide.notes.cSld)
+			slide.notes.cSld.spTree.forEach(visitDrawing);
+	}
+};
 CPresentation.prototype.insertSlide = function (pos, slide) {
 	History.Add(new AscDFH.CChangesDrawingsContentPresentation(this, AscDFH.historyitem_Presentation_AddSlide, pos, [slide], true));
+	this.noteSlideOrderBeforeChange();
 	this.Slides.splice(pos, 0, slide);
 	var aSlideComments = slide.slideComments.comments;
 	for (var i = 0; i < aSlideComments.length; ++i) {
@@ -11801,6 +11899,16 @@ function isSlideLikeObject(oObjectToCheck) {
 //------------------------------------------------------------export----------------------------------------------------
 window['AscCommonSlide'] = window['AscCommonSlide'] || {};
 window['AscCommonSlide'].CPresentation = CPresentation;
+
+window['AscCommonSlide'].SLIDE_JUMP_PREFIX = "ppaction://hlinksldjumpslide";
+// Returns the zero-based slide position of a "jump to slide" link value, or null.
+window['AscCommonSlide'].GetSlideJumpPosition = function (value) {
+	const prefix = window['AscCommonSlide'].SLIDE_JUMP_PREFIX;
+	if (typeof value !== "string" || 0 !== value.indexOf(prefix))
+		return null;
+	const digits = value.substring(prefix.length);
+	return /^\d+$/.test(digits) ? parseInt(digits, 10) : null;
+};
 window['AscCommonSlide'].CPrSection = CPrSection;
 window['AscCommonSlide'].CSlideSize = CSlideSize;
 window['AscCommonSlide'].IdList = IdList;
