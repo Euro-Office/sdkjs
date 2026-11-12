@@ -1,7 +1,7 @@
 import os
 
 exclude_dirs = set(['vendor', 'externs', 'node_modules', '.webpack-cache'])
-exclude_files = set(['jquery_native.js'])
+exclude_files = set()
 
 def get_string_from_list(list):
   return "\n".join(list)
