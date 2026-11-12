@@ -9828,23 +9828,34 @@ CPresentation.prototype.CanRemoveMaster = function(oMaster) {
 // Links to a slide in the same presentation are stored as "ppaction://hlinksldjumpslide<N>",
 // where N is the target's zero-based position; PPTX gets "slide<N+1>.xml". Positions change
 // when slides are inserted, moved or deleted, so after such a change every link is rewritten
-// to the new position of the slide it pointed at. The rewrite goes into the same history
-// point as the slide change: undo restores both, and co-editors receive both.
+// to the new position of the slide it pointed at.
 //
-// insertSlide and removeSlideByObject are the only places that change this.Slides for a local
-// edit (undo, redo and remote changes splice the array in the change classes). They note the
-// order before the first change; Recalculate, which runs once the edit is done, rewrites the
-// links. A move is a remove followed by an insert, so the old order must be kept until then.
+// insertSlide and removeSlideByObject note the order before the first change; Recalculate
+// rewrites the links once the edit is done. A move is a remove followed by an insert, so the
+// old order must be kept until then. The rewrite only goes into the history point the slide
+// change was recorded in, so undo restores both and co-editors receive both. Opening a file,
+// undo, redo and remote changes either run with the history off or never call these two
+// functions, so they never note an order.
 CPresentation.prototype.noteSlideOrderBeforeChange = function () {
-	if (!this.slideOrderBeforeChange)
-		this.slideOrderBeforeChange = this.Slides.slice();
+	if (this.slideOrderBeforeChange || !History.CanAddChanges())
+		return;
+	this.slideOrderBeforeChange = {
+		order : this.Slides.slice(),
+		point : History.Points[History.Index]
+	};
 };
 CPresentation.prototype.renumberSlideLinksAfterReorder = function () {
-	const oldOrder = this.slideOrderBeforeChange;
+	const noted = this.slideOrderBeforeChange;
+	if (!noted || !History.CanAddChanges())
+		return;
 	this.slideOrderBeforeChange = null;
-	if (!oldOrder || !oldOrder.length)
+
+	// A slide change that never got its Recalculate (a builder call outside an action) must not
+	// be rewritten into some later, unrelated history point.
+	if (History.Points[History.Index] !== noted.point)
 		return;
 
+	const oldOrder = noted.order;
 	const slides = this.Slides;
 	if (oldOrder.length === slides.length && oldOrder.every(function (slide, i) {return slide === slides[i];}))
 		return;
@@ -9852,7 +9863,12 @@ CPresentation.prototype.renumberSlideLinksAfterReorder = function () {
 	const newPosition = new Map();
 	slides.forEach(function (slide, i) {newPosition.set(slide, i);});
 
-	this.forEachSlideJumpLink(function (value, setValue) {
+	this.forEachSlideJumpLink(function (value, setValue, owner) {
+		// The drawing is being edited by someone else. Writing to it would race with their
+		// change, so this link keeps its number.
+		if (owner.Lock && owner.Lock.Is_Locked())
+			return;
+
 		const oldPosition = AscCommonSlide.GetSlideJumpPosition(value);
 		const target = (oldPosition !== null) ? oldOrder[oldPosition] : undefined;
 		// A link to a deleted slide keeps its number, as before.
@@ -9864,16 +9880,18 @@ CPresentation.prototype.renumberSlideLinksAfterReorder = function () {
 			setValue(AscCommonSlide.SLIDE_JUMP_PREFIX + position);
 	});
 };
-// Calls callback(value, setValue) for every link to a slide on the slides and their notes.
-// setValue writes the new value through the history.
+// Calls callback(value, setValue, owner) for every link to a slide on the slides and their
+// notes, on masters and layouts, and on notes masters. setValue writes the new value through
+// the history. owner is the top-level drawing that holds the link, which carries the lock.
 CPresentation.prototype.forEachSlideJumpLink = function (callback) {
+	let owner = null;
 	function visitParagraphContent(items) {
 		for (let i = 0; i < items.length; ++i) {
 			const item = items[i];
 			if (!item || item instanceof AscCommonWord.ParaRun)
 				continue;
 			if (item instanceof AscCommonWord.ParaHyperlink && null !== AscCommonSlide.GetSlideJumpPosition(item.GetValue()))
-				callback(item.GetValue(), function (value) {item.SetValue(value);});
+				callback(item.GetValue(), function (value) {item.SetValue(value);}, owner);
 			if (Array.isArray(item.Content))
 				visitParagraphContent(item.Content);
 		}
@@ -9885,7 +9903,7 @@ CPresentation.prototype.forEachSlideJumpLink = function (callback) {
 				const changed = link.createDuplicate();
 				changed.id = value;
 				setLink(changed);
-			});
+			}, owner);
 		}
 	}
 	function visitDrawing(drawing) {
@@ -9912,13 +9930,28 @@ CPresentation.prototype.forEachSlideJumpLink = function (callback) {
 		if (Array.isArray(drawing.spTree))
 			drawing.spTree.forEach(visitDrawing);
 	}
+	function visitSpTree(slideLike) {
+		if (!slideLike || !slideLike.cSld)
+			return;
+		const spTree = slideLike.cSld.spTree;
+		for (let i = 0; i < spTree.length; ++i) {
+			owner = spTree[i];
+			visitDrawing(spTree[i]);
+		}
+	}
 
 	for (let i = 0; i < this.Slides.length; ++i) {
-		const slide = this.Slides[i];
-		slide.cSld.spTree.forEach(visitDrawing);
-		if (slide.notes && slide.notes.cSld)
-			slide.notes.cSld.spTree.forEach(visitDrawing);
+		visitSpTree(this.Slides[i]);
+		visitSpTree(this.Slides[i].notes);
 	}
+	for (let i = 0; i < this.slideMasters.length; ++i) {
+		const master = this.slideMasters[i];
+		visitSpTree(master);
+		for (let j = 0; j < master.sldLayoutLst.length; ++j)
+			visitSpTree(master.sldLayoutLst[j]);
+	}
+	for (let i = 0; i < this.notesMasters.length; ++i)
+		visitSpTree(this.notesMasters[i]);
 };
 CPresentation.prototype.insertSlide = function (pos, slide) {
 	History.Add(new AscDFH.CChangesDrawingsContentPresentation(this, AscDFH.historyitem_Presentation_AddSlide, pos, [slide], true));

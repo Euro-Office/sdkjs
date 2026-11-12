@@ -255,6 +255,85 @@ $(function ()
 		assert.strictEqual(inLastCell.GetValue(), SLIDE_JUMP + "3", "Link in another cell");
 	});
 
+	QUnit.test("Links on a layout and on a master", function (assert)
+	{
+		const slides = MakeSlides(3);
+		const master = logicDocument.slideMasters[0];
+		const onLayout = LinkShape(master.sldLayoutLst[0], 2);
+		const onMaster = LinkShape(master, 2);
+
+		NewSlideAfter(1);
+
+		assert.strictEqual(logicDocument.Slides.indexOf(slides[2]), 3, "The target is now at position 3");
+		assert.strictEqual(onLayout.getCNvProps().hlinkClick.id, SLIDE_JUMP + "3", "The layout link points to position 3");
+		assert.strictEqual(onMaster.getCNvProps().hlinkClick.id, SLIDE_JUMP + "3", "The master link points to position 3");
+
+		master.sldLayoutLst[0].cSld.spTree.splice(master.sldLayoutLst[0].cSld.spTree.indexOf(onLayout), 1);
+		master.cSld.spTree.splice(master.cSld.spTree.indexOf(onMaster), 1);
+	});
+
+	QUnit.test("A drawing locked by another user is left alone", function (assert)
+	{
+		const slides = MakeSlides(3);
+		const locked = LinkShape(slides[0], 2);
+		const free = LinkShape(slides[1], 2);
+		locked.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeOther, false);
+
+		try
+		{
+			NewSlideAfter(1);
+		}
+		finally
+		{
+			locked.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+		}
+
+		assert.strictEqual(locked.getCNvProps().hlinkClick.id, SLIDE_JUMP + "2", "The locked drawing is not written to");
+		assert.strictEqual(free.getCNvProps().hlinkClick.id, SLIDE_JUMP + "3", "Other drawings are renumbered");
+	});
+
+	QUnit.test("Slide changes outside the history are not renumbered", function (assert)
+	{
+		const slides = MakeSlides(3);
+		const shape = LinkShape(slides[0], 2);
+		const extra = slides[1].createDuplicate();
+
+		AscCommon.History.TurnOff();
+		try
+		{
+			logicDocument.insertSlide(1, extra);
+		}
+		finally
+		{
+			AscCommon.History.TurnOn();
+		}
+		logicDocument.StartAction(AscDFH.historydescription_Presentation_AddNextSlide);
+		logicDocument.FinalizeAction();
+
+		assert.notOk(logicDocument.slideOrderBeforeChange, "No order was noted with the history off");
+		assert.strictEqual(shape.getCNvProps().hlinkClick.id, SLIDE_JUMP + "2", "The link is unchanged");
+
+		// A file is read into a history without any point yet.
+		AscCommon.History.Clear();
+		logicDocument.insertSlide(1, slides[1].createDuplicate());
+		assert.notOk(logicDocument.slideOrderBeforeChange, "No order was noted without a history point");
+	});
+
+	QUnit.test("A slide change is not renumbered in a later history point", function (assert)
+	{
+		const slides = MakeSlides(3);
+		const shape = LinkShape(slides[0], 2);
+
+		// A builder call that inserts a slide but never recalculates in its own action.
+		AscCommon.History.Create_NewPoint(AscDFH.historydescription_Presentation_AddNextSlide);
+		logicDocument.insertSlide(1, slides[1].createDuplicate());
+		logicDocument.StartAction(AscDFH.historydescription_Presentation_AddNextSlide);
+		logicDocument.FinalizeAction();
+
+		assert.notOk(logicDocument.slideOrderBeforeChange, "The noted order was dropped");
+		assert.strictEqual(shape.getCNvProps().hlinkClick.id, SLIDE_JUMP + "2", "Nothing was written into the later point");
+	});
+
 	QUnit.test("Reading the position from a link value", function (assert)
 	{
 		const read = AscCommonSlide.GetSlideJumpPosition;
