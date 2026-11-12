@@ -605,5 +605,71 @@ $(function () {
 		console.log("All parseText CSV tests completed successfully!");
 	});
 
+	QUnit.test("Test: CSV import preserves multiline cells", function (assert) {
+		var options = new Asc.asc_CTextOptions(AscCommon.c_oAscCodePageUtf8, AscCommon.c_oAscCsvDelimiter.Comma);
+		options.asc_setTextQualifier('"');
+
+		["\n", "\r\n", "\r"].forEach(function (newline) {
+			var text = '"aaa","b' + newline + 'bb","ccc"' + newline + 'zzz,yyy,xxx';
+			var parsed = AscCommon.parseText(text, options, true);
+			var result = AscCommonExcel.g_clipboardExcel.pasteProcessor._getTableFromText(parsed, true);
+			var values = result.content.map(function (row) {
+				return row.map(function (cell) {
+					return cell.content[0].text;
+				});
+			});
+
+			assert.deepEqual(values, [["aaa", "b\nbb", "ccc"], ["zzz", "yyy", "xxx"]],
+				"CSV " + JSON.stringify(newline) + " preserves the multiline cell and surrounding cells");
+			assert.strictEqual(result.props.cellCount, 3, "CSV " + JSON.stringify(newline) + " keeps three columns");
+		});
+	});
+
+	QUnit.test("Test: parsed cells preserve carriage returns", function (assert) {
+		var input = [["aaa", "b\rbb", "ccc"], ["zzz", "yyy", "xxx"]];
+		var result = AscCommonExcel.g_clipboardExcel.pasteProcessor._getTableFromText(input, true);
+		var values = result.content.map(function (row) {
+			return row.map(function (cell) {
+				return cell.content[0].text;
+			});
+		});
+
+		assert.deepEqual(values, input, "An embedded CR preserves cell contents and positions in parsed data");
+	});
+
+	QUnit.test("Test: plain text paste separates rows and columns", function (assert) {
+		["\n", "\r\n", "\r"].forEach(function (newline) {
+			var text = "aaa\tbbb\tccc" + newline + "zzz\tyyy\txxx";
+			var result = AscCommonExcel.g_clipboardExcel.pasteProcessor._getTableFromText(text, false);
+			var values = result.content.map(function (row) {
+				return row.map(function (cell) {
+					return cell.content[0].text;
+				});
+			});
+
+			assert.deepEqual(values, [["aaa", "bbb", "ccc"], ["zzz", "yyy", "xxx"]],
+				"Plain text " + JSON.stringify(newline) + " separates rows and columns");
+			assert.strictEqual(result.props.cellCount, 3, "Plain text keeps three columns");
+		});
+	});
+
+	QUnit.test("Test: text paste keeps the cell length limit", function (assert) {
+		var maxLength = Asc.c_oAscMaxCellOrCommentLength;
+		var textAtLimit = "a".repeat(maxLength);
+		var processor = AscCommonExcel.g_clipboardExcel.pasteProcessor;
+
+		[false, true].forEach(function (bPastedArray) {
+			var mode = bPastedArray ? "Parsed CSV" : "Plain text";
+			var result = processor._getTableFromText(bPastedArray ? [[textAtLimit]] : textAtLimit, bPastedArray);
+			assert.strictEqual(result.content[0][0].content[0].text.length, maxLength,
+				mode + " preserves a cell at the length limit");
+
+			var textOverLimit = textAtLimit + "b";
+			result = processor._getTableFromText(bPastedArray ? [[textOverLimit]] : textOverLimit, bPastedArray);
+			assert.strictEqual(result.content[0][0].content[0].text.length, maxLength,
+				mode + " still enforces the cell length limit");
+		});
+	});
+
 	QUnit.module("CopyPaste");
 });
