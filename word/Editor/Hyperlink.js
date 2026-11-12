@@ -70,7 +70,7 @@ ParaHyperlink.prototype.Get_FirstTextPr2 = function()
 ParaHyperlink.prototype.Copy = function(Selected, oPr)
 {
     var NewHyperlink = CParagraphContentWithParagraphLikeContent.prototype.Copy.apply(this, arguments);
-    NewHyperlink.SetValue(this.Value);
+    NewHyperlink.SetValue(this.GetResolvedValue());
     NewHyperlink.SetToolTip(this.ToolTip);
     NewHyperlink.SetAnchor(this.Anchor);
     NewHyperlink.Visited = this.Visited;
@@ -317,6 +317,20 @@ ParaHyperlink.prototype.GetValue = function()
 {
 	return this.Value;
 };
+/**
+ * In a presentation, a link to a slide keeps its stored position while it follows
+ * its target slide (see CPresentation.prototype.resolveSlideJumpValue). Returns the
+ * value with the target's current position; any other link returns GetValue().
+ * @returns {string}
+ */
+ParaHyperlink.prototype.GetResolvedValue = function()
+{
+	let logicDocument = Asc.editor && Asc.editor.getLogicDocument ? Asc.editor.getLogicDocument() : null;
+	if (logicDocument && logicDocument.resolveSlideJumpValue)
+		return logicDocument.resolveSlideJumpValue(this);
+
+	return this.GetValue();
+};
 ParaHyperlink.prototype.SetValue = function(sValue)
 {
 	this.Set_Value(sValue);
@@ -411,6 +425,9 @@ ParaHyperlink.prototype.Document_UpdateInterfaceState = function()
 	this.Get_Text(oHyperText);
 
 	var oHyperProps = new Asc.CHyperlinkProperty(this);
+	var sResolvedValue = this.GetResolvedValue();
+	if (sResolvedValue !== this.Value && "ppaction://noaction" !== sResolvedValue)
+		oHyperProps.put_Value(sResolvedValue);
 	oHyperProps.put_Text(oHyperText.Text);
 	oHyperProps.put_InternalHyperlink(this);
 

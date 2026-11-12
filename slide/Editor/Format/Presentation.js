@@ -3206,9 +3206,17 @@ CPresentation.prototype.private_CollectSlideJumpCarriers = function (drawing, ou
 			out.push(cNvPr.hlinkHover);
 		}
 	}
-	let content = drawing.getDocContent && drawing.getDocContent();
-	if (content && content.GetAllParagraphs) {
-		let paragraphs = content.GetAllParagraphs(undefined, []);
+	let paragraphs = null;
+	if (drawing.graphicObject && drawing.graphicObject.GetAllParagraphs) {
+		// For a table, getDocContent() returns only the cell that holds the cursor.
+		paragraphs = drawing.graphicObject.GetAllParagraphs(undefined, []);
+	} else {
+		let content = drawing.getDocContent && drawing.getDocContent();
+		if (content && content.GetAllParagraphs) {
+			paragraphs = content.GetAllParagraphs(undefined, []);
+		}
+	}
+	if (paragraphs) {
 		for (let i = 0; i < paragraphs.length; ++i) {
 			this.private_CollectParaSlideJumpLinks(paragraphs[i], out);
 		}
@@ -5545,7 +5553,7 @@ CPresentation.prototype.OnKeyDown = function (e) {
 		{
 			var Hyperlink = this.IsCursorInHyperlink(false);
 			if (null != Hyperlink && false === e.ShiftKey) {
-				this.Api.sync_HyperlinkClickCallback(Hyperlink.GetValue());
+				this.Api.sync_HyperlinkClickCallback(this.resolveSlideJumpValue(Hyperlink));
 				Hyperlink.SetVisited(true);
 
 				// TODO: Пока сделаем так, потом надо будет переделать

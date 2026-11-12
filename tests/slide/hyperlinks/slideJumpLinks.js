@@ -199,4 +199,119 @@ $(function ()
 
 		assert.strictEqual(logicDocument.getSlideJumpTargetIndex(copy), 3, "The copy follows the same target slide");
 	});
+
+	QUnit.test("Copied text link points to the same slide", function (assert)
+	{
+		const slides = ResetPresentation(3);
+		const hyperlink = AddTextLink(slides[0], 2);
+		const shape = slides[0].cSld.spTree[slides[0].cSld.spTree.length - 1];
+
+		AddSlideAfter(0);
+
+		const copy = hyperlink.Copy(false, {});
+		assert.strictEqual(logicDocument.getSlideJumpTargetIndex(copy), 3, "A copy of the link follows the target slide");
+
+		let linkInShapeCopy = null;
+		shape.copy(undefined).getDocContent().GetAllParagraphs(undefined, []).forEach(function (paragraph)
+		{
+			paragraph.Content.forEach(function (element)
+			{
+				if (element instanceof AscCommonWord.ParaHyperlink)
+					linkInShapeCopy = element;
+			});
+		});
+		assert.strictEqual(logicDocument.getSlideJumpTargetIndex(linkInShapeCopy), 3, "A copy of the shape follows the target slide");
+	});
+
+	QUnit.test("Enter on a text link opens the target slide", function (assert)
+	{
+		const slides = ResetPresentation(3);
+		const hyperlink = AddTextLink(slides[0], 2);
+
+		AddSlideAfter(0);
+
+		const clicked = [];
+		const saved = {
+			isCursorInHyperlink : logicDocument.IsCursorInHyperlink,
+			clickCallback       : editor.sync_HyperlinkClickCallback,
+			sendEvent           : editor.sendEvent,
+			getShortcut         : editor.getShortcut
+		};
+		logicDocument.IsCursorInHyperlink = function () {return hyperlink;};
+		editor.sync_HyperlinkClickCallback = function (url) {clicked.push(url);};
+		editor.sendEvent = function () {};
+		editor.getShortcut = function () {return undefined;};
+		try
+		{
+			logicDocument.OnKeyDown({KeyCode : 13, ShiftKey : false, CtrlKey : false, AltKey : false, MacCmdKey : false});
+		}
+		finally
+		{
+			logicDocument.IsCursorInHyperlink = saved.isCursorInHyperlink;
+			editor.sync_HyperlinkClickCallback = saved.clickCallback;
+			editor.sendEvent = saved.sendEvent;
+			editor.getShortcut = saved.getShortcut;
+		}
+
+		assert.deepEqual(clicked, [SLIDE_JUMP + "3"], "Enter opens position 3");
+	});
+
+	QUnit.test("Hyperlink dialog shows the target slide", function (assert)
+	{
+		const slides = ResetPresentation(3);
+		const hyperlink = AddTextLink(slides[0], 2);
+
+		AddSlideAfter(0);
+
+		const props = [];
+		const saved = editor.sync_HyperlinkPropCallback;
+		editor.sync_HyperlinkPropCallback = function (hyperProps) {props.push(hyperProps);};
+		try
+		{
+			hyperlink.Document_UpdateInterfaceState();
+		}
+		finally
+		{
+			editor.sync_HyperlinkPropCallback = saved;
+		}
+
+		assert.strictEqual(props.length, 1, "The link sends its properties once");
+		assert.strictEqual(props[0].get_Value(), SLIDE_JUMP + "3", "The dialog gets position 3");
+		assert.strictEqual(hyperlink.GetValue(), SLIDE_JUMP + "2", "The stored value is unchanged");
+	});
+
+	QUnit.test("Links in every table cell follow their target slide", function (assert)
+	{
+		const slides = ResetPresentation(3);
+		editor.WordControl.GoToPage(0);
+		logicDocument.Add_FlowTable(2, 2);
+		const frame = slides[0].cSld.spTree.find(function (drawing)
+		{
+			return drawing.getObjectType() === AscDFH.historyitem_type_GraphicFrame;
+		});
+		const table = frame.graphicObject;
+
+		// As read from PPTX: values are set directly, then bound on open.
+		function LoadedLink(cell)
+		{
+			const paragraph = cell.Content.Content[0];
+			const hyperlink = new AscCommonWord.ParaHyperlink();
+			const run = new AscCommonWord.ParaRun(paragraph, false);
+			run.AddText("go");
+			hyperlink.AddToContent(0, run);
+			paragraph.AddToContent(0, hyperlink);
+			hyperlink.Value = SLIDE_JUMP + "2";
+			return hyperlink;
+		}
+		const linkInCursorCell = LoadedLink(table.Content[0].Get_Cell(0));
+		const linkInOtherCell = LoadedLink(table.Content[1].Get_Cell(1));
+		table.CurCell = table.Content[0].Get_Cell(0);
+		table.Selection.Use = false;
+		logicDocument.bindSlideJumpLinks();
+
+		AddSlideAfter(0);
+
+		assert.strictEqual(logicDocument.getSlideJumpTargetIndex(linkInCursorCell), 3, "Link in the cell with the cursor");
+		assert.strictEqual(logicDocument.getSlideJumpTargetIndex(linkInOtherCell), 3, "Link in another cell");
+	});
 });
