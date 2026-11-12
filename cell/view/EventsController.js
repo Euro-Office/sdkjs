@@ -26,11 +26,10 @@
 "use strict";
 
 (/**
-	 * @param {jQuery} $
 	 * @param {Window} window
 	 * @param {undefined} undefined
 	 */
-	function ($, window, undefined) {
+	function (window, undefined) {
 
 		var AscBrowser = AscCommon.AscBrowser;
 
@@ -2327,4 +2326,4 @@
 		window['AscCommonExcel'] = window['AscCommonExcel'] || {};
 		window["AscCommonExcel"].asc_CEventsController = asc_CEventsController;
 	}
-)(jQuery, window);
+)(window);

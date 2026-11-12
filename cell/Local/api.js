@@ -33,11 +33,10 @@ var c_oAscError = Asc.c_oAscError;
 /////////////////////////////////////////////////////////
 
 (/**
- * @param {jQuery} $
  * @param {Window} window
  * @param {undefined} undefined
  */
-	function($, window, undefined) {
+	function(window, undefined) {
 
 	var asc = window["Asc"];
 	var spreadsheet_api = asc['spreadsheet_api'];
@@ -347,4 +346,4 @@ var c_oAscError = Asc.c_oAscError;
 		else if (sCommand == "print")
 			asc["editor"].asc_Print();
 	};
-})(jQuery, window);
+})(window);
