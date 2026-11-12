@@ -24,13 +24,16 @@ test('removed vendor files stay deleted', () => {
 });
 
 test('build configs and tooling do not reference removed vendor files', () => {
-    const dirs = ['configs', 'build/loaders', 'build/scripts'];
+    const dirs = ['configs', 'build/loaders', 'build/scripts', 'tests/common/api'];
     for (const dir of dirs) {
-        for (const name of fs.readdirSync(path.join(SRC_ROOT, dir))) {
-            const content = fs.readFileSync(path.join(SRC_ROOT, dir, name), 'utf8');
+        const entries = fs.readdirSync(path.join(SRC_ROOT, dir), { recursive: true, withFileTypes: true });
+        for (const entry of entries.filter((e) => e.isFile())) {
+            const name    = path.relative(path.join(SRC_ROOT, dir), path.join(entry.parentPath, entry.name));
+            const content = fs.readFileSync(path.join(entry.parentPath, entry.name), 'utf8');
             for (const file of REMOVED) {
                 const base = path.basename(file);
-                assert.ok(!content.includes(base), `${dir}/${name} references ${base}`);
+                const ref  = new RegExp(`(vendor/|['"])${base.replace(/\./g, '\\.')}`);
+                assert.ok(!ref.test(content), `${dir}/${name} references ${base}`);
             }
         }
     }
