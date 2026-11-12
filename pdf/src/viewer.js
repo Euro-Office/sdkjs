@@ -891,22 +891,7 @@
 			
 			var basePath = window["AscViewer"]["baseEngineUrl"];
 			
-			var useWasm = false;
-			var webAsmObj = window["WebAssembly"];
-			if (typeof webAsmObj === "object")
-			{
-				if (typeof webAsmObj["Memory"] === "function")
-				{
-					if ((typeof webAsmObj["instantiateStreaming"] === "function") || (typeof webAsmObj["instantiate"] === "function"))
-						useWasm = true;
-				}
-			}
-
-			var src = basePath;
-			if (useWasm)
-				src += "drawingfile.js";
-			else
-				src += "drawingfile_ie.js";
+			var src = basePath + "drawingfile.js";
 
 			scriptElem.setAttribute('src', src);
 			scriptElem.setAttribute('type','text/javascript');
