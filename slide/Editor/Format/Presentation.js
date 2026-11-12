@@ -2695,6 +2695,7 @@ CPresentation.prototype.RecalculateByChanges = function(arrChanges, nStartIndex,
 	this.Recalculate(History.Get_RecalcData(null, arrChanges, nStartIndex, nEndIndex));
 };
 CPresentation.prototype.Recalculate = function (RecalcData) {
+	this.renumberSlideLinksAfterReorder();
 	this.DrawingDocument.OnStartRecalculate(this.GetSlidesCount());
 	this.StopAnimationPreview();
 	++this.RecalcId;
@@ -9780,6 +9781,7 @@ CPresentation.prototype.removeSlideByObject = function (oSlide, bNoCheck, pos) {
 					oSlide.removeComment(sId, true);
 				}
 			}
+			this.noteSlideOrderBeforeChange();
 			this.Slides.splice(pos, 1);
 			break;
 		}
@@ -9823,8 +9825,137 @@ CPresentation.prototype.CanRemoveMaster = function(oMaster) {
 	return this.slideMasters.length > 1;
 };
 
+// Links to a slide in the same presentation are stored as "ppaction://hlinksldjumpslide<N>",
+// where N is the target's zero-based position; PPTX gets "slide<N+1>.xml". Positions change
+// when slides are inserted, moved or deleted, so after such a change every link is rewritten
+// to the new position of the slide it pointed at.
+//
+// insertSlide and removeSlideByObject note the order before the first change; Recalculate
+// rewrites the links once the edit is done. A move is a remove followed by an insert, so the
+// old order must be kept until then. The rewrite only goes into the history point the slide
+// change was recorded in, so undo restores both and co-editors receive both. Opening a file,
+// undo, redo and remote changes either run with the history off or never call these two
+// functions, so they never note an order.
+CPresentation.prototype.noteSlideOrderBeforeChange = function () {
+	if (this.slideOrderBeforeChange || !History.CanAddChanges())
+		return;
+	this.slideOrderBeforeChange = {
+		order : this.Slides.slice(),
+		point : History.Points[History.Index]
+	};
+};
+CPresentation.prototype.renumberSlideLinksAfterReorder = function () {
+	const noted = this.slideOrderBeforeChange;
+	if (!noted || !History.CanAddChanges())
+		return;
+	this.slideOrderBeforeChange = null;
+
+	// A slide change that never got its Recalculate (a builder call outside an action) must not
+	// be rewritten into some later, unrelated history point.
+	if (History.Points[History.Index] !== noted.point)
+		return;
+
+	const oldOrder = noted.order;
+	const slides = this.Slides;
+	if (oldOrder.length === slides.length && oldOrder.every(function (slide, i) {return slide === slides[i];}))
+		return;
+
+	const newPosition = new Map();
+	slides.forEach(function (slide, i) {newPosition.set(slide, i);});
+
+	this.forEachSlideJumpLink(function (value, setValue, owner) {
+		// The drawing is being edited by someone else. Writing to it would race with their
+		// change, so this link keeps its number.
+		if (owner.Lock && owner.Lock.Is_Locked())
+			return;
+
+		const oldPosition = AscCommonSlide.GetSlideJumpPosition(value);
+		const target = (oldPosition !== null) ? oldOrder[oldPosition] : undefined;
+		// A link to a deleted slide keeps its number, as before.
+		if (!target || !newPosition.has(target))
+			return;
+
+		const position = newPosition.get(target);
+		if (position !== oldPosition)
+			setValue(AscCommonSlide.SLIDE_JUMP_PREFIX + position);
+	});
+};
+// Calls callback(value, setValue, owner) for every link to a slide on the slides and their
+// notes, on masters and layouts, and on notes masters. setValue writes the new value through
+// the history. owner is the top-level drawing that holds the link, which carries the lock.
+CPresentation.prototype.forEachSlideJumpLink = function (callback) {
+	let owner = null;
+	function visitParagraphContent(items) {
+		for (let i = 0; i < items.length; ++i) {
+			const item = items[i];
+			if (!item || item instanceof AscCommonWord.ParaRun)
+				continue;
+			if (item instanceof AscCommonWord.ParaHyperlink && null !== AscCommonSlide.GetSlideJumpPosition(item.GetValue()))
+				callback(item.GetValue(), function (value) {item.SetValue(value);}, owner);
+			if (Array.isArray(item.Content))
+				visitParagraphContent(item.Content);
+		}
+	}
+	function visitShapeLink(getLink, setLink) {
+		const link = getLink();
+		if (link && null !== AscCommonSlide.GetSlideJumpPosition(link.id)) {
+			callback(link.id, function (value) {
+				const changed = link.createDuplicate();
+				changed.id = value;
+				setLink(changed);
+			}, owner);
+		}
+	}
+	function visitDrawing(drawing) {
+		if (!drawing)
+			return;
+
+		const nvPr = drawing.getCNvProps && drawing.getCNvProps();
+		if (nvPr) {
+			visitShapeLink(function () {return nvPr.hlinkClick;}, function (link) {nvPr.setHlinkClick(link);});
+			visitShapeLink(function () {return nvPr.hlinkHover;}, function (link) {nvPr.setHlinkHover(link);});
+		}
+
+		// A table frame's getDocContent() returns only the cell with the cursor.
+		let paragraphs = null;
+		if (drawing.graphicObject && drawing.graphicObject.GetAllParagraphs)
+			paragraphs = drawing.graphicObject.GetAllParagraphs(undefined, []);
+		else if (drawing.getDocContent && drawing.getDocContent())
+			paragraphs = drawing.getDocContent().GetAllParagraphs(undefined, []);
+		if (paragraphs) {
+			for (let i = 0; i < paragraphs.length; ++i)
+				visitParagraphContent(paragraphs[i].Content);
+		}
+
+		if (Array.isArray(drawing.spTree))
+			drawing.spTree.forEach(visitDrawing);
+	}
+	function visitSpTree(slideLike) {
+		if (!slideLike || !slideLike.cSld)
+			return;
+		const spTree = slideLike.cSld.spTree;
+		for (let i = 0; i < spTree.length; ++i) {
+			owner = spTree[i];
+			visitDrawing(spTree[i]);
+		}
+	}
+
+	for (let i = 0; i < this.Slides.length; ++i) {
+		visitSpTree(this.Slides[i]);
+		visitSpTree(this.Slides[i].notes);
+	}
+	for (let i = 0; i < this.slideMasters.length; ++i) {
+		const master = this.slideMasters[i];
+		visitSpTree(master);
+		for (let j = 0; j < master.sldLayoutLst.length; ++j)
+			visitSpTree(master.sldLayoutLst[j]);
+	}
+	for (let i = 0; i < this.notesMasters.length; ++i)
+		visitSpTree(this.notesMasters[i]);
+};
 CPresentation.prototype.insertSlide = function (pos, slide) {
 	History.Add(new AscDFH.CChangesDrawingsContentPresentation(this, AscDFH.historyitem_Presentation_AddSlide, pos, [slide], true));
+	this.noteSlideOrderBeforeChange();
 	this.Slides.splice(pos, 0, slide);
 	var aSlideComments = slide.slideComments.comments;
 	for (var i = 0; i < aSlideComments.length; ++i) {
@@ -11801,6 +11932,16 @@ function isSlideLikeObject(oObjectToCheck) {
 //------------------------------------------------------------export----------------------------------------------------
 window['AscCommonSlide'] = window['AscCommonSlide'] || {};
 window['AscCommonSlide'].CPresentation = CPresentation;
+
+window['AscCommonSlide'].SLIDE_JUMP_PREFIX = "ppaction://hlinksldjumpslide";
+// Returns the zero-based slide position of a "jump to slide" link value, or null.
+window['AscCommonSlide'].GetSlideJumpPosition = function (value) {
+	const prefix = window['AscCommonSlide'].SLIDE_JUMP_PREFIX;
+	if (typeof value !== "string" || 0 !== value.indexOf(prefix))
+		return null;
+	const digits = value.substring(prefix.length);
+	return /^\d+$/.test(digits) ? parseInt(digits, 10) : null;
+};
 window['AscCommonSlide'].CPrSection = CPrSection;
 window['AscCommonSlide'].CSlideSize = CSlideSize;
 window['AscCommonSlide'].IdList = IdList;
