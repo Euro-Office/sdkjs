@@ -59,6 +59,7 @@ const allTests = [
 	'common/api/api-visio.html',
 
 	'word/unit-tests/paragraphContentPos.html',
+	'word/unit-tests/fieldInstructionParser.html',
 	'word/unit-tests/deleted-text-recovery.html',
 	'word/content-control/block-level/cursorAndSelection.html',
 	'word/content-control/inline-level/checkbox.html',
