@@ -169,6 +169,11 @@ var EditorSkins = {
 		SheetViewCellBackgroundHover   : "#97e3b6",
 		SheetViewCellTitleLabel        : "#121212",
 
+		CellBackground                 : "#FFFFFF",
+		CellGrid                       : "#CACACA",
+
+		ColOrRowResizeBorderColor      : "#000000", //spreadsheeteditor - col/row resize guides
+
 		ColorDark                : "#ffffff",
 		ColorDarkActive          : "#ffffff",
 		ColorDarkHighlighted     : "#c1c1c1",
@@ -317,6 +322,11 @@ var EditorSkins = {
 		SheetViewCellBackgroundPressed : "#aaffcc",
 		SheetViewCellBackgroundHover   : "#97e3b6",
 		SheetViewCellTitleLabel        : "#121212",
+
+		CellBackground                 : "#262626",
+		CellGrid                       : "#454545",
+
+		ColOrRowResizeBorderColor      : "#CCCCCC", //spreadsheeteditor - col/row resize guides
 
 		ColorDark                : "#333",
 		ColorDarkActive          : "#333",
@@ -491,7 +501,12 @@ function updateGlobalSkinColors(theme)
 			continue;
 		if ("" === colorMap[color])
 			continue;
-		if (undefined === theme[colorMap[color]])
+		// theme[colorMap[color]] resolving to "" (not just undefined) must be checked too:
+		// some caller-supplied theme objects derive from CSS custom properties (web-apps'
+		// Themes.js), where an undefined property reads back as "" (never undefined) --
+		// and correctColor("") would otherwise silently resolve to solid black instead of
+		// leaving GlobalSkin[color] alone
+		if (undefined === theme[colorMap[color]] || "" === theme[colorMap[color]])
 			continue;
 
 		if(typeof GlobalSkin[color] === "number")
@@ -547,6 +562,7 @@ function updateGlobalSkin(obj)
 window['AscCommon'] = window['AscCommon'] || {};
 window['AscCommon'].GlobalSkin = GlobalSkin;
 window['AscCommon'].updateGlobalSkin = updateGlobalSkin;
+window['AscCommon'].EditorSkins = EditorSkins;
 
 window['AscCommon'].RgbaHexToRGBA = function(color)
 {
