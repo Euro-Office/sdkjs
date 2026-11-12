@@ -243,6 +243,30 @@ $(function () {
 		}
 	});
 
+	QUnit.test("setArrayFormulasOpen marks a blank head of a calculated array on its own (the XML open path)", function (assert) {
+		// The binary reader marks a blank head through setFormulaOpen, per cell. The XML reader (sdkjs-ooxml) has no
+		// such step, so setArrayFormulasOpen must mark the head itself. Reopen a calculated array with a blank head,
+		// clear what setFormulaOpen marked, and run the array loop alone: it must still mark the head, not the members.
+		const wb = reopen(function (wb, ws) {
+			fillSheet(ws);
+			setCachedValue(ws, "A1", null); // blank head
+			setCachedValue(ws, "A2", "cached"); // a member with a value: the array was calculated
+			setCachedValue(ws, "A4", null); // blank member
+		});
+		const ws = wb.getWorksheet(0);
+		wb.dependencyFormulas.changedCell = null;
+		wb.dependencyFormulas.changedRange = null;
+
+		let parsed;
+		ws._getCell(0, 0, function (cell) {
+			parsed = cell.formulaParsed;
+		});
+		const manager = new AscCommonExcel.InitOpenManager(null, wb);
+		manager.setArrayFormulasOpen({ws: ws, formulaArray: [parsed]});
+
+		assert.deepEqual(getCellsToRecalc(wb), ["A1"], "The loop marks the blank head, not its blank members");
+	});
+
 	QUnit.test("Formulas without a value that read a blank array member are calculated from it", function (assert) {
 		const wb = reopen(function (wb, ws) {
 			fillSheet(ws);

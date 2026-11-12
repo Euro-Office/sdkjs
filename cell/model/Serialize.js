@@ -15050,6 +15050,7 @@
 			let isRecalcCellsWithoutValue = isFullCalcOnLoad || null != parsed.cm;
 			let isVolatile = parsed.ca;
 			let hasMemberValue = false;
+			let headWithoutValue = false;
 			let cellsWithoutValue = isVolatile ? null : [];
 			tmp.ws.getRange3(ref.r1, ref.c1, ref.r2, ref.c2)._foreach(function(cell, row, col) {
 				let isHead = row === ref.r1 && col === ref.c1;
@@ -15061,6 +15062,9 @@
 					return;
 				}
 				if (cell.isNullTextString()) {
+					if (isHead) {
+						headWithoutValue = true;
+					}
 					if (isRecalcCellsWithoutValue) {
 						wb.dependencyFormulas.addToChangedCell2(sheetId, row, col);
 					} else {
@@ -15078,11 +15082,16 @@
 				for (let j = 0; j < cellsWithoutValue.length; j += 2) {
 					wb.dependencyFormulas.addToChangedCell2(sheetId, cellsWithoutValue[j], cellsWithoutValue[j + 1]);
 				}
+			} else if (headWithoutValue) {
+				// The array was calculated (a member has a value), so its blank members keep their saved blank and
+				// read as empty (Cell.isBlankArrayResult). A head saved without a value is the exception: recalculate
+				// it alone, as main and setFormulaOpen on the binary path already do. Marking it here makes it
+				// independent of the reader — the XML path's sdkjs-ooxml reader does not call setFormulaOpen per cell.
+				wb.dependencyFormulas.addToChangedCell2(sheetId, ref.r1, ref.c1);
 			}
-			// Otherwise the array was calculated and a member without a value is a blank result (e.g. of UNIQUE over a
-			// column with an empty cell in a Google Sheets file). It keeps its cached value like any other formula,
-			// formulas read it as empty (Cell.isBlankArrayResult). A head without a value is marked by setFormulaOpen
-			// on the binary path; marking it here as well is harmless (idempotent) and covers readers that skip it.
+			// Otherwise (a calculated array whose head has a value) nothing is marked: every member without a value is
+			// a blank result (e.g. of UNIQUE over a column with an empty cell in a Google Sheets file) and keeps its
+			// cached value like any other formula, read as empty via Cell.isBlankArrayResult.
 		}
 	};
     InitOpenManager.prototype.InitStyleManager = function (oStyleObject, aCellXfs)
