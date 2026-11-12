@@ -222,19 +222,13 @@ function CEditorPage(api)
 	// methods ---
 	this.checkBodyOffset = function()
 	{
-		var off = jQuery("#" + this.Name).offset();
+		var element = document.getElementById(this.Name);
+		if (!element)
+			return;
 
-		if (off)
-		{
-			this.X = off.left;
-			this.Y = off.top;
-
-			if (AscCommon.AscBrowser.isOffsetUsedZoom())
-			{
-				this.X *= AscCommon.AscBrowser.zoom;
-				this.Y *= AscCommon.AscBrowser.zoom;
-			}
-		}
+		var pos = AscCommon.UI.getBoundingClientRect(element);
+		this.X = pos.left;
+		this.Y = pos.top;
 	};
 
 	this.checkBodySize = function()
