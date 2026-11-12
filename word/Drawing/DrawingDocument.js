@@ -1090,6 +1090,9 @@ CPage.prototype.Draw = function (context, xDst, yDst, wDst, hDst, api)
 		strokeColor = api.getPageStrokeColor();
 	}
 
+	if (api && api.WordControl && api.WordControl.isPagelessMode)
+		strokeColor = undefined;
+
 	if (strokeColor)
 	{
 		let lineW = Math.round(AscCommon.AscBrowser.retinaPixelRatio);
@@ -4395,7 +4398,7 @@ function CDrawingDocument()
 	{
 		var pixHeigth = this.m_oWordControl.m_oEditor.HtmlElement.height;
 		pixHeigth /= AscCommon.AscBrowser.retinaPixelRatio;
-		var pixBetweenPages = 20 * (this.m_lDrawingEnd - this.m_lDrawingFirst);
+		var pixBetweenPages = this.m_oWordControl.getPageGapVer() * (this.m_lDrawingEnd - this.m_lDrawingFirst);
 
 		return (pixHeigth - pixBetweenPages) * g_dKoef_pix_to_mm * 100 / this.m_oWordControl.m_nZoomValue;
 	};
