@@ -48,7 +48,6 @@ function fixUrl(arrPaths, basePath) {
 
 function writeScripts(sdkCfg, name) {
     let files = [
-        path.join(SRC_ROOT, 'vendor', 'polyfill.js'),
         path.join(SRC_ROOT, 'common', 'AllFonts.js'),
     ];
 
