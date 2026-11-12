@@ -47,6 +47,7 @@ const allTests = [
 	'cell/spreadsheet-calculation/whatIfAnalysisTests.html',
 	'cell/spreadsheet-calculation/NumFormatParse.html',
 	'cell/spreadsheet-calculation/DataValidationTests.html',
+	'cell/spreadsheet-calculation/CheckboxTests.html',
 	'cell/spreadsheet-calculation/conditionalFormattingTests.html',
 	'cell/spreadsheet-calculation/ExternalReference.html',
 	'cell/spreadsheet-calculation/SheetMemoryTest.html',

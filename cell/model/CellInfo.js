@@ -204,6 +204,8 @@
 		//user protection range info
 		this.isUserProtected = null;
 
+		this.checkbox = false;
+
 		// ToDo not used
 		this.border = null;
 	}
@@ -240,6 +242,9 @@
 			return null;
 		}
 		return this.comment ? [this.comment] : [];
+	};
+	asc_CCellInfo.prototype.asc_getCheckbox = function () {
+		return !!this.checkbox;
 	};
 	asc_CCellInfo.prototype.asc_getLocked = function () {
 		return this.isLocked;
@@ -396,6 +401,7 @@
 	prot["asc_getInnerText"] = prot.asc_getInnerText;
 	prot["asc_getHyperlink"] = prot.asc_getHyperlink;
 	prot["asc_getComments"] = prot.asc_getComments;
+	prot["asc_getCheckbox"] = prot.asc_getCheckbox;
 	prot["asc_getLocked"] = prot.asc_getLocked;
 	prot["asc_getLockedTable"] = prot.asc_getLockedTable;
 	prot["asc_getLockedSparkline"] = prot.asc_getLockedSparkline;
