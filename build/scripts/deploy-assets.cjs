@@ -13,7 +13,7 @@
 //   - JS files: run through terser (WHITESPACE_ONLY equivalent) + license header
 //
 // JS files ignored (same ignoreFiles list as Gruntfile.js):
-//   jquery_native, fonts_ie, spell_ie, engine_ie, zlib_ie, drawingfile_ie, themes
+//   jquery_native, themes
 
 const path  = require('path');
 const fs    = require('fs');
@@ -30,8 +30,7 @@ const licenseText = buildLicenseHeader(BUILD_DIR, { stripSentinel: true });
 
 // JS files skipped from individual minification (same as ignoreFiles in Gruntfile.js)
 const IGNORE_NAMES = new Set([
-    'jquery_native', 'fonts_ie', 'spell_ie', 'engine_ie',
-    'zlib_ie', 'drawingfile_ie', 'themes',
+    'jquery_native', 'themes',
 ]);
 
 // Mirrors the otherFiles array in Gruntfile.js
