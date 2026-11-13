@@ -17,7 +17,7 @@ ARG BUILD_ROOT
 FROM ubuntu:26.04 AS web-base
     RUN apt-get update && \
         apt-get install -y ca-certificates curl gnupg wget zip brotli bzip2 && \
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+        curl -fsSL https://deb.nodesource.com/setup_26.x | bash - && \
         apt-get install -y nodejs && \
         npm install -g @yao-pkg/pkg && \
         rm -rf /var/lib/apt/lists/*
