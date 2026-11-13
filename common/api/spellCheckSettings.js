@@ -30,16 +30,18 @@
 	const FLAGS_MASK       = 0xFFFF;
 	const IGNORE_UPPERCASE = 0x0001;
 	const IGNORE_NUMBERS   = 0x0002;
+	const WAVY_LINE        = 0x0004;
 
 	const NON_IGNORE_UPPERCASE = FLAGS_MASK ^ IGNORE_UPPERCASE;
 	const NON_IGNORE_NUMBERS   = FLAGS_MASK ^ IGNORE_NUMBERS;
+	const NON_WAVY_LINE        = FLAGS_MASK ^ WAVY_LINE;
 
 	/**
 	 * @constructor
 	 */
 	function CSpellCheckSettings()
 	{
-		this.Flags = IGNORE_UPPERCASE | IGNORE_NUMBERS;
+		this.Flags = IGNORE_UPPERCASE | IGNORE_NUMBERS | WAVY_LINE;
 	}
 	CSpellCheckSettings.prototype.Copy = function()
 	{
@@ -73,6 +75,17 @@
 		else
 			this.Flags &= NON_IGNORE_NUMBERS;
 	};
+	CSpellCheckSettings.prototype.IsWavyLine = function()
+	{
+		return !!(this.Flags & WAVY_LINE);
+	};
+	CSpellCheckSettings.prototype.SetWavyLine = function(isWavy)
+	{
+		if (isWavy)
+			this.Flags |= WAVY_LINE;
+		else
+			this.Flags &= NON_WAVY_LINE;
+	};
 	//--------------------------------------------------------export----------------------------------------------------
 	window['AscCommon'] = window['AscCommon'] || {};
 	window['AscCommon'].CSpellCheckSettings = window['AscCommon']['CSpellCheckSettings'] = CSpellCheckSettings;
@@ -80,5 +93,7 @@
 	CSpellCheckSettings.prototype['put_IgnoreWordsInUppercase'] = CSpellCheckSettings.prototype.put_IgnoreWordsInUppercase = CSpellCheckSettings.prototype.SetIgnoreWordsInUppercase;
 	CSpellCheckSettings.prototype['get_IgnoreWordsWithNumbers'] = CSpellCheckSettings.prototype.get_IgnoreWordsWithNumbers = CSpellCheckSettings.prototype.IsIgnoreWordsWithNumbers;
 	CSpellCheckSettings.prototype['put_IgnoreWordsWithNumbers'] = CSpellCheckSettings.prototype.put_IgnoreWordsWithNumbers = CSpellCheckSettings.prototype.SetIgnoreWordsWithNumbers;
+	CSpellCheckSettings.prototype['get_WavyLine'] = CSpellCheckSettings.prototype.get_WavyLine = CSpellCheckSettings.prototype.IsWavyLine;
+	CSpellCheckSettings.prototype['put_WavyLine'] = CSpellCheckSettings.prototype.put_WavyLine = CSpellCheckSettings.prototype.SetWavyLine;
 
 })(window);
