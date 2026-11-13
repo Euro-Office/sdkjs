@@ -57,6 +57,7 @@ const allTests = [
 	'common/api/api-cell.html',
 	'common/api/api-slide.html',
 	'common/api/api-visio.html',
+	'common/local-session/local-session.html',
 
 	'word/unit-tests/paragraphContentPos.html',
 	'word/unit-tests/deleted-text-recovery.html',

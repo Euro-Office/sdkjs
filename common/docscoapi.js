@@ -37,6 +37,123 @@
   var c_oAscServerCommandErrors = AscCommon.c_oAscServerCommandErrors;
   var c_oAscForceSaveTypes = AscCommon.c_oAscForceSaveTypes;
 
+  // Local session transport: an in-page object registered by the host (web-apps) that replaces the
+  // socket.io connection to the DocService. See DocumentServer/docs/client-only-editor-plan.md.
+  var g_oLocalSessionTransport = null;
+  function setLocalSessionTransport(transport) {
+    g_oLocalSessionTransport = transport || null;
+  }
+  function getLocalSessionTransport() {
+    return g_oLocalSessionTransport;
+  }
+
+  // Adapter exposing the subset of the socket.io client surface that DocsCoApi uses, on top of a
+  // local session transport. The adapter never reconnects on its own: the host may reopen a
+  // connection it dropped by calling onOpen again, and DocsCoApi.connect() opens a new one.
+  //
+  // Transport callbacks are delivered asynchronously and in order, like socket.io events, so a host
+  // that answers inside transport.send() does not re-enter DocsCoApi or the editor in the middle of
+  // a state change (e.g. CWordCollaborativeEditing.OnEnd_CheckLock sets the global lock after
+  // askLock returns). Callbacks of a connection that sdkjs closed are ignored.
+  function CLocalTransportSocket(transport, coApi) {
+    this.transport = transport;
+    this.coApi = coApi;
+    this.connected = false;
+    this.connection = null;
+    this.queue = [];
+    this.isFlushScheduled = false;
+    this["auth"] = {};
+    this.io = {
+      "opts": {},
+      reconnectionAttempts: function() {},
+      reconnectionDelay: function() {},
+      reconnectionDelayMax: function() {},
+      randomizationFactor: function() {},
+      setOpenToken: function() {},
+      setSessionToken: function() {}
+    };
+  }
+  CLocalTransportSocket.prototype.connect = function() {
+    if (this.connection && this.connected) {
+      return;
+    }
+    var t = this;
+    var connection = this.connection = {closed: false};
+    this.connected = true;
+    this.transport.connect({
+      "onOpen": function() {
+        t._deliver(connection, function() {
+          t.connected = true;
+          t.coApi._onServerOpen();
+        });
+      },
+      "onMessage": function(data) {
+        t._deliver(connection, function() {
+          t.coApi._onServerMessage(data);
+        });
+      },
+      "onClose": function(explicit) {
+        t._deliver(connection, function() {
+          t.connected = false;
+          t.coApi._onServerClose(!!explicit);
+          if (!explicit) {
+            t.coApi.onDisconnect();
+          }
+        });
+      },
+      "onDisconnect": function(reason, code) {
+        t._deliver(connection, function() {
+          t.connected = false;
+          t.coApi._onServerClose(true);
+          t.coApi.onDisconnect(reason, code);
+        });
+      }
+    });
+  };
+  CLocalTransportSocket.prototype._deliver = function(connection, fn) {
+    if (connection.closed) {
+      return;
+    }
+    this.queue.push({connection: connection, fn: fn});
+    if (this.isFlushScheduled) {
+      return;
+    }
+    this.isFlushScheduled = true;
+    var t = this;
+    Promise.resolve().then(function() {
+      t._flush();
+    });
+  };
+  CLocalTransportSocket.prototype._flush = function() {
+    this.isFlushScheduled = false;
+    while (this.queue.length > 0) {
+      var item = this.queue.shift();
+      if (!item.connection.closed) {
+        item.fn();
+      }
+    }
+  };
+  CLocalTransportSocket.prototype.emit = function(name, data) {
+    if ("message" === name && this.connection) {
+      this.transport.send(data);
+    }
+  };
+  CLocalTransportSocket.prototype.close = function() {
+    if (!this.connection) {
+      return;
+    }
+    this.connection.closed = true;
+    this.connection = null;
+    this.connected = false;
+    this.queue = [];
+    this.transport.close();
+    // mirrors the explicit "io client disconnect" event of socket.io: no reconnect is attempted
+    this.coApi._onServerClose(true);
+  };
+  CLocalTransportSocket.prototype.disconnect = function() {
+    this.close();
+  };
+
   // Класс надстройка, для online и offline работы
   function CDocsCoApi() {
     this._CoAuthoringApi = new DocsCoApi();
@@ -933,7 +1050,9 @@
 		if (this._lastForceSaveButtonTime < newForceSaveButtonTime) {
 			this._lastForceSaveButtonTime = newForceSaveButtonTime;
 			this._send({'type': 'forceSaveStart'});
-            res = true;
+			// A local session host may not answer forceSaveStart/forceSave at all, so the editor must not
+			// keep its save action open waiting for them; replies that do arrive are still handled.
+			res = !(this.socketio instanceof CLocalTransportSocket);
 		}
 		return res;
 	};
@@ -1776,6 +1895,11 @@
       var t = this;
       let socket;
       let firstConnection = true;
+      if (g_oLocalSessionTransport) {
+        socket = this.socketio = new CLocalTransportSocket(g_oLocalSessionTransport, this);
+        socket.connect();
+        return socket;
+      }
       let options = {
         "path": this.socketio_url,
         "transports": ["websocket", "polling"],
@@ -1953,4 +2077,6 @@
   //----------------------------------------------------------export----------------------------------------------------
   window['AscCommon'] = window['AscCommon'] || {};
   window['AscCommon'].CDocsCoApi = CDocsCoApi;
+  window['AscCommon'].setLocalSessionTransport = window.AscCommon.setLocalSessionTransport = setLocalSessionTransport;
+  window['AscCommon'].getLocalSessionTransport = window.AscCommon.getLocalSessionTransport = getLocalSessionTransport;
 })(window);
