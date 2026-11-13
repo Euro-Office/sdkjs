@@ -900,6 +900,79 @@
 			}
 			return res;
 		}
+		// Keeps the "by paragraph" animation builds of the shape in sync with its text directly at the
+		// edit (typing, IME, replace all, paragraph add/remove), in the same history point as the text
+		// change. Internal_Content_Add/Remove remember the structural delta; OnContentChange catches
+		// text-only changes.
+		CDrawingDocContent.prototype.Internal_Content_Add = function(Position, NewObject, isCorrectContent)
+		{
+			this._animSyncDepth = (this._animSyncDepth || 0) + 1;
+			try
+			{
+				CDocumentContent.prototype.Internal_Content_Add.call(this, Position, NewObject, isCorrectContent);
+			}
+			finally
+			{
+				this._animSyncDepth--;
+			}
+			if (NewObject && NewObject.IsParagraph && NewObject.IsParagraph())
+				this.notifyParagraphBuilds(Position, 1, true);
+		}
+		CDrawingDocContent.prototype.Internal_Content_Remove = function(Position, Count, isCorrectContent)
+		{
+			this._animSyncDepth = (this._animSyncDepth || 0) + 1;
+			try
+			{
+				CDocumentContent.prototype.Internal_Content_Remove.call(this, Position, Count, isCorrectContent);
+			}
+			finally
+			{
+				this._animSyncDepth--;
+			}
+			this.notifyParagraphBuilds(Position, Count, false);
+		}
+		CDrawingDocContent.prototype.OnContentChange = function()
+		{
+			CDocumentContentBase.prototype.OnContentChange.call(this);
+			if (!this._animSyncDepth)
+				this.notifyParagraphBuilds(-1, 0, true);
+		}
+		CDrawingDocContent.prototype.notifyParagraphBuilds = function(nPos, nCount, bAdd)
+		{
+			const oShape = this.Is_DrawingShape(true);
+			if (!oShape)
+				return;
+			// the timing belongs to the slide (layout, master), not to the presentation
+			const oParent = oShape.parent;
+			const sShapeId = oShape.GetId();
+			const oTiming = oParent && oParent.timing;
+			if (!oTiming || !oTiming.hasParagraphBuild(sShapeId))
+				return;
+			// undo/redo and changes from co-editors are replayed together with the timing changes that were
+			// recorded with the text change: syncing again while they are applied would duplicate them
+			if (this.isReplayingChanges())
+				return;
+			const oDelta = nPos >= 0 ? {spid: sShapeId, pos: nPos, count: nCount, add: bAdd} : null;
+			// most edits (typing inside a paragraph) leave the paragraph ranges as they are: they must not
+			// touch the timing or take its lock
+			if (!oTiming.isParagraphBuildSyncNeeded(sShapeId, oDelta))
+				return;
+			// syncing changes the timing, so it needs the timing lock of the shape's slide (taken when free),
+			// which need not be the current slide (e.g. replace all): skip it while someone else edits the
+			// animations of that slide
+			const oPresentation = oParent.presentation;
+			if (oPresentation && oPresentation.IsSelectionLocked(AscCommon.changestype_Timing, [oParent]))
+				return;
+			oTiming.syncParagraphBuildsFor(sShapeId, oDelta);
+		}
+		CDrawingDocContent.prototype.isReplayingChanges = function()
+		{
+			const oHistory = AscCommon.History;
+			if (oHistory && oHistory.UndoRedoInProgress)
+				return true;
+			const oCoEditing = AscCommon.CollaborativeEditing;
+			return !!(oCoEditing && oCoEditing.IsReplayingChanges && oCoEditing.IsReplayingChanges());
+		}
 		CDrawingDocContent.prototype.getCharContentLength = function () {
 			let nContentLength = 0;
 			this.CheckRunContent(function (oRun) {

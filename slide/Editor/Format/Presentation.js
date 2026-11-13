@@ -10289,8 +10289,9 @@ CPresentation.prototype.Document_Is_SelectionLocked = function (CheckType, Addit
 		fCheckSlides(function (slide) {return slide.layoutLock;}, selected_slides);
 	}
 	if (CheckType === AscCommon.changestype_Timing) {
-		const oSlide = this.GetCurrentSlide();
-		fCheckSlides(function (slide) {return slide.timingLock;}, [oSlide]);
+		// AdditionalData: the slides (layouts, masters) whose timing changes, the current slide by default
+		const aSlides = Array.isArray(AdditionalData) ? AdditionalData : [this.GetCurrentSlide()];
+		fCheckSlides(function (slide) {return slide.timingLock;}, aSlides);
 	}
 	if (CheckType === AscCommon.changestype_ColorScheme) {
 		var check_obj =
@@ -11210,6 +11211,13 @@ CPresentation.prototype.StartAction = function (nDescription, additional) {
 	this.Api.getMacroRecorder().addStepData(nDescription, additional, true);
 };
 CPresentation.prototype.FinalizeAction = function (isCheckEmptyAction, isCheckLockedAction, additional) {
+	// text edits (typing, Enter, Backspace) end here: keep "by paragraph" animations in sync in the same history point.
+	// That changes the timing, so it needs the timing lock: skip it while someone else edits the animations of the slide
+	const oCurSlide = this.GetCurrentSlide();
+	if (oCurSlide && oCurSlide.hasOutdatedParagraphBuilds && oCurSlide.hasOutdatedParagraphBuilds()
+		&& this.IsSelectionLocked(AscCommon.changestype_Timing) === false) {
+		oCurSlide.syncParagraphBuilds();
+	}
 	this.Recalculate();
 	this.Api.checkChangesSize();
 	if (false !== isCheckEmptyAction && AscCommon.History.Is_LastPointEmpty()) {
