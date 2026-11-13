@@ -692,5 +692,48 @@ $(function () {
 		clearData(0, 0, 5, 5);
 	});
 
+	QUnit.test('Conditional formatting: rule formula with CELL("protect")', function (assert) {
+		// A1 keeps the default format (no own xfs), A2 is unlocked
+		ws.getRange4(0, 0).fillData([["1"], ["2"]]);
+		ws.getRange2("A2").setLocked(false);
+
+		let a1HasOwnFormat = true;
+		ws._getCellNoEmpty(0, 0, function (cell) {
+			a1HasOwnFormat = !!(cell && cell.xfs);
+		});
+		assert.strictEqual(a1HasOwnFormat, false, "A1 has no own format");
+
+		// "Highlight unlocked cells"
+		let rule = new AscCommonExcel.CConditionalFormattingRule();
+		rule.asc_setType(Asc.c_oAscCFType.expression);
+		let xfs = new Asc.asc_CellXfs();
+		let fillColor = getRgbColor("C6EFCE");
+		xfs.asc_setFillColor(fillColor);
+		rule.asc_setDxf(xfs);
+		rule.asc_setValue1('=NOT(CELL("protect",A1))');
+		rule.asc_setLocation("$A$1:$A$2");
+
+		api.asc_setCF([rule]);
+		ws.setDirtyConditionalFormatting(new AscCommonExcel.MultiplyRange([new Asc.Range(0, 0, 0, 1)]));
+
+		let error = null;
+		let compiledStyle1, compiledStyle2;
+		try {
+			compiledStyle1 = ws.getCompiledStyle(0, 0);
+			compiledStyle2 = ws.getCompiledStyle(1, 0);
+		} catch (e) {
+			error = e;
+		}
+		assert.strictEqual(error && error.toString(), null, "compiling the style does not recurse");
+
+		let rgbColor1 = compiledStyle1 && compiledStyle1.fill && compiledStyle1.fill.bg();
+		let rgbColor2 = compiledStyle2 && compiledStyle2.fill && compiledStyle2.fill.bg();
+		assert.strictEqual(compareAscColorAndRgbColor(fillColor, rgbColor1), false, "locked A1 is not highlighted");
+		assert.strictEqual(compareAscColorAndRgbColor(fillColor, rgbColor2), true, "unlocked A2 is highlighted");
+
+		// Clean up data after tests
+		clearData(0, 0, 1, 1);
+	});
+
 	QUnit.module("Conditional formatting");
 });
