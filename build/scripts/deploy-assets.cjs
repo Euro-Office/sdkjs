@@ -37,11 +37,6 @@ const IGNORE_NAMES = new Set([
 // Mirrors the otherFiles array in Gruntfile.js
 const OTHER_FILES = [
     {
-        cwd:  path.join(SRC_ROOT, 'vendor'),
-        src:  ['polyfill.js'],
-        dest: path.join(BUILD_ROOT, 'vendor'),
-    },
-    {
         cwd:  path.join(SRC_ROOT, 'common'),
         src:  [
             'device_scale.js',
