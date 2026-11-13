@@ -3275,6 +3275,9 @@
 		this.showHorizontalScroll = null;
 		this.App = null;
 		this.Core = null;
+		// Sheets the editor cannot show (Excel 4.0 macro sheets), as an opaque Uint8Array
+		// that is written back unchanged on save.
+		this.preservedSheets = null;
 
 		AscFormat.ExecuteNoHistory(function () {
 			this.CustomProperties = new AscCommon.CCustomProperties();

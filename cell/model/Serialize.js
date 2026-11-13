@@ -303,7 +303,10 @@
         XmlMap: 30,
         RdRichValue: 31,
         RdRichValueStructure: 32,
-        RdRichValueTypes: 33
+        RdRichValueTypes: 33,
+        // Euro-Office: sheets the editor cannot show (Excel 4.0 macro sheets). Opaque here;
+        // core writes and parses the payload. A high value keeps it clear of upstream ids.
+        PreservedSheets: 100
     };
     /** @enum */
     var c_oSerWorkbookPrTypes =
@@ -3829,6 +3832,11 @@
 				this.bs.WriteItem(c_oSerWorkbookTypes.ExternalReferences, function() {oThis.WriteExternalReferences();});
 			}
 			if (!this.isCopyPaste) {
+                if (this.wb.preservedSheets) {
+                    this.bs.WriteItem(c_oSerWorkbookTypes.PreservedSheets, function() {
+                        oThis.memory.WriteBuffer(oThis.wb.preservedSheets, 0, oThis.wb.preservedSheets.length);
+                    });
+                }
                 if (this.wb.oApi.vbaProject) {
                     this.bs.WriteItem(c_oSerWorkbookTypes.VbaProject, function() {
                         var old = new AscCommon.CMemory(true);
@@ -9625,6 +9633,10 @@
 					this.oWorkbook.setOleSize(new AscCommonExcel.OleSizeSelectionRange(null, parsedRange));
 				}
 			}
+            else if (c_oSerWorkbookTypes.PreservedSheets === type)
+            {
+                this.InitOpenManager.oReadResult.preservedSheets = this.stream.GetBufferUint8(length);
+            }
             else if (c_oSerWorkbookTypes.VbaProject === type)
             {
                 let _end_rec = this.stream.cur + length;
@@ -14041,6 +14053,7 @@
             if (this.InitOpenManager.oReadResult.vbaProject) {
                 wb.oApi.vbaProject = this.InitOpenManager.oReadResult.vbaProject;
             }
+            wb.preservedSheets = this.InitOpenManager.oReadResult.preservedSheets;
             wb.checkCorrectTables();
 		};
 		this.PostLoadPrepareDefNames = function(wb)
@@ -14849,6 +14862,7 @@
             pivotCacheDefinitions: {},
             vbaMacros: null,
             vbaProject: null,
+            preservedSheets: null,
             macros: null,
             slicerCaches: {},
             tableIds: {},
@@ -14898,6 +14912,7 @@
         if (this.oReadResult.vbaProject) {
             wb.oApi.vbaProject = this.oReadResult.vbaProject;
         }
+        wb.preservedSheets = this.oReadResult.preservedSheets;
 
         wb.checkCorrectTables();
     };
