@@ -36,3 +36,49 @@ rules:
   # Stylistic Issues
   # http://eslint.org/docs/rules/#stylistic-issues
   linebreak-style: [error, unix]
+
+overrides:
+  # The files in common/Native stub the browser environment for the embedded JS
+  # context used by DoctRenderer/x2t. Nothing in CI executes that bundle - the
+  # QUnit suites run in a real browser, where these stubs are never loaded - so
+  # an undeclared identifier here reaches production completely unexercised.
+  # That is how console.error() came to reference an undeclared `param` and
+  # abort every converter operation that logged an error.
+  #
+  # no-undef is enabled for this directory only. Enabling it repo-wide would
+  # report ~86k violations across 1437 identifiers, almost all of them
+  # legitimate cross-module namespaces (AscCommon, AscDFH, Asc, AscFormat, ...),
+  # which would need a globals list larger than the rule is worth.
+  # `browser: false` in both blocks below is deliberate and load-bearing. These
+  # files *provide* window/document/navigator/console/setTimeout/performance for
+  # a context that has none. Treating them as browser code makes every stub read
+  # as a redeclaration of a built-in and buries the real defects in the noise.
+  #
+  # The two host globals are injected by the converter before any script runs:
+  #   window             -> the global object itself, doctrenderer.cpp:579
+  #   native             -> doctrenderer.cpp:583 (global_js->set("native", ...))
+  #   CreateEmbedObject  -> js_internal/v8/v8_base.cpp:218 (InsertToGlobal)
+  - files:
+      - common/Native/native.js
+    env:
+      browser: false
+      es2015: true
+    globals:
+      window: readonly
+      native: readonly
+    rules:
+      no-undef: error
+
+  - files:
+      - common/Native/native_graphics.js
+    env:
+      browser: false
+      es2015: true
+    globals:
+      window: readonly
+      CreateEmbedObject: readonly
+      # Declared by native.js, which editors.cpp (GetAllScript) concatenates
+      # ahead of this file.
+      AscCommon: readonly
+    rules:
+      no-undef: error
