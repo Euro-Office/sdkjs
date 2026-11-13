@@ -5421,4 +5421,4 @@
 		prot["asc_getTableAllowed"] = prot.asc_getTableAllowed;
 
 	}
-)(jQuery, window);
+)(window.jQuery, window);

@@ -1521,7 +1521,7 @@ CChartsDrawer.prototype =
 		//TODO стоит сделать общую обработку для всех диаграмм
 		let calculateStacked = function(sum) {
 			if(c_oChartTypes.HBar === chartType || c_oChartTypes.Bar === chartType) {
-				let originalData = $.extend(true, [], data);
+				let originalData = data.map(function (row) { return row.slice(); });
 				for (let j = 0; j < data.length; j++) {
 					for (let i = 0; i < data[j].length; i++) {
 						data[j][i] = t._findPrevValue(originalData, j, i)
