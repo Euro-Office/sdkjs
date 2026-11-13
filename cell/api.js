@@ -1008,9 +1008,72 @@ var editor;
   };
 
   spreadsheet_api.prototype.asc_PasteData = function (_format, data1, data2, text_data, doNotShowButton, callback) {
-    if (this.canEdit()) {
-      this.wb.pasteData(_format, data1, data2, text_data, doNotShowButton, callback);
-      //this.asc_EndMoveSheet2(data1, 1, "test2");
+    if (!this.canEdit()) {
+      return;
+    }
+    var t = this;
+    var paste = function () {
+      t.wb.pasteData(_format, data1, data2, text_data, doNotShowButton, callback);
+    };
+    if (this.wb.getCellEditMode()) {
+      paste();
+      return;
+    }
+    var cellCount = AscCommonExcel.getPasteCellCount(_format, data1, text_data);
+    // A cut pasted back into this document becomes a move in the paste engine, which sends almost no changes. The
+    // move is only recognised once the clipboard binary has been read, so an internal paste with a cut pending is let
+    // through unless it holds more cells than the cut, and so can't be the cut. The cut is clamped to the sheet's data,
+    // so a whole-column or select-all cut doesn't let everything through.
+    if (AscCommon.c_oAscClipboardDataFormat.Internal === _format && null !== this.wb.cutIdSheet) {
+      var cutWs = this.wb.getWorksheetById(this.wb.cutIdSheet);
+      var cutRanges = cutWs && cutWs.getCutRange();
+      var cutRange = cutRanges && cutRanges[0];
+      var cutRows = cutRange ? Math.min(cutRange.r2, cutWs.model.getRowsCount() - 1) - cutRange.r1 + 1 : 0;
+      var cutCols = cutRange ? Math.min(cutRange.c2, cutWs.model.getColsCount() - 1) - cutRange.c1 + 1 : 0;
+      if (cutRows > 0 && cutCols > 0 && cellCount <= cutRows * cutCols) {
+        paste();
+        return;
+      }
+    }
+
+    var getChangesSize = function () {
+      return AscCommon.History.GetLocalChangesSize() + t.CoAuthoringApi.get_serverChangesSize();
+    };
+    switch (AscCommonExcel.getPasteSizeAction(_format, cellCount, this.maxChangesSize, getChangesSize)) {
+      case AscCommonExcel.c_oAscPasteSizeAction.Refuse:
+        this.sendEvent("asc_onError", c_oAscError.ID.PasteSizeLimitError, c_oAscError.Level.NoCritical);
+        callback && callback(false);
+        break;
+      case AscCommonExcel.c_oAscPasteSizeAction.Confirm:
+        // A UI without this dialog never answers, so it gets today's behaviour
+        if (!this.asc_checkNeedCallback("asc_onConfirmLargePaste")) {
+          paste();
+          break;
+        }
+        // The confirm runs after the paste event has returned; special paste relies on data1 surviving that too
+        var answered = false;
+        this.sendEvent("asc_onConfirmLargePaste", cellCount, AscCommonExcel.getPasteMinSeconds(_format, cellCount), function (can) {
+          // Every registered listener gets this callback; only the first answer counts
+          if (answered) {
+            return;
+          }
+          answered = true;
+          if (can && t.canEdit()) {
+            // An HTML paste reads styles from the iframe it was parsed into, which was hidden when the paste event
+            // returned; Firefox computes no styles in a hidden frame
+            var clipboard = AscCommon.g_clipboardBase;
+            var isOwnFrame = !!data2 && data2 === clipboard.CommonIframe;
+            isOwnFrame && clipboard.CommonIframe_PasteShow();
+            paste();
+            isOwnFrame && clipboard.CommonIframe_PasteHide();
+          } else if (callback) {
+            callback(false);
+          }
+        });
+        break;
+      default:
+        paste();
+        break;
     }
   };
 
