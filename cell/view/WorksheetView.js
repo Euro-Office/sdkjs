@@ -3996,8 +3996,15 @@ function isAllowPasteLink(pastedWb) {
 			// Напечатаем пустую страницу
 			drawingCtx.BeginPage && drawingCtx.BeginPage(c_oAscPrintDefaultSettings.PageWidth, c_oAscPrintDefaultSettings.PageHeight);
 
-			//draw header/footer
-			this.drawHeaderFooter(drawingCtx, printPagesData, indexPrintPage, countPrintPages);
+			//draw header/footer: an empty sheet still prints them, on page 1 of 1
+			//(drawHeaderFooter skips a null page, so pass the size of the page started above)
+			let pageSetupModel = this.model.PagePrintOptions ? this.model.PagePrintOptions.pageSetup : null;
+			let emptyPage = {
+				pageWidth: c_oAscPrintDefaultSettings.PageWidth,
+				pageHeight: c_oAscPrintDefaultSettings.PageHeight,
+				scale: pageSetupModel ? pageSetupModel.asc_getScale() / 100 : 1
+			};
+			this.drawHeaderFooter(drawingCtx, emptyPage, 0, 1);
 
 			if(window['Asc']['editor'].watermarkDraw)
 			{

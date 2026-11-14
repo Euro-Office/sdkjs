@@ -127,4 +127,48 @@ $(function () {
 		printed = printedPageSetup({"spreadsheetLayout": {"fitToWidth": 0, "fitToHeight": 0, "scale": 100}, "adjustOptions": {"printType": 1}});
 		assert.strictEqual(printed.asc_getFitToWidth(), 0, "scale in the json params: not fitted");
 	});
+
+	QUnit.module("Print empty sheet");
+
+	QUnit.test("The blank page of an empty print gets the header and footer", function (assert) {
+		let wsView = api.wb.getWorksheet(0);
+		let headerFooter = wsView.model.headerFooter;
+		let oddHeader = headerFooter.oddHeader;
+		let oddFooter = headerFooter.oddFooter;
+		let stringRender = wsView.stringRender;
+		let drawn = [];
+		// This harness does not lay out the workbook view: give the sheet view what drawForPrint reads.
+		wsView.stringRender = stringRender || {};
+		wsView.getZoom = function () {
+			return 1;
+		};
+		wsView._drawHeaderFooter = function (drawingCtx, printPagesData, headerFooterData, indexPrintPage, countPrintPages, bFooter) {
+			drawn.push({page: printPagesData, index: indexPrintPage, count: countPrintPages, footer: bFooter});
+		};
+		try {
+			headerFooter.oddHeader = new Asc.CHeaderFooterData();
+			headerFooter.oddHeader.setStr("&CHeader");
+			headerFooter.oddFooter = new Asc.CHeaderFooterData();
+			headerFooter.oddFooter.setStr("&CPage &P");
+			// No sheet has a print page: drawForPrint prints one blank page.
+			wsView.drawForPrint({BeginPage: function () {}, EndPage: function () {}}, null, 0, null);
+
+			assert.strictEqual(drawn.length, 2, "header and footer are drawn on the blank page");
+			let defaults = AscCommon.c_oAscPrintDefaultSettings;
+			for (let i = 0; i < drawn.length; i++) {
+				let desc = drawn[i].footer ? "footer: " : "header: ";
+				assert.ok(drawn[i].page, desc + "has a page");
+				assert.strictEqual(drawn[i].page && drawn[i].page.pageWidth, defaults.PageWidth, desc + "width of the blank page");
+				assert.strictEqual(drawn[i].page && drawn[i].page.pageHeight, defaults.PageHeight, desc + "height of the blank page");
+				assert.strictEqual(drawn[i].index, 0, desc + "page 1");
+				assert.strictEqual(drawn[i].count, 1, desc + "of 1 page");
+			}
+		} finally {
+			delete wsView._drawHeaderFooter;
+			delete wsView.getZoom;
+			wsView.stringRender = stringRender;
+			headerFooter.oddHeader = oddHeader;
+			headerFooter.oddFooter = oddFooter;
+		}
+	});
 });
