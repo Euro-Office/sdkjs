@@ -1013,7 +1013,8 @@
 		}
 		if (this.ElementType === InputTextElementType.ContentEditableDiv && AscCommon.AscBrowser.isSafariMobile)
 		{
-			_style += "border:none;position:absolute;padding:0px;margin:0px;";
+			// Without pre-wrap WebKit keeps trailing and repeated spaces as U+00A0, which then reach the document.
+			_style += "border:none;position:absolute;padding:0px;margin:0px;white-space:pre-wrap;";
 		}
 		else
 		{
