@@ -3965,7 +3965,7 @@ function isAllowPasteLink(pastedWb) {
 		oRangeSizes.height += 3;
 		return oRangeSizes;
 	};
-	WorksheetView.prototype.drawForPrint = function (drawingCtx, printPagesData, indexPrintPage, pages) {
+	WorksheetView.prototype.drawForPrint = function (drawingCtx, printPagesData, indexPrintPage, pages, opt_isEmpty) {
 		let t = this;
 		let countPrintPages = pages && pages.length;
 
@@ -3997,14 +3997,18 @@ function isAllowPasteLink(pastedWb) {
 			drawingCtx.BeginPage && drawingCtx.BeginPage(c_oAscPrintDefaultSettings.PageWidth, c_oAscPrintDefaultSettings.PageHeight);
 
 			//draw header/footer: an empty sheet still prints them, on page 1 of 1
-			//(drawHeaderFooter skips a null page, so pass the size of the page started above)
-			let pageSetupModel = this.model.PagePrintOptions ? this.model.PagePrintOptions.pageSetup : null;
-			let emptyPage = {
-				pageWidth: c_oAscPrintDefaultSettings.PageWidth,
-				pageHeight: c_oAscPrintDefaultSettings.PageHeight,
-				scale: pageSetupModel ? pageSetupModel.asc_getScale() / 100 : 1
-			};
-			this.drawHeaderFooter(drawingCtx, emptyPage, 0, 1);
+			//(drawHeaderFooter skips a null page, so pass the size of the page started above).
+			//Only when nothing is printable: a page range past the last page also prints a blank page, without them.
+			if (opt_isEmpty) {
+				//the scale of the sheet, as the normal path falls back to when a page has none
+				let pageSetupModel = this.model.PagePrintOptions ? this.model.PagePrintOptions.pageSetup : null;
+				let emptyPage = {
+					pageWidth: c_oAscPrintDefaultSettings.PageWidth,
+					pageHeight: c_oAscPrintDefaultSettings.PageHeight,
+					scale: pageSetupModel ? pageSetupModel.asc_getScale() / 100 : 1
+				};
+				this.drawHeaderFooter(drawingCtx, emptyPage, 0, 1);
+			}
 
 			if(window['Asc']['editor'].watermarkDraw)
 			{

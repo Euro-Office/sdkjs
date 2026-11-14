@@ -3939,7 +3939,7 @@
 		  if (0 === printPagesData.arrPages.length) {
 			  // Печать пустой страницы
 			  ws = t.getWorksheet();
-			  ws.drawForPrint(pdfPrinter, null);
+			  ws.drawForPrint(pdfPrinter, null, 0, null, true);
 		  } else {
 			  var indexWorksheet = -1;
 			  var indexWorksheetTmp = -1;
