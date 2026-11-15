@@ -10833,7 +10833,13 @@ Paragraph.prototype.Get_CompiledPr = function()
 				&& Prev_NumPr.NumId === NumPr.NumId))
 				Prev_After = 0;
 
-			Pr.ParaPr.Spacing.Before = Math.max(Prev_After, Cur_Before) - Prev_After;
+			// w:doNotUseHTMLParagraphAutoSpacing: space after of the previous paragraph and space before
+			// of this one add up instead of collapsing to the larger of the two
+			let oLogicDocument = this.GetLogicDocument();
+			if (oLogicDocument && oLogicDocument.IsDocumentEditor() && oLogicDocument.GetDocumentSettings().DoNotUseHTMLParagraphAutoSpacing)
+				Pr.ParaPr.Spacing.Before = Cur_Before;
+			else
+				Pr.ParaPr.Spacing.Before = Math.max(Prev_After, Cur_Before) - Prev_After;
 		}
 	}
 	else if (null === PrevEl)

@@ -65,6 +65,7 @@
 		this.BalanceSingleByteDoubleByteWidth = false;
 		this.UlTrailSpace                     = false;
 		this.UseFELayout                      = false;
+		this.DoNotUseHTMLParagraphAutoSpacing = false;
 	}
 	DocumentSettings.prototype.getCompatibilityMode = function()
 	{

@@ -7404,6 +7404,7 @@ function BinarySettingsTableWriter(memory, doc, saveParams)
 		}
 		this.bs.WriteItem(c_oSerCompat.Flags1, function() {oThis.memory.WriteULong(flags1);});
 		var flags2 = 0;
+		flags2 |=  (oSettings.DoNotUseHTMLParagraphAutoSpacing ? 1 : 0) << 5;
 		flags2 |=  (oSettings.UseFELayout ? 1 : 0) << 17;
 		if (this.saveParams.isCompatible) {
 			flags2 |= (oSettings.SplitPageBreakAndParaMark ? 1 : 0) << 27;
@@ -17119,6 +17120,7 @@ function Binary_SettingsTableReader(doc, oReadResult, stream)
 			Settings.DoNotExpandShiftReturn = 0 != ((flags1 >> 10) & 1);
 		} else if (c_oSerCompat.Flags2 === type) {
 			var flags2 = this.stream.GetULong(length);
+			Settings.DoNotUseHTMLParagraphAutoSpacing = 0 != ((flags2 >> 5) & 1);
 			Settings.UseFELayout = 0 != ((flags2 >> 17) & 1);
 			Settings.SplitPageBreakAndParaMark = 0 != ((flags2 >> 27) & 1);
 		} else
