@@ -11212,10 +11212,11 @@ CPresentation.prototype.StartAction = function (nDescription, additional) {
 };
 CPresentation.prototype.FinalizeAction = function (isCheckEmptyAction, isCheckLockedAction, additional) {
 	// text edits (typing, Enter, Backspace) end here: keep "by paragraph" animations in sync in the same history point.
-	// That changes the timing, so it needs the timing lock: skip it while someone else edits the animations of the slide
+	// That changes the timing: skip it while someone else edits the animations of the slide (the timing lock of the
+	// slide, not the global lock, which is also set while the lock request of this very edit is pending)
 	const oCurSlide = this.GetCurrentSlide();
 	if (oCurSlide && oCurSlide.hasOutdatedParagraphBuilds && oCurSlide.hasOutdatedParagraphBuilds()
-		&& this.IsSelectionLocked(AscCommon.changestype_Timing) === false) {
+		&& !(oCurSlide.timingLock && oCurSlide.timingLock.Lock.Is_Locked())) {
 		oCurSlide.syncParagraphBuilds();
 	}
 	this.Recalculate();

@@ -167,6 +167,21 @@ $(function ()
 		logicDocument.Remove(-1, true, false, false, false);
 	}
 
+	function GetTimingChanges(historyIndex)
+	{
+		let timingChanges = 0;
+		for (let point = historyIndex + 1; point <= AscCommon.History.Index; ++point)
+		{
+			AscCommon.History.Points[point].Items.forEach(function (item)
+			{
+				if (item.Class instanceof AscFormat.CIndexRg || item.Class instanceof AscFormat.CTxEl
+					|| item.Class instanceof AscFormat.CTiming || item.Class instanceof AscFormat.CBldP)
+					++timingChanges;
+			});
+		}
+		return timingChanges;
+	}
+
 	function FindEffectByRangeStart(slide, nSt)
 	{
 		return slide.timing.getAllAnimEffects().find(function (effect)
@@ -411,7 +426,7 @@ $(function ()
 		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point E"));
 		logicDocument.FinalizeAction();
 		assert.deepEqual(GetRanges(slide), [[0, 0], [2, 3], [4, 4], [5, 5], [6, 6]], "Lock free again: the next edit catches up");
-		assert.strictEqual(lock.Get_Type(), AscCommon.c_oAscLockTypes.kLockTypeMine, "The timing lock is taken for the sync");
+		assert.strictEqual(lock.Get_Type(), AscCommon.c_oAscLockTypes.kLockTypeNone, "The sync only checks the timing lock, it does not take it");
 		CheckParagraphBuild(assert, slide, shape, AscFormat.ParaBuildType_p, "Build stays p");
 	});
 
@@ -936,7 +951,7 @@ $(function ()
 		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1]], "Typing new text gives one effect per paragraph again");
 	});
 
-	QUnit.test("Typing inside a paragraph does not take the timing lock", function (assert)
+	QUnit.test("Typing inside a paragraph leaves the timing alone", function (assert)
 	{
 		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
 		AddFade(slide, shape);
@@ -949,13 +964,14 @@ $(function ()
 		logicDocument.EnterText("x".codePointsArray());
 		assert.deepEqual([lock.Get_Type(), GetRanges(slide)], [AscCommon.c_oAscLockTypes.kLockTypeNone, [[0, 0], [1, 1], [2, 2]]], "Typing a character: the ranges stay, the timing lock stays free");
 		logicDocument.MoveCursorToEndPos();
+		const historyIndex = AscCommon.History.Index;
 		logicDocument.AddNewParagraph();
-		assert.strictEqual(lock.Get_Type(), AscCommon.c_oAscLockTypes.kLockTypeNone, "Enter at the end (empty paragraph): the timing lock stays free");
+		assert.deepEqual(GetTimingChanges(historyIndex), 0, "Enter at the end (empty paragraph): the timing does not change");
 		logicDocument.EnterText("D".codePointsArray());
-		assert.deepEqual([lock.Get_Type(), GetRanges(slide)], [AscCommon.c_oAscLockTypes.kLockTypeMine, [[0, 0], [1, 1], [2, 2], [3, 3]]], "A new paragraph range: synced with the timing lock");
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1], [2, 2], [3, 3]], "A new paragraph range: synced");
 	});
 
-	QUnit.test("Text edits on another slide need the timing lock of that slide", function (assert)
+	QUnit.test("Text edits on another slide check the timing lock of that slide", function (assert)
 	{
 		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
 		AddFade(slide, shape);
@@ -981,6 +997,45 @@ $(function ()
 		docContent.Internal_Content_Add(docContent.Content.length, CreateParagraph(docContent, "Point E"));
 		logicDocument.FinalizeAction();
 		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]], "Lock free again: synced");
-		assert.deepEqual([lock.Get_Type(), currentLock.Get_Type()], [AscCommon.c_oAscLockTypes.kLockTypeMine, AscCommon.c_oAscLockTypes.kLockTypeNone], "The timing lock of the edited slide is taken, not the one of the current slide");
+		assert.strictEqual(currentLock.Get_Type(), AscCommon.c_oAscLockTypes.kLockTypeNone, "The timing lock of the current slide is not taken");
+	});
+
+	QUnit.test("The first edit in a shape syncs while its shape lock request is pending", function (assert)
+	{
+		const {slide, shape} = CreateTextShape(["Point A", "Point B", "Point C"]);
+		AddFade(slide, shape);
+		SelectShape(slide, shape);
+		SetTextSequence(slide, BY_PARAGRAPH);
+		FindEffectByRangeStart(slide, 1).cTn.presetSubtype = 2;
+		FindEffectByRangeStart(slide, 2).cTn.presetSubtype = 8;
+		slide.timingLock.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+		shape.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+
+		// several users in the deck: the edit asks the server for the shape lock and holds the global lock
+		// until the answer comes
+		const coEditing = AscCommon.CollaborativeEditing;
+		const coApi = Asc.editor.CoAuthoringApi;
+		const useType = coEditing.m_nUseType;
+		const askLock = coApi.askLock;
+		let lockRequests = 0;
+		coEditing.m_nUseType = -1;
+		coApi.askLock = function () {++lockRequests;};
+		try
+		{
+			MoveCursorToParagraph(slide, shape, 0, true);
+			logicDocument.AddNewParagraph();
+			assert.deepEqual([lockRequests, coEditing.Get_GlobalLock()], [1, true], "The shape lock is requested, the global lock is held");
+		}
+		finally
+		{
+			coEditing.Set_GlobalLock(false);
+			coEditing.m_nUseType = useType;
+			coApi.askLock = askLock;
+		}
+		shape.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeMine, false);
+		logicDocument.EnterText("X".codePointsArray());
+
+		assert.deepEqual(GetRanges(slide), [[0, 0], [1, 1], [2, 2], [3, 3]], "One effect per paragraph");
+		assert.deepEqual([2, 3].map(function (nSt) {return FindEffectByRangeStart(slide, nSt).cTn.presetSubtype;}), [2, 8], "B and C keep their settings: they did not move to X and B");
 	});
 });

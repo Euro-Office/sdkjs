@@ -954,14 +954,14 @@
 				return;
 			const oDelta = nPos >= 0 ? {spid: sShapeId, pos: nPos, count: nCount, add: bAdd} : null;
 			// most edits (typing inside a paragraph) leave the paragraph ranges as they are: they must not
-			// touch the timing or take its lock
+			// touch the timing
 			if (!oTiming.isParagraphBuildSyncNeeded(sShapeId, oDelta))
 				return;
-			// syncing changes the timing, so it needs the timing lock of the shape's slide (taken when free),
-			// which need not be the current slide (e.g. replace all): skip it while someone else edits the
-			// animations of that slide
-			const oPresentation = oParent.presentation;
-			if (oPresentation && oPresentation.IsSelectionLocked(AscCommon.changestype_Timing, [oParent]))
+			// syncing changes the timing: skip it while someone else edits the animations of the shape's slide,
+			// which need not be the current slide (e.g. replace all). Only the timing lock of that slide counts:
+			// the global lock is also set while the lock request of this very edit is pending, so the first
+			// edit in a shape would never sync and later syncs would match the ranges wrongly
+			if (oParent.timingLock && oParent.timingLock.Lock.Is_Locked())
 				return;
 			oTiming.syncParagraphBuildsFor(sShapeId, oDelta);
 		}
