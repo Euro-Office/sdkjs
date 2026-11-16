@@ -1581,7 +1581,6 @@ CGraphicObjects.prototype =
             return this.graphicPages[pageIndex].getTableByXY(x, y, documentContent);
         else
             return this.graphicPages[pageIndex].hdrFtrPage.getTableByXY(x, y, documentContent);
-        return null;
     },
 
     OnMouseDown: function(e, x, y, pageIndex)

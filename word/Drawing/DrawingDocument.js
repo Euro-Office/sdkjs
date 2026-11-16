@@ -500,8 +500,6 @@ function CTableOutlineDr()
 
 			return false;
 		}
-
-		return false;
 	}
 
 	this.checkMouseMoveTrack = function (pos, word_control)

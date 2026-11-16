@@ -13222,8 +13222,6 @@ CTextPr.prototype.Copy_HighLight = function()
 		return highlight_None;
 	else
 		return this.HighLight.Copy();
-
-	return undefined;
 };
 CTextPr.prototype.Merge = function(TextPr)
 {
@@ -14290,63 +14288,6 @@ CTextPr.prototype.Check_NeedRecalc = function()
 {
 	// Потому что в параграфе внутри Internal_recalculate_0 кэшируются ParaTextPr
 	return true;
-
-	if (undefined != this.Bold)
-		return true;
-
-	if (undefined != this.Italic)
-		return true;
-
-	if (undefined != this.FontFamily)
-		return true;
-
-	if (undefined != this.FontSize)
-		return true;
-
-	if (undefined != this.VertAlign)
-		return true;
-
-	if (undefined != this.Spacing)
-		return true;
-
-	if (undefined != this.Caps)
-		return true;
-
-	if (undefined != this.SmallCaps)
-		return true;
-
-	if (undefined != this.Position)
-		return true;
-
-	if (undefined != this.RFonts.Ascii)
-		return true;
-
-	if (undefined != this.RFonts.EastAsia)
-		return true;
-
-	if (undefined != this.RFonts.HAnsi)
-		return true;
-
-	if (undefined != this.RFonts.CS)
-		return true;
-
-	if (undefined != this.RTL || undefined != this.CS || undefined != this.BoldCS || undefined != this.ItalicCS || undefined != this.FontSizeCS)
-		return true;
-
-	if (undefined != this.Lang.Val)
-		return true;
-
-	// Потому что в параграфе внутри Internal_recalculate_0 кэшируются ParaTextPr
-	if (undefined != this.Color)
-		return true;
-
-	if (undefined != this.HighLight)
-		return true;
-
-	if (undefined != this.Shd)
-		return true;
-
-	return false;
 };
 CTextPr.prototype.getFontCoef = function()
 {

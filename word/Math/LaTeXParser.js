@@ -285,11 +285,11 @@
 	{
 		switch (str)
 		{
-			case "\\frac"	:	return BAR_FRACTION;    break;
-			case "\\over"	:	return BAR_FRACTION;    break;
-			case "\\binom"	:	return NO_BAR_FRACTION; break;
-			case "\\atop"	:	return NO_BAR_FRACTION; break;
-			default         :   return SKEWED_FRACTION; break;
+			case "\\frac"	:	return BAR_FRACTION;
+			case "\\over"	:	return BAR_FRACTION;
+			case "\\binom"	:	return NO_BAR_FRACTION;
+			case "\\atop"	:	return NO_BAR_FRACTION;
+			default         :   return SKEWED_FRACTION;
 		}
 	}
 	CLaTeXParser.prototype.GetFractionLiteral = function ()

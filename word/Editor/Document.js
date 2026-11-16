@@ -19709,10 +19709,6 @@ CDocument.prototype.controller_AddInlineTable = function(nCols, nRows, nMode)
 	{
 		return Item.AddInlineTable(nCols, nRows, nMode);
 	}
-
-	this.Recalculate();
-
-	return null;
 };
 CDocument.prototype.controller_ClearParagraphFormatting = function(isClearParaPr, isClearTextPr)
 {
@@ -22919,45 +22915,6 @@ CDocument.prototype.TurnComboBoxFormValue = function(oForm, isNext)
 	
 	this.Api.sendEvent("asc_onShowContentControlsActions", obj, realCoords.X, realCoords.Y);
 	return;
-
-	// Previously we changed the value directly in the form
-	var sValue = oForm.GetSelectedText(true, true);
-	var oComboBoxPr = oForm.IsComboBox() ? oForm.GetComboBoxPr() : oForm.GetDropDownListPr();
-
-	var nIndex = oComboBoxPr.FindByText(sValue);
-	var nCount = oComboBoxPr.GetItemsCount();
-	if (nCount <= 0)
-		return;
-
-	var nNewIndex = 0;
-	if (-1 !== nIndex)
-	{
-		if (isNext)
-		{
-			nNewIndex = nIndex + 1;
-			if (nNewIndex >= nCount)
-				nNewIndex = 0;
-		}
-		else
-		{
-			nNewIndex = nIndex - 1;
-			if (nNewIndex < 0)
-				nNewIndex = nCount - 1;
-		}
-	}
-
-	var sNewValue = oComboBoxPr.GetItemValue(nNewIndex);
-	oForm.SelectContentControl();
-	oForm.SkipSpecialContentControlLock(true);
-	if (!this.IsSelectionLocked(AscCommon.changestype_Paragraph_Content, null, true, this.IsFormFieldEditing()))
-	{
-		this.StartAction();
-		oForm.SelectListItem(sNewValue);
-		oForm.SelectContentControl();
-		this.Recalculate();
-		this.FinalizeAction();
-	}
-	oForm.SkipSpecialContentControlLock(false);
 };
 CDocument.prototype.MoveToNextRadioButton = function(form, isNext)
 {

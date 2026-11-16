@@ -1807,16 +1807,6 @@ function CHorRuler()
 
             // если вникуда - то ВСЕГДА margins
             return -AscWord.RULER_DRAG_TYPE.leftMargin;
-
-            if (isColumnsInside2)
-                return 0;
-            if ((y >= _top && y <= _bottom) && !isTableInside)
-            {
-				if (x < _margin_left)
-					return -AscWord.RULER_DRAG_TYPE.leftMargin;
-				if (x > _margin_right)
-					return -AscWord.RULER_DRAG_TYPE.rightMargin;
-            }
         }
 
         return AscWord.RULER_DRAG_TYPE.none;

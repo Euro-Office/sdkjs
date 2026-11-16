@@ -1734,8 +1734,6 @@
 			value: oAlphanumeric.data,
 			style: oStyle,
 		};
-
-		return this.ReadTokensWhileEnd(Literals.alphanumeric, Struc.char);
 	}
 	CUnicodeParser.prototype.GetCharLiteral = function ()
 	{
@@ -1972,9 +1970,6 @@
 					base: oEntity,
 					value: oDiacritic,
 				};
-
-				if (this.oLookahead.class === Literals.space.id)
-					this.EatToken(this.oLookahead.class);
 			}
 
 			if (this.IsHBracketLiteral())
