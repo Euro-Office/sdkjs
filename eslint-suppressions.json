@@ -7,11 +7,6 @@
 			"count": 1
 		}
 	},
-	"cell/model/FormulaObjects/dateandtimeFunctions.js": {
-		"no-unreachable": {
-			"count": 6
-		}
-	},
 	"cell/model/FormulaObjects/lookupandreferenceFunctions.js": {
 		"no-dupe-else-if": {
 			"count": 1
@@ -22,220 +17,13 @@
 			"count": 1
 		}
 	},
-	"cell/model/PivotTables.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"cell/model/UndoRedo.js": {
-		"no-unreachable": {
-			"count": 15
-		}
-	},
-	"cell/model/Workbook.js": {
-		"no-unreachable": {
-			"count": 21
-		}
-	},
-	"cell/model/WorkbookElems.js": {
-		"no-unreachable": {
-			"count": 42
-		}
-	},
-	"cell/model/autofilters.js": {
-		"no-unreachable": {
-			"count": 4
-		}
-	},
-	"common/Charts/ChartsDrawer.js": {
-		"no-dupe-else-if": {
-			"count": 1
-		}
-	},
-	"common/Drawings/CommonController.js": {
-		"no-unreachable": {
-			"count": 2
-		}
-	},
-	"common/Drawings/Externals.js": {
-		"no-unreachable": {
-			"count": 3
-		}
-	},
-	"common/Drawings/Format/ChartFormat.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/Drawings/Format/ChartSpace.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/Drawings/Format/Format.js": {
-		"no-debugger": {
-			"count": 5
-		},
-		"no-unreachable": {
-			"count": 33
-		}
-	},
-	"common/Drawings/Format/GraphicFrame.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/Drawings/Format/GroupShape.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/Drawings/Format/Shape.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/Drawings/TrackObjects/ResizeTracks.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/Drawings/TrackObjects/Spline.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/Scrolls/mobileTouchManagerBase.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/SerializeCommonWordExcel.js": {
-		"no-duplicate-case": {
-			"count": 2
-		},
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/clipboard_base.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"common/editorscommon.js": {
-		"no-dupe-else-if": {
-			"count": 20
-		},
-		"no-unreachable": {
-			"count": 71
-		}
-	},
-	"common/macro-recorder.js": {
-		"no-unreachable": {
-			"count": 5
-		}
-	},
-	"common/text_input2.js": {
-		"no-unreachable": {
-			"count": 2
-		}
-	},
 	"common/workerspeech.js": {
 		"no-dupe-else-if": {
 			"count": 1
 		}
 	},
-	"pdf/src/document.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"slide/Drawing/DrawingDocument.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"slide/Editor/Format/Timing.js": {
-		"no-unreachable": {
-			"count": 38
-		}
-	},
-	"visio/Drawing/HtmlPage.js": {
-		"no-unreachable": {
-			"count": 3
-		}
-	},
-	"visio/api.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"visio/model/overrides.js": {
-		"no-dupe-else-if": {
-			"count": 1
-		}
-	},
-	"word/Drawing/DrawingDocument.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"word/Drawing/Rulers.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"word/Editor/Document.js": {
-		"no-unreachable": {
-			"count": 2
-		}
-	},
-	"word/Editor/DocumentContent.js": {
-		"no-unreachable": {
-			"count": 2
-		}
-	},
-	"word/Editor/GraphicObjects/GraphicObjects.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"word/Editor/HeaderFooter.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"word/Editor/Paragraph.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"word/Editor/Serialize2.js": {
-		"no-unreachable": {
-			"count": 2
-		}
-	},
 	"word/Editor/StructuredDocumentTags/BlockLevel.js": {
 		"no-dupe-else-if": {
-			"count": 1
-		}
-	},
-	"word/Editor/StructuredDocumentTags/SdtBase.js": {
-		"no-unreachable": {
-			"count": 1
-		}
-	},
-	"word/Editor/Styles.js": {
-		"no-dupe-else-if": {
-			"count": 3
-		},
-		"no-unreachable": {
-			"count": 2
-		}
-	},
-	"word/Editor/Table.js": {
-		"no-unreachable": {
 			"count": 1
 		}
 	},
@@ -247,9 +35,6 @@
 	"word/Math/LaTeXParser.js": {
 		"no-dupe-else-if": {
 			"count": 1
-		},
-		"no-unreachable": {
-			"count": 5
 		}
 	},
 	"word/Math/NamesOfLiterals.js": {
@@ -257,18 +42,8 @@
 			"count": 2
 		}
 	},
-	"word/Math/UnicodeParser.js": {
-		"no-unreachable": {
-			"count": 2
-		}
-	},
 	"word/Math/math-ml.js": {
 		"no-dupe-else-if": {
-			"count": 1
-		}
-	},
-	"word/apiBuilder.js": {
-		"no-duplicate-case": {
 			"count": 1
 		}
 	}
