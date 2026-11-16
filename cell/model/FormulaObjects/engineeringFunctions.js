@@ -48,9 +48,8 @@ function (window, undefined) {
 
 	var rg_validBINNumber = /^[01]{1,10}$/, rg_validDEC2BINNumber = /^-?[0-9]{1,3}$/,
 		rg_validDEC2OCTNumber = /^-?[0-9]{1,9}$/, rg_validDEC2HEXNumber = /^-?[0-9]{1,12}$/,
-		rg_validHEXNumber = /^[0-9A-F]{1,10}$/i, rg_validOCTNumber = /^[0-7]{1,10}$/, rg_complex_number = new XRegExp(
-		"^(?<real>[-+]?(?:\\d*(?:\\.\\d+)?(?:[Ee][+-]?\\d+)?))?(?<img>([-+]?(\\d*(?:\\.\\d+)?(?:[Ee][+-]?\\d+)?)?[ij])?)",
-		"g");
+		rg_validHEXNumber = /^[0-9A-F]{1,10}$/i, rg_validOCTNumber = /^[0-7]{1,10}$/, rg_complex_number =
+		/^(?<real>[-+]?(?:\d*(?:\.\d+)?(?:[Ee][+-]?\d+)?))?(?<img>([-+]?(\d*(?:\.\d+)?(?:[Ee][+-]?\d+)?)?[ij])?)/;
 
 	var NumberBase = {
 		BIN: 2, OCT: 8, DEC: 10, HEX: 16
@@ -848,10 +847,10 @@ function (window, undefined) {
 		}, isImagUnit: function (c) {
 			return c == 'i' || c == 'j';
 		}, parseComplexStr: function (s) {
-			var match = XRegExp.exec(s, rg_complex_number), r, i, suf;
+			var match = rg_complex_number.exec(s), r, i, suf;
 			if (match) {
-				r = match["real"];
-				i = match["img"];
+				r = match.groups.real;
+				i = match.groups.img;
 
 				if (!(r || i)) {
 					return new cError(cErrorType.not_numeric);

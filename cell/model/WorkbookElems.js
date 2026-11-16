@@ -6213,7 +6213,7 @@ StyleManager.prototype =
 		/*var res = null;
 		if (null !== this.Hyperlink) {
 			//либо гиперссылка, либо ссылка на локальный файл(отдельное поле не стал заводить, все будет в Hyperlink)
-			if (XRegExp.exec(this.Hyperlink, new XRegExp("([a-zA-Z]:)?(\\\\[a-zA-Z0-9_.-]+)+\\\\?"))) {
+			if (/([a-zA-Z]:)?(\\[a-zA-Z0-9_.-]+)+\\?/.test(this.Hyperlink)) {
 				res = Asc.c_oAscHyperlinkType.FileLink;
 			} else {
 				res = Asc.c_oAscHyperlinkType.WebLink;
