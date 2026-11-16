@@ -19875,14 +19875,6 @@
 			cell.setCheckbox(val);
 		});
 	};
-	Range.prototype.getCheckbox = function () {
-		let res = false;
-		this.worksheet._getCellNoEmpty(this.bbox.r1, this.bbox.c1, function(cell) {
-			if (null != cell && cell.getCheckbox())
-				res = true;
-		});
-		return res;
-	};
 	Range.prototype.setType=function(type){
 		AscCommon.History.Create_NewPoint();
 		this.createCellOnRowColCross();
