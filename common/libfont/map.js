@@ -90,7 +90,7 @@
 		this.FD_Ascii_Names = [];
 
 		this.FD_Ascii_Names_Offsets = null;
-		if (typeof(Int32Array) != 'undefined' && !window.opera)
+		if (typeof(Int32Array) != 'undefined')
 			this.FD_Ascii_Names_Offsets = new Int32Array(256);
 		else
 			this.FD_Ascii_Names_Offsets = new Array(256);
@@ -665,7 +665,7 @@
 
 		this.m_aPanose  = null;
 
-		if (typeof(Int8Array) != 'undefined' && !window.opera)
+		if (typeof(Int8Array) != 'undefined')
 		{
 			this.m_aPanose = new Int8Array(10);
 		}
@@ -965,8 +965,8 @@
 
 			// Для начала просматриваем сколько вообще различных пространств надо.
 			// Исходя из их общего количества, находим вес 1 пропущеного пространства.
-			var arrCandidate = ((typeof(Int8Array) != 'undefined' && !window.opera)) ? new Uint8Array(192) : new Array(192);
-			var arrRequest = ((typeof(Int8Array) != 'undefined' && !window.opera)) ? new Uint8Array(192) : new Array(192);
+			var arrCandidate = ((typeof(Int8Array) != 'undefined')) ? new Uint8Array(192) : new Array(192);
+			var arrRequest = ((typeof(Int8Array) != 'undefined')) ? new Uint8Array(192) : new Array(192);
 
 			for (var i = 0; i < 192; i++)
 			{

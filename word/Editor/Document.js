@@ -9363,7 +9363,6 @@ CDocument.prototype.OnKeyDown = function(e)
 			}
 		}
 		else if ((e.KeyCode === 93 && !e.MacCmdKey)
-			|| (AscCommon.AscBrowser.isOpera && (57351 === e.KeyCode))
 			|| (e.KeyCode === 121 && true === e.ShiftKey)) // Shift + F10 - контекстное меню
 		{
 			var X_abs, Y_abs, oPosition, ConvertedPos;

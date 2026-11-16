@@ -317,21 +317,11 @@
 
         nRetValue = isChecked ? oApInfoTmp["Yes"]["retValue"] : oApInfoTmp["Off"]["retValue"];
 
-        let supportImageDataConstructor = (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge) ? false : true;
-
         let ctx             = canvas.getContext("2d");
         let mappedBuffer    = oFile.getUint8ClampedArray(nRetValue, 4 * nWidth * nHeight);
         let imageData       = null;
 
-        if (supportImageDataConstructor)
-        {
-            imageData = new ImageData(mappedBuffer, nWidth, nHeight);
-        }
-        else
-        {
-            imageData = ctx.createImageData(nWidth, nHeight);
-            imageData.data.set(mappedBuffer, 0);                    
-        }
+        imageData = new ImageData(mappedBuffer, nWidth, nHeight);
         if (ctx)
             ctx.putImageData(imageData, 0, 0);
         
@@ -830,24 +820,10 @@
     <path d='M5.2381 8.8L4 11.8L7.71429 16C12.0476 9.4 13.2857 8.2 17 4C14.5238 4 9.77778 8.8 7.71429 11.8L5.2381 8.8Z' fill='black'/>\
     </svg>";
 
-    function toBase64(str) {
-		return window.btoa(unescape(encodeURIComponent(str)));
-	}
-	
 	function getSvgImage(svg) {
 		let image = new Image();
-		if (!AscCommon.AscBrowser.isIE || AscCommon.AscBrowser.isIeEdge) {
-			image.src = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
-		}
-		else {
-			image.src = "data:image/svg+xml;base64," + toBase64(svg);
-			image.onload = function() {
-				// Почему-то IE не определяет размеры сам
-				this.width = 20;
-				this.height = 20;
-			};
-		}
-		
+		image.src = "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+
 		return image;
 	}
 

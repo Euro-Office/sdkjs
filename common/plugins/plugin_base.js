@@ -524,8 +524,6 @@
 
 	if (window.addEventListener)
 		window.addEventListener("keydown", onBaseKeyDown, false);
-	else
-		window.attachEvent("keydown", onBaseKeyDown);
 
 })(window, undefined);
 

@@ -236,7 +236,6 @@
 		this.bIsEventPaste = false;
 		this.ZoomFreePageNum = -1;
 		this.MainScrollsEnabledFlag = 0;
-		this.m_bIsIE = AscCommon.AscBrowser.isIE;
 
 		// thumbnails
 		this.Thumbnails = new CThumbnailsManager(this);
@@ -931,10 +930,7 @@
 			window.onkeyup = this.onKeyUp;
 
 			if (!window["AscDesktopEditor"]) {
-				if (window.attachEvent)
-					window.attachEvent('onmessage', this.m_oApi.DemonstrationToReporterMessages);
-				else
-					window.addEventListener('message', this.m_oApi.DemonstrationToReporterMessages, false);
+				window.addEventListener('message', this.m_oApi.DemonstrationToReporterMessages, false);
 			}
 
 			document.oncontextmenu = function (e) {
@@ -994,21 +990,6 @@
 
 		if (this.m_oApi.isReporterMode)
 			this.m_oApi.StartDemonstration(this.Name, 0);
-
-		if (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge) {
-			var ie_hack = [
-				this.m_oThumbnailsBack,
-				this.m_oThumbnails,
-				this.m_oMainContent,
-				this.m_oEditor,
-				this.m_oOverlay
-			];
-
-			for (var elem in ie_hack) {
-				if (ie_hack[elem] && ie_hack[elem].HtmlElement)
-					ie_hack[elem].HtmlElement.style.zIndex = 0;
-			}
-		}
 	};
 	CEditorPage.prototype.initThumbnails = function () {
 
@@ -3535,12 +3516,10 @@
 		// после fullscreen возможно изменение X, Y после вызова Resize.
 		oWordControl.checkBodyOffset();
 
-		if (!oThis.m_bIsIE) {
-			if (e.preventDefault)
-				e.preventDefault();
-			else
-				e.returnValue = false;
-		}
+		if (e.preventDefault)
+			e.preventDefault();
+		else
+			e.returnValue = false;
 
 		if (AscCommon.g_inputContext && AscCommon.g_inputContext.externalChangeFocus())
 			return;
@@ -4126,10 +4105,6 @@
 		var oWordControl = oThis;
 		if (false === oWordControl.m_oApi.bInit_word_control || oWordControl.IsFocus === false || oWordControl.m_oApi.isLongAction() || oWordControl.m_bIsMouseLock === true)
 			return;
-
-		if (window.opera && !oWordControl.IsKeyDownButNoPress) {
-			oWordControl.onKeyDown(e);
-		}
 
 		oWordControl.IsKeyDownButNoPress = false;
 

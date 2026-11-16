@@ -102,9 +102,6 @@
                 this.m_oContext = AscCommon.AscBrowser.getContext2D(this.m_oControl.HtmlElement);
 
                 this.m_oContext.imageSmoothingEnabled = false;
-                this.m_oContext.mozImageSmoothingEnabled = false;
-                this.m_oContext.oImageSmoothingEnabled = false;
-                this.m_oContext.webkitImageSmoothingEnabled = false;
             }
 
             this.SetBaseTransform();

@@ -567,8 +567,6 @@
 		this.touchManager = null;
 
 		this.isXP = ((AscCommon.AscBrowser.userAgent.indexOf("windowsxp") > -1) || (AscCommon.AscBrowser.userAgent.indexOf("chrome/49") > -1)) ? true : false;
-		if (!this.isXP && AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge)
-			this.isXP = true;
 
 		if (this.isXP)
 		{
@@ -648,20 +646,11 @@
 		this.UseRequestAnimationFrame = AscCommon.AscBrowser.isChrome;
 		this.RequestAnimationFrame    = (function()
 		{
-			return window.requestAnimationFrame ||
-				window.webkitRequestAnimationFrame ||
-				window.mozRequestAnimationFrame ||
-				window.oRequestAnimationFrame ||
-				window.msRequestAnimationFrame || null;
+			return window.requestAnimationFrame || null;
 		})();
 		this.CancelAnimationFrame     = (function()
 		{
-			return window.cancelRequestAnimationFrame ||
-				window.webkitCancelAnimationFrame ||
-				window.webkitCancelRequestAnimationFrame ||
-				window.mozCancelRequestAnimationFrame ||
-				window.oCancelRequestAnimationFrame ||
-				window.msCancelRequestAnimationFrame || null;
+			return window.cancelAnimationFrame || null;
 		})();
 		if (this.UseRequestAnimationFrame)
 		{
