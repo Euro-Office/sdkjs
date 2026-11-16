@@ -61,3 +61,48 @@ test('word page reads its offset without jQuery', () => {
     page.checkBodySize();
     assert.deepEqual([page.X, page.Y], [0, 0]);
 });
+
+test('spreadsheet target position adds the document offset of the cell cursor', () => {
+    const ctx    = loadEditor('cell', '');
+    const cursor = {
+        getClientRects       : () => [{}],
+        getBoundingClientRect: () => ({ left: 10, top: 20 }),
+        ownerDocument        : { defaultView: { pageXOffset: 5, pageYOffset: 7 } },
+    };
+    const api = Object.create(ctx.AscCommon.baseEditorsApi.prototype);
+    api.editorId            = ctx.AscCommon.c_oEditorId.Spreadsheet;
+    api.asc_getCellInfo     = () => ({ asc_getSelectionType: () => -1 });
+    api.asc_getCellEditMode = () => true;
+    api.wb = { cellEditor: { curLeft: 1, curTop: 2, curHeight: 3, cursor } };
+
+    const ret = api.getTargetOnBodyCoords();
+    assert.deepEqual([ret.X, ret.Y, ret.TargetH], [16, 29, 3]);
+
+    cursor.getClientRects = () => [];
+    const hidden = api.getTargetOnBodyCoords();
+    assert.deepEqual([hidden.X, hidden.Y], [1, 2]);
+});
+
+test('editor sources do not use jQuery', () => {
+    const usesJQuery = /\bjQuery\b|(?<![\w$.\\])\$\(|(?<![\w$\\])\$\.[A-Za-z]/;
+    const isComment  = /^\s*(\/\/|\/\*|\*)/;
+    const files      = new Set();
+    for (const module of Object.keys(configs)) {
+        for (const platform of ['', 'desktop', 'mobile']) {
+            const cfg = configs[module].sdk;
+            expandGlobs([...getFilesMin(cfg, platform), ...getFilesAll(cfg, platform)]).forEach((file) => files.add(file));
+        }
+    }
+    const hits = [];
+    for (const file of files) {
+        if (file.includes(`${path.sep}vendor${path.sep}`)) {
+            continue;
+        }
+        read(file).split('\n').forEach((line, i) => {
+            if (usesJQuery.test(line) && !isComment.test(line)) {
+                hits.push(`${path.relative(SRC_ROOT, file)}:${i + 1}`);
+            }
+        });
+    }
+    assert.deepEqual(hits, []);
+});

@@ -728,9 +728,12 @@
 			}.bind(this);
 
 			let isMenuHovered = false;
-			const drawColorsMenuTrigger = jQuery("#dem_id_draw_color_menu_trigger");
-			drawColorsMenuTrigger.on('mouseenter', function (e) {
-				if (!isMenuHovered) {
+			const drawColorsMenuTrigger = document.getElementById("dem_id_draw_color_menu_trigger");
+			const isEnterOrLeave = function (e) {
+				return !e.relatedTarget || !drawColorsMenuTrigger.contains(e.relatedTarget);
+			};
+			drawColorsMenuTrigger.addEventListener('mouseover', function (e) {
+				if (!isMenuHovered && isEnterOrLeave(e)) {
 					const offset = AscCommon.UI.getBoundingClientRect(e.target);
 					const menuWidth = 174;
 					let leftPosition = offset.left + offset.width;
@@ -738,25 +741,22 @@
 						leftPosition = offset.left - menuWidth;
 					}
 
-					this.elementReporterDrawColorsMenu.css({
-						display: "block",
-						top: offset.top + "px",
-						left: leftPosition + "px"
-					});
+					const menuStyle = this.elementReporterDrawColorsMenu.style;
+					menuStyle.display = "block";
+					menuStyle.top = offset.top + "px";
+					menuStyle.left = leftPosition + "px";
 				}
 			}.bind(this));
 
-			drawColorsMenuTrigger.on('mouseleave', function () {
-				if (!isMenuHovered) {
-					this.elementReporterDrawColorsMenu.css("display", "none");
+			drawColorsMenuTrigger.addEventListener('mouseout', function (e) {
+				if (!isMenuHovered && isEnterOrLeave(e)) {
+					this.elementReporterDrawColorsMenu.style.display = "none";
 				}
 			}.bind(this));
 
-			this.elementReporterDrawColorsMenu = jQuery("#dem_id_draw_color_menu");
-			this.elementReporterDrawColorsMenu.css({
-				"z-index": 2,
-				"padding": "5px"
-			});
+			this.elementReporterDrawColorsMenu = document.getElementById("dem_id_draw_color_menu");
+			this.elementReporterDrawColorsMenu.style.zIndex = "2";
+			this.elementReporterDrawColorsMenu.style.padding = "5px";
 
 			this.toggleElementReporterDrawMenuButton = function(state, icon) {
 				icon = undefined !== icon ? icon : "btn-pen";
@@ -785,7 +785,7 @@
 				btnIcon.classList.add(state ? icon + "-active" : icon);
 			}.bind(this);
 
-			this.elementReporterDrawColorsMenu.on('click', function (e) {
+			this.elementReporterDrawColorsMenu.addEventListener('click', function (e) {
 				const checkedMenuItem = this.elementReporterDrawMenu.querySelector("a[data-checked]");
 				this.currentDrawColor = e.target.getAttribute("data-value");
 				showCurrentColor();

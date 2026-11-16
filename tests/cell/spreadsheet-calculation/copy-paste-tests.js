@@ -605,5 +605,20 @@ $(function () {
 		console.log("All parseText CSV tests completed successfully!");
 	});
 
+	QUnit.test("Test: links pasted into a chart become plain text spans", function (assert) {
+		let node = document.createElement("div");
+		node.innerHTML = '<a href="https://example.com" style="font-weight: bold">&lt;img src="x"&gt;text</a>';
+		document.body.appendChild(node);
+
+		AscCommonExcel.g_clipboardExcel.pasteProcessor._changeHtmlTag(node.querySelectorAll("a"));
+
+		let span = node.querySelector("span");
+		assert.strictEqual(node.querySelector("a"), null, "link is replaced");
+		assert.strictEqual(node.querySelector("img"), null, "link text is not parsed as HTML");
+		assert.strictEqual(span.textContent, '<img src="x">text', "link text is kept as text");
+		assert.strictEqual(span.style.fontWeight, "bold", "font weight is kept");
+		node.remove();
+	});
+
 	QUnit.module("CopyPaste");
 });

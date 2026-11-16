@@ -26,11 +26,10 @@
 "use strict";
 
 (/**
-	 * @param {jQuery} $
 	 * @param {Window} window
 	 * @param {undefined} undefined
 	 */
-	function ($, window, undefined) {
+	function (window, undefined) {
 
 		/*
 		 * Import
@@ -3684,7 +3683,7 @@
 				var newFonts;
 				//если находимся внутри диаграммы убираем ссылки
 				if (targetDocContent && targetDocContent.Parent && targetDocContent.Parent.parent && targetDocContent.Parent.parent.chart) {
-					var changeTag = $(node).find("a");
+					var changeTag = node.querySelectorAll("a");
 					this._changeHtmlTag(changeTag);
 				}
 
@@ -3850,7 +3849,7 @@
 
 			//TODO сделать при получаении структуры. игнорировать размер шрифта и тп
 			_changeHtmlTag: function (arr) {
-				var oldElem, value, style, bold, underline, italic;
+				var oldElem, newElem, value, style, bold, underline, italic;
 				for (var i = 0; i < arr.length; i++) {
 					oldElem = arr[i];
 					value = oldElem.innerText;
@@ -3870,8 +3869,11 @@
 						bold = oldElem.style.fontWeight;
 					}
 
-					style = ' style = "text-decoration:' + underline + ";" + "font-style:" + italic + ";" + "font-weight:" + bold + ";" + '"';
-					$(oldElem).replaceWith("<span" + style + ">" + value + "</span>");
+					style = "text-decoration:" + underline + ";" + "font-style:" + italic + ";" + "font-weight:" + bold + ";";
+					newElem = oldElem.ownerDocument.createElement("span");
+					newElem.setAttribute("style", style);
+					newElem.textContent = value;
+					oldElem.replaceWith(newElem);
 				}
 			},
 
@@ -5421,4 +5423,4 @@
 		prot["asc_getTableAllowed"] = prot.asc_getTableAllowed;
 
 	}
-)(window.jQuery, window);
+)(window);

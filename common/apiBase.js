@@ -4244,13 +4244,11 @@
                     }
                 }
 
-                if (off) {
-                    off = jQuery(off).offset();
-                    if (off)
-                    {
-                        ret.X += off.left;
-                        ret.Y += off.top;
-                    }
+                if (off && off.getClientRects().length) {
+                    var offRect = off.getBoundingClientRect();
+                    var offWindow = off.ownerDocument.defaultView;
+                    ret.X += offRect.left + offWindow.pageXOffset;
+                    ret.Y += offRect.top + offWindow.pageYOffset;
                 }
 
                 ret.X >>= 0;
