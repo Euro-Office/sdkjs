@@ -312,4 +312,17 @@ $(function () {
 		assert.strictEqual(stream.GetCurPos(), data.length, "whole record consumed");
 	});
 
+	QUnit.test("insert is refused inside a pivot table", function (assert) {
+		reset();
+		select("A1:A2");
+		var pivot = {intersection: function () { return true; }};
+		ws.pivotTables.push(pivot);
+		try {
+			api.asc_insertCheckbox();
+		} finally {
+			ws.pivotTables.splice(ws.pivotTables.indexOf(pivot), 1);
+		}
+		assert.strictEqual(hasCheckbox("A1"), false, "no checkbox in the pivot range");
+		assert.strictEqual(cell("A1").getValue(), "", "blank pivot cell stays blank");
+	});
 });
