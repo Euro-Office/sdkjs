@@ -289,4 +289,27 @@ $(function () {
 		});
 		assert.strictEqual(xfs ? xfs.checkbox : null, null, "removed flag leaves no checkbox property behind");
 	});
+
+	QUnit.test("checkbox is written as xf field 100, not upstream Complement 15", function (assert) {
+		var memory = new AscCommon.CMemory();
+		new AscCommonExcel.BinaryStylesTableWriter(memory).WriteXfs({xf: {checkbox: true}});
+		var bytes = Array.prototype.slice.call(memory.data, 0, memory.pos);
+		assert.deepEqual(bytes, [100, AscCommon.c_oSerPropLenType.Byte, 1], "type 100, one-byte bool");
+	});
+
+	QUnit.test("upstream Complement field 15 is skipped, field 100 is read", function (assert) {
+		var data = new Uint8Array([
+			15, AscCommon.c_oSerPropLenType.Long, 1, 0, 0, 0,
+			100, AscCommon.c_oSerPropLenType.Byte, 0
+		]);
+		var stream = new AscCommon.FT_Stream2(data, data.length);
+		var reader = new AscCommonExcel.Binary_StylesTableReader(stream, api.wbModel);
+		var oXfs = {};
+		reader.bcr.Read2Spreadsheet(data.length, function (t, l) {
+			return reader.ReadXfs(t, l, oXfs);
+		});
+		assert.strictEqual(oXfs.checkbox, false, "field 100 read, field 15 does not set the flag");
+		assert.strictEqual(stream.GetCurPos(), data.length, "whole record consumed");
+	});
+
 });
