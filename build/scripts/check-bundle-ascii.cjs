@@ -29,7 +29,7 @@
 
 const fs   = require('fs');
 const path = require('path');
-const { sync: globSync } = require('glob');
+const { globFiles } = require('../lib/sdk-configs.cjs');
 const { resolveBuildRoot } = require('../lib/env.cjs');
 
 // An unquoted object key in `{`/`,` position that starts with either a raw
@@ -74,7 +74,7 @@ function main(argv) {
     if (files.length === 0) {
         const buildDir  = path.resolve(__dirname, '..');
         const deployRoot = resolveBuildRoot(buildDir);
-        files = globSync('*/sdk-all{,-min}.js', { cwd: deployRoot, absolute: true }).sort();
+        files = globFiles('*/sdk-all{,-min}.js', { cwd: deployRoot }).sort();
         if (files.length === 0) {
             console.error(`check-bundle-ascii: no sdk-all bundles found under ${deployRoot} -- nothing was verified`);
             return 1;

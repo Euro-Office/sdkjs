@@ -17,7 +17,7 @@
 
 const path  = require('path');
 const fs    = require('fs');
-const { sync: globSync } = require('glob');
+const { globFiles } = require('../lib/sdk-configs.cjs');
 const { minify }   = require('terser');
 const { resolveBuildRoot, buildLicenseHeader } = require('../lib/env.cjs');
 
@@ -120,8 +120,7 @@ async function main() {
     for (const entry of OTHER_FILES) {
         const matches = [];
         for (const pattern of entry.src) {
-            const found = globSync(pattern, { cwd: entry.cwd, nodir: true });
-            for (const f of found) matches.push(f);
+            for (const f of globFiles(pattern, { cwd: entry.cwd })) matches.push(path.relative(entry.cwd, f));
         }
 
         for (const relFile of matches) {
