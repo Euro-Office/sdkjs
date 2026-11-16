@@ -934,6 +934,13 @@
 
 		this.SetTextMatrix = function(fA, fB, fC, fD, fE, fF)
 		{
+			// A matrix that differs from identity only by float noise is identity. ODP files can carry
+			// rotations of whole turns (n * 2pi). Their rounding error must not clear the cache.
+			if (Math.abs(fA - 1) < 0.0001 && Math.abs(fB) < 0.0001 &&
+				Math.abs(fC) < 0.0001 && Math.abs(fD - 1) < 0.0001)
+			{
+				fA = 1; fB = 0; fC = 0; fD = 1;
+			}
 			var m = this.m_arrdTextMatrix;
 
 			var b1 = (m[0] == fA && m[1] == -fB && m[2] == -fC && m[3] == fD);
