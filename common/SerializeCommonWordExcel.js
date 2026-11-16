@@ -513,7 +513,7 @@ Binary_CommonReader.prototype.Read2 = function(stLen, fRead)
             case c_oSerPropLenType.Long:
             case c_oSerPropLenType.Double: nRealLen = 4;break;
 			case c_oSerPropLenType.Double64: nRealLen = 8;break;
-			case c_oSerPropLenType.Long: nRealLen = 8;break;
+			case c_oSerPropLenType.Long64: nRealLen = 8;break;
             case c_oSerPropLenType.Variable:
                 nRealLen = this.stream.GetULongLE();
                 nCurPosShift += 4;
@@ -553,7 +553,7 @@ Binary_CommonReader.prototype.Read2Spreadsheet = function(stLen, fRead)
             case c_oSerPropLenType.Long: nRealLen = 4;break;
             case c_oSerPropLenType.Double: nRealLen = 8;break;
 			case c_oSerPropLenType.Double64: nRealLen = 8;break;
-			case c_oSerPropLenType.Long: nRealLen = 8;break;
+			case c_oSerPropLenType.Long64: nRealLen = 8;break;
             case c_oSerPropLenType.Variable:
                 nRealLen = this.stream.GetULongLE();
                 nCurPosShift += 4;

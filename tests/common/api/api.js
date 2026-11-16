@@ -138,4 +138,22 @@ $(function () {
 		}
 		window["AscDesktopEditor"] = oldAscDesktopEditor;
 	});
+
+	QUnit.test("Binary_CommonReader reads Long64 properties", function (assert)
+	{
+		const lenType = AscCommon.c_oSerPropLenType;
+		["Read2", "Read2Spreadsheet"].forEach(function (method)
+		{
+			const data = new Uint8Array([1, lenType.Long64, 1, 2, 3, 4, 5, 6, 7, 8, 2, lenType.Byte, 9]);
+			const reader = new AscCommon.Binary_CommonReader(new AscCommon.FT_Stream2(data, data.length));
+			const items = [];
+			const res = reader[method](data.length, function (type, length)
+			{
+				items.push([type, length]);
+				return AscCommon.c_oSerConstants.ReadUnknown;
+			});
+			assert.strictEqual(res, AscCommon.c_oSerConstants.ReadOk, method + " result");
+			assert.deepEqual(items, [[1, 8], [2, 1]], method + " items");
+		});
+	});
 });
