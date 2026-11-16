@@ -1301,46 +1301,6 @@ function ResizeTrackShapeImage(originalObject, cardDirection, drawingsController
             }
             if (this.originalObject.isObjectInSmartArt()) {
                 return;
-                if (this.resizedPosX < 0) {
-                    this.resizedExtX = this.originalExtX + this.originalObject.x;
-                    this.resizedPosX = 0;
-
-                }
-                if (this.resizedPosY < 0) {
-                    this.resizedPosY = 0.000001; // TODO: fix this
-                    this.resizedExtY = this.originalExtY + this.originalObject.y;
-                }
-
-                var oSmartArt = this.originalObject.group && this.originalObject.group.group;
-                if(oSmartArt) {
-                    if (oSmartArt.x + oSmartArt.extX < this.resizedPosX + this.resizedExtX) {
-                        this.resizedExtX = oSmartArt.extX - this.resizedPosX;
-                    }
-                    if (oSmartArt.y + oSmartArt.extY < this.resizedPosY + this.resizedExtY) {
-                        this.resizedExtY = oSmartArt.extY - this.resizedPosY;
-                    }
-                }
-                var point = this.originalObject.getSmartArtShapePoint();
-                if (point) {
-                    var prSet = point.getPrSet();
-                    var defaultExtX = this.originalExtX;
-                    var defaultExtY = this.originalExtY;
-
-                    if (prSet) {
-                        if (prSet.custScaleX) {
-                            defaultExtX /= prSet.custScaleX;
-                        }
-                        if (prSet.custScaleY) {
-                            defaultExtY /= prSet.custScaleY;
-                        }
-                        if (this.resizedExtX !== this.originalExtX) {
-                            prSet.setCustScaleX((this.resizedExtX / defaultExtX));
-                        }
-                        if (this.resizedExtY !== this.originalExtY) {
-                            prSet.setCustScaleY((this.resizedExtY / defaultExtY));
-                        }
-                    }
-            }
             }
             if(this.chartSpace)
             {

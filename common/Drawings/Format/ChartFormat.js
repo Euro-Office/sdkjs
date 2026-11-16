@@ -4603,7 +4603,6 @@
                 return oDataRefs.getDataRange();
             }
         }
-        return sFormula;
     };
     CSeriesBase.prototype.isVaryColors = function() {
         if(!this.parent) {

@@ -6475,7 +6475,6 @@
 			}
 			else
 				return this.hitInBoundingRect(x, y);
-			return false;
 		};
 
 		CShape.prototype.hitInInnerArea = function (x, y) {

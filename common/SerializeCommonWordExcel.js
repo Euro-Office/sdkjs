@@ -766,11 +766,6 @@ FT_Stream2.prototype.GetDoubleLE = function() {
 	tempHelpUnit[6] = this.GetUChar();
 	tempHelpUnit[7] = this.GetUChar();
 	return tempHelpFloat[0];
-
-	var arr = [];
-	for(var i = 0; i < 8; ++i)
-		arr.push(this.GetUChar());
-	return this.doubleDecodeLE754(arr);
 };
 FT_Stream2.prototype.doubleDecodeLE754 = function(a) {
 	var s, e, m, i, d, nBits, mLen, eLen, eBias, eMax;
