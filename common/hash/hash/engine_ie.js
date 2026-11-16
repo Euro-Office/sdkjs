@@ -1,6 +1,5 @@
 ﻿/*
  * (c) Copyright Ascensio System SIA 2010-2024
- * Modified by Euro-Office contributors in 2026: reuse hexadecimal lookup tables.
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)

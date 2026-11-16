@@ -49,6 +49,16 @@ for (const source of sources) {
 		assert.equal(context.AscCommon.Hex['encode'], encode);
 	});
 
+	test(`${source}: truthy case flags and out-of-range bytes keep current behavior`, () => {
+		const encode = loadSerialization(source).AscCommon.Hex.encode;
+
+		assert.equal(encode([255], 1), 'FF');
+		assert.equal(encode([255], 'upper'), 'FF');
+		assert.equal(encode([255], 0), 'ff');
+		assert.equal(encode([255], ''), 'ff');
+		assert.equal(encode([256, -1, 1.5, 0]), 'undefinedundefinedundefined00');
+	});
+
 	test(`${source}: repeated encoding reuses byte representations`, () => {
 		const context = loadSerialization(source);
 		vm.runInContext(`
