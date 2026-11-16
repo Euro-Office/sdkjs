@@ -387,6 +387,16 @@
 
 	CGlyphBitmap.prototype =
 	{
+		// Color glyph (COLRv1): drawn as is, never tinted with the text color
+		fromRGBA: function (data)
+		{
+			if (this.nWidth <= 0 || this.nHeight <= 0)
+				return;
+			this.oGlyphData.init(this.nWidth, this.nHeight);
+			this.oGlyphData.m_oContext.putImageData(new ImageData(data, this.nWidth, this.nHeight), 0, 0);
+			this.oGlyphData.checkColor = function () {};
+		},
+
 		fromAlphaMask: function (font_manager)
 		{
 			var bIsCanvas = false;
@@ -1206,6 +1216,18 @@
 			//measure_time_start = performance.now();
 
 			oSizes.bBitmap = true;
+			var colorInfo = AscFonts.FT_Get_Glyph_Color_Render ? AscFonts.FT_Get_Glyph_Color_Render(this.m_pFace, unGID, 0x000000FF) : null;
+			if (colorInfo)
+			{
+				oSizes.oBitmap = new CGlyphBitmap();
+				oSizes.oBitmap.nX = colorInfo.left;
+				oSizes.oBitmap.nY = colorInfo.top;
+				oSizes.oBitmap.nWidth = colorInfo.width;
+				oSizes.oBitmap.nHeight = colorInfo.rows;
+				oSizes.oBitmap.fromRGBA(colorInfo.data);
+				return oSizes;
+			}
+
 			var rasterInfo = AscFonts.FT_Glyph_Get_Raster(this.m_pFace, REND_MODE);
 			if (!rasterInfo || rasterInfo.pitch == 0)
 				return oSizes;
@@ -1923,4 +1945,5 @@
 
 	window['AscFonts'].EGlyphState = EGlyphState;
 	window['AscFonts'].CFontFile = CFontFile;
+	window['AscFonts'].CGlyphBitmap = CGlyphBitmap;
 })(window);
