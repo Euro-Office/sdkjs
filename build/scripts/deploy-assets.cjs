@@ -26,7 +26,7 @@ const SRC_ROOT  = path.resolve(BUILD_DIR, '..');
 
 const BUILD_ROOT = resolveBuildRoot(BUILD_DIR);
 
-const licenseText = buildLicenseHeader(BUILD_DIR, { stripSentinel: true });
+const licenseText = buildLicenseHeader(BUILD_DIR);
 
 // JS files skipped from individual minification (same as ignoreFiles in Gruntfile.js)
 const IGNORE_NAMES = new Set([

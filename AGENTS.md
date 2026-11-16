@@ -36,12 +36,12 @@ bundles (`sdk-all.js` / `sdk-all-min.js`) that the sibling **web-apps** repo loa
 
 For Docker dev environment setup (running the full server stack), see [/DocumentServer/AGENTS.md](../DocumentServer/AGENTS.md).
 
-Requires **Node.js** only — the build now runs on Webpack + Terser (no Java, no Google
+Requires **Node.js** only — the build now runs on Webpack + esbuild (no Java, no Google
 Closure Compiler). There is **no root `package.json`**; all build deps live in `build/`.
 See `build/DEVELOPER-GUIDE.md` for the full workflow (watch mode, source maps, cache).
 
 ```bash
-# Full SDK build (release; all 4 modules in parallel, ~50s cold / ~2-3s warm). Run from build/.
+# Full SDK build (release; all 4 modules in parallel, ~20s cold / ~2-3s warm). Run from build/.
 cd build && npm ci && npm run build
 # Outputs: ../deploy/sdkjs/{word,cell,slide,visio}/sdk-all-min.js + sdk-all.js
 ```
@@ -61,11 +61,13 @@ Config is via **environment variables**, not CLI flags: `SDK_PLATFORM=desktop` o
 (desktop/mobile-only files), `SDK_SOURCE_MAPS=1` (source maps on a production build),
 `SDK_ADDONS=../../sdkjs-forms` (`path.delimiter`-separated list; merges external addon repos'
 `configs/`), `NODE_ENV=development` (readable, unminified output). There is no `--level`
-CLI flag anymore — minification is always Terser, but `webpack.sdk.factory.mjs` still
-distinguishes desktop/mobile from web: `SDK_PLATFORM=desktop`/`mobile` sets Terser's
-`compress: false` (closer to the old `WHITESPACE_ONLY` tier), while web builds keep
-`compress` on (closer to `ADVANCED`, minus mangling). `mangle: false` is load-bearing on
-every platform (see Gotchas below).
+CLI flag anymore — minification is always esbuild (through terser-webpack-plugin's
+`esbuildMinify`), but `webpack.sdk.factory.mjs` still distinguishes desktop/mobile from web:
+`SDK_PLATFORM=desktop`/`mobile` sets esbuild's `minifySyntax: false` (closer to the old
+`WHITESPACE_ONLY` tier), while web builds keep it on (closer to `ADVANCED`, minus renaming).
+No identifier renaming (`minify: false`, `minifyIdentifiers: false`) is load-bearing on
+every platform (see Gotchas below). esbuild still numbers locals that shadow an outer name
+(`window2`), so don't rely on `Function.name` of nested declarations.
 
 **`make` is NOT the SDK build.** The Makefile's default target also builds the sibling
 `../web-apps` repo and requires it to be checked out next to sdkjs; it is the integration
@@ -210,7 +212,7 @@ Each editor dir has the same set of API files:
   often checks both.
 - External callers must use bracket access (`window['Asc']['asc_docs_api']`); public names are
   still published both ways (`window['Name'].Sym = window.Name.Sym = Sym`) as a defensive
-  convention, but the current webpack build runs Terser with `mangle: false` — property/name
+  convention, but the current webpack build runs esbuild without identifier renaming, so property/name
   mangling is not actually applied. Keep using bracket access anyway; don't rely on this as
   license to switch to dot-access-only code.
 - `make` pulls in `../web-apps`; for SDK-only work use `npm run build` in `build/`.
