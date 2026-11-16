@@ -216,7 +216,7 @@
         XfId: 12,
         Aligment: 13,
         Protection: 14,
-        Checkbox: 15
+        Checkbox: 100
     };
 	var c_oSerProtectionTypes =
     {
