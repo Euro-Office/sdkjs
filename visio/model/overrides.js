@@ -305,8 +305,6 @@ function parseFieldPictureFormat(vsdxFieldValue, vsdxFieldFormat) {
 			res = "0.000";
 		} else if (9 === vFieldPicture) {
 			res = "0.000 u";
-		} else if (9 === vFieldPicture) {
-			res = "0.000 u";
 		} else if (10 === vFieldPicture) {
 			res = "<,FEET/INCH>0.000 u";
 		} else if (11 === vFieldPicture) {

@@ -31596,9 +31596,6 @@
 			case Asc.c_oAscChartTypeSettings.comboCustom: {
 				return "comboCustom";
 			}
-			case Asc.c_oAscChartTypeSettings.comboCustom: {
-				return "comboCustom";
-			}
 		}
 		return "unknown";
 	}

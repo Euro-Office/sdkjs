@@ -6228,6 +6228,7 @@ CStyle.prototype =
     {
         if (true === Reader.GetBool())
             return undefined;
+        // eslint-disable-next-line no-dupe-else-if -- each GetBool() reads the next flag
         else if (true === Reader.GetBool())
             return null;
         else
@@ -6238,6 +6239,7 @@ CStyle.prototype =
     {
         if (true === Reader.GetBool())
             return undefined;
+        // eslint-disable-next-line no-dupe-else-if -- each GetBool() reads the next flag
         else if (true === Reader.GetBool())
             return null;
         else
@@ -6248,6 +6250,7 @@ CStyle.prototype =
     {
         if (true === Reader.GetBool())
             return undefined;
+        // eslint-disable-next-line no-dupe-else-if -- each GetBool() reads the next flag
         else if (true === Reader.GetBool())
             return null;
         else

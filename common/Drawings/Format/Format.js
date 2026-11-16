@@ -170,6 +170,7 @@
 			const oApi = window.editor || Asc.editor;
 			return !!(oApi && oApi.isSkipAddIdToBaseObject);
 		};
+		/* eslint-disable no-debugger -- debug-only helper */
 		//Method for debug
 		CBaseObject.prototype.compareTypes = function (oOther) {
 			if (!oOther || !oOther.compareTypes) {
@@ -208,6 +209,7 @@
 				}
 			}
 		};
+		/* eslint-enable no-debugger */
 
 		function InitClassWithoutType(fClass, fBase) {
 			fClass.prototype = Object.create(fBase.prototype);

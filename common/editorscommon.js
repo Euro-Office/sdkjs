@@ -11291,10 +11291,6 @@
 				nIndex = 64;
 			} else if (unR == 0xFF && unG == 0xFF && unB == 0xFF) {
 				nIndex = 65;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0x00) {
-				nIndex = 0;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0xFF) {
-				nIndex = 1;
 			} else if (unR == 0xFF && unG == 0x00 && unB == 0x00) {
 				nIndex = 2;
 			} else if (unR == 0x00 && unG == 0xFF && unB == 0x00) {
@@ -11307,22 +11303,6 @@
 				nIndex = 6;
 			} else if (unR == 0x00 && unG == 0xFF && unB == 0xFF) {
 				nIndex = 7;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0x00) {
-				nIndex = 8;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0xFF) {
-				nIndex = 9;
-			} else if (unR == 0xFF && unG == 0x00 && unB == 0x00) {
-				nIndex = 10;
-			} else if (unR == 0x00 && unG == 0xFF && unB == 0x00) {
-				nIndex = 11;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0xFF) {
-				nIndex = 12;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0x00) {
-				nIndex = 13;
-			} else if (unR == 0xFF && unG == 0x00 && unB == 0xFF) {
-				nIndex = 14;
-			} else if (unR == 0x00 && unG == 0xFF && unB == 0xFF) {
-				nIndex = 15;
 			} else if (unR == 0x80 && unG == 0x00 && unB == 0x00) {
 				nIndex = 16;
 			} else if (unR == 0x00 && unG == 0x80 && unB == 0x00) {
@@ -11355,26 +11335,8 @@
 				nIndex = 30;
 			} else if (unR == 0xCC && unG == 0xCC && unB == 0xFF) {
 				nIndex = 31;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0x80) {
-				nIndex = 32;
-			} else if (unR == 0xFF && unG == 0x00 && unB == 0xFF) {
-				nIndex = 33;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0x00) {
-				nIndex = 34;
-			} else if (unR == 0x00 && unG == 0xFF && unB == 0xFF) {
-				nIndex = 35;
-			} else if (unR == 0x80 && unG == 0x00 && unB == 0x80) {
-				nIndex = 36;
-			} else if (unR == 0x80 && unG == 0x00 && unB == 0x00) {
-				nIndex = 37;
-			} else if (unR == 0x00 && unG == 0x80 && unB == 0x80) {
-				nIndex = 38;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0xFF) {
-				nIndex = 39;
 			} else if (unR == 0x00 && unG == 0xCC && unB == 0xFF) {
 				nIndex = 40;
-			} else if (unR == 0xCC && unG == 0xFF && unB == 0xFF) {
-				nIndex = 41;
 			} else if (unR == 0xCC && unG == 0xFF && unB == 0xCC) {
 				nIndex = 42;
 			} else if (unR == 0xFF && unG == 0xFF && unB == 0x99) {
@@ -11413,8 +11375,6 @@
 				nIndex = 59;
 			} else if (unR == 0x99 && unG == 0x33 && unB == 0x00) {
 				nIndex = 60;
-			} else if (unR == 0x99 && unG == 0x33 && unB == 0x66) {
-				nIndex = 61;
 			} else if (unR == 0x33 && unG == 0x33 && unB == 0x99) {
 				nIndex = 62;
 			} else if (unR == 0x33 && unG == 0x33 && unB == 0x33) {
