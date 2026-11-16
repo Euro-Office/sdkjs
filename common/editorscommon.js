@@ -53,13 +53,6 @@
 		scriptDirectory = scriptDirectory.substring(0,scriptDirectory.replace(/[?#].*/,"").lastIndexOf("/") + 1);
 	}
 
-	Number.isInteger = Number.isInteger || function(value) {
-		return typeof value === 'number' && Number.isFinite(value) && !(value % 1);
-	};
-	Number.isFinite = Number.isFinite || function(value) {
-		return typeof value === 'number' && isFinite(value);
-	};
-
 	RegExp.escape = function ( text ) {
 		return text.replace( /[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&" );
 	};
@@ -71,22 +64,6 @@
 	Math.cosh = function ( arg ) {
 		return (this.pow( this.E, arg ) + this.pow( this.E, -arg )) / 2;
 	};
-
-	Math.tanh = Math.tanh || function(x) {
-			if (x === Infinity) {
-				return 1;
-			} else if (x === -Infinity) {
-				return -1;
-			} else {
-				var y = Math.exp(2 * x);
-				if (y === Infinity) {
-					return 1;
-				} else if (y === -Infinity) {
-					return -1;
-				}
-				return (y - 1) / (y + 1);
-			}
-		};
 
 	Math.asinh = function ( arg ) {
 		return this.log( arg + this.sqrt( arg * arg + 1 ) );
@@ -145,14 +122,6 @@
 		return this.log( x ) / this.log( 10 );
 	};
 
-	Math.log1p = Math.log1p || function(x) {
-		return Math.log(1 + x);
-	};
-
-	Math.expm1 = Math.expm1 || function(x) {
-		return Math.exp(x) - 1;
-	};
-
 	Math.binomCoeff = function ( n, k ) {
 		return this.fact( n ) / (this.fact( k ) * this.fact( n - k ));
 	};
@@ -166,17 +135,6 @@
 			return true;
 		}
 		return this.abs( a - b ) < 1e-15;
-	};
-
-	if (typeof Math.sign != 'function') {
-		Math['sign'] = Math.sign = function (n) {
-			return n == 0 ? 0 : n < 0 ? -1 : 1;
-		};
-	}
-
-	Math.trunc = Math.trunc || function(v) {
-		v = +v;
-		return (v - v % 1)   ||   (!isFinite(v) || v === 0 ? v : v < 0 ? -0 : 0);
 	};
 
 	if (typeof require === 'function' && !window['XRegExp'])
@@ -14071,15 +14029,6 @@
 		return null;
 	};
 
-	//------------------------------------------------------------fill polyfill--------------------------------------------
-	if (!Object.values) {
-		Object.values = function (obj) {
-			return Object.keys(obj).map(function (e) {
-				return obj[e];
-			});
-		}
-	}
-	
 	/**
 	 * @param {string} text
 	 * @param {Asc.asc_CTextOptions} options
