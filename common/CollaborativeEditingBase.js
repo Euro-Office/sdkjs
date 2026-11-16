@@ -200,6 +200,7 @@
         // this.m_nErrorLog_SumIndex          = 0;
 
         this.m_bFast  = false;
+        this.m_nFastSyncNextTime = 0; // Fast mode: no sync of changes before this time
 
         this.m_oLogicDocument     = null;
 		this.m_nTrackingPositions = 1; // По-умолчанию мы отслеживаем позиции
@@ -535,6 +536,17 @@
     CCollaborativeEditingBase.prototype.getOwnLocksLength = function()
     {
         return this.m_aNeedUnlock2.length;
+    };
+    CCollaborativeEditingBase.prototype.IsFastSyncPaused = function()
+    {
+        return (new Date().getTime() < this.m_nFastSyncNextTime);
+    };
+    CCollaborativeEditingBase.prototype.OnFastSync = function(nStartTime)
+    {
+        // Wait three times as long as this sync took, at most 5 s: syncing then takes at most
+        // a quarter of the time, also when many users edit at once.
+        var nTime = new Date().getTime();
+        this.m_nFastSyncNextTime = nTime + Math.min(3 * (nTime - nStartTime), 5000);
     };
     CCollaborativeEditingBase.prototype.Send_Changes = function()
     {

@@ -2586,6 +2586,10 @@ CPresentation.prototype.Continue_FastCollaborativeEditing = function () {
 		}
 	}
 
+	if (AscCommon.CollaborativeEditing.IsFastSyncPaused())
+		return;
+
+	var nSyncStart = new Date().getTime();
 	var bHaveChanges = History.Have_Changes(true);
 	if (true !== bHaveChanges && (true === AscCommon.CollaborativeEditing.Have_OtherChanges() || 0 !== AscCommon.CollaborativeEditing.getOwnLocksLength())) {
 		// Принимаем чужие изменение. Своих нет, но функцию отсылки надо вызвать, чтобы снялить локи.
@@ -2594,6 +2598,7 @@ CPresentation.prototype.Continue_FastCollaborativeEditing = function () {
 	} else if (true === bHaveChanges || true === AscCommon.CollaborativeEditing.Have_OtherChanges()) {
 		this.Api.asc_Save(true);
 	}
+	AscCommon.CollaborativeEditing.OnFastSync(nSyncStart);
 
 	var CurTime = new Date().getTime();
 	if (this.CheckNeedUpdateTargetForCollaboration() && (CurTime - this.LastUpdateTargetTime > 1000)) {
