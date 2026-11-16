@@ -2,6 +2,7 @@
 
 - jQuery 1.7.1 in `common/Native/jquery_native.js`, server-side doctrenderer only ([MIT](https://raw.githubusercontent.com/jquery/jquery/main/LICENSE.txt))
 - XRegExp ([MIT](https://raw.githubusercontent.com/slevithan/xregexp/master/LICENSE))
+- paper.js 0.12.17, boolean path operations adapted in `common/Drawings/Format/path-boolean.js` ([MIT](https://github.com/paperjs/paper.js/blob/develop/LICENSE.txt))
 
 Vendored copies in `vendor/`, built into the editors. Not tracked by Renovate, update by hand:
 
