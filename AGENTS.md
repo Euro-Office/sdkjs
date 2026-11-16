@@ -118,7 +118,7 @@ not silently dropped.
 
 Test dependencies are pinned in `tests/package.json` + `tests/npm-shrinkwrap.json`, kept out of
 `build/` so production `npm ci` there does not download Chromium. Test pages load QUnit and
-jQuery from `tests/node_modules` and XRegExp from `vendor/`, never from a CDN
+jQuery from `tests/node_modules`, never from a CDN
 (`build/test/test-pages-offline.test.cjs` enforces this). New pages: copy those relative
 `<script>`/`<link>` paths from a sibling page.
 
