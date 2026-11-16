@@ -14824,7 +14824,6 @@ CT_WorksheetSource.prototype.getDataLocation = function() {
 				case AscCommonExcel.cElementType.cellsRange3D:
 					var ws = val.getWS() !== AscCommonExcel.g_DefNameWorksheet ? val.getWS() : null;
 					return new PivotDataLocation(ws, val.getBBox0(), headings);
-					break;
 			}
 		}
 	}

@@ -888,13 +888,10 @@ function (window, undefined) {
 		switch (nType) {
 			case this.Properties.Row:
 				return this.nRow;
-				break;
 			case this.Properties.Col:
 				return this.nCol;
-				break;
 			case this.Properties.NewVal:
 				return this.oNewVal;
-				break;
 		}
 		return null;
 	};
@@ -937,10 +934,8 @@ function (window, undefined) {
 		switch (nType) {
 			case this.Properties.value:
 				return this.value;
-				break;
 			case this.Properties.style:
 				return this.style;
-				break;
 		}
 		return null;
 	};
@@ -1066,13 +1061,10 @@ function (window, undefined) {
 		switch (nType) {
 			case this.Properties.from:
 				return this.from;
-				break;
 			case this.Properties.to:
 				return this.to;
-				break;
 			case this.Properties.bRow:
 				return this.bRow;
-				break;
 		}
 		return null;
 	};
@@ -1964,25 +1956,18 @@ function (window, undefined) {
 		switch (nType) {
 			case this.Properties.name:
 				return this.name;
-				break;
 			case this.Properties.sheetidfrom:
 				return this.sheetidfrom;
-				break;
 			case this.Properties.sheetid:
 				return this.sheetid;
-				break;
 			case this.Properties.tableNames:
 				return this.tableNames;
-				break;
 			case this.Properties.insertBefore:
 				return this.insertBefore;
-				break;
 			case this.Properties.opt_sheet:
 				return this.opt_sheet;
-				break;
 			case this.Properties.opt_sheetidToAdd:
 				return this.opt_sheetidToAdd;
-				break;
 		}
 		return null;
 	};

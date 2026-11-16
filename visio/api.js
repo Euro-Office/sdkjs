@@ -700,12 +700,6 @@
 	VisioEditorApi.prototype.isDocumentModified = function()
 	{
 		return false;
-		if (!this.canSave)
-		{
-			// Пока идет сохранение, мы не закрываем документ
-			return true;
-		}
-		return this.isDocumentModify;
 	};
 	VisioEditorApi.prototype.SetDrawingFreeze = function(bIsFreeze)
 	{

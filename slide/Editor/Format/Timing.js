@@ -10775,157 +10775,119 @@
             switch (nFilterType) {
                 case FILTER_TYPE_BLINDS_HORIZONTAL: {
                     return this.createBlindsHorizontal(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_BLINDS_VERTICAL: {
                     return this.createBlindsVertical(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_BOX_IN: {
                     return this.createBoxIn(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_BOX_OUT: {
                     return this.createBoxOut(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_CHECKERBOARD_ACROSS: {
                     return this.createCheckerBoardAcross(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_CHECKERBOARD_DOWN: {
                     return this.createCheckerBoardDown(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_CIRCLE:
                 case FILTER_TYPE_CIRCLE_IN: {
                     return this.createCircleIn(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_CIRCLE_OUT: {
                     return this.createCircleOut(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_DIAMOND:
                 case FILTER_TYPE_DIAMOND_IN: {
                     return this.createDiamondIn(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_DIAMOND_OUT: {
                     return this.createDiamondOut(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_DISSOLVE: {
                     return this.createDissolve(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_FADE: {
                     return this.createFade(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_SLIDE_FROM_TOP: {
                     return this.createSlideFromTop(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_SLIDE_FROM_BOTTOM: {
                     return this.createSlideFromBottom(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_SLIDE_FROM_LEFT: {
                     return this.createSlideFromLeft(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_SLIDE_FROM_RIGHT: {
                     return this.createSlideFromRight(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_PLUS_IN: {
                     return this.createPlusIn(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_PLUS_OUT: {
                     return this.createPlusOut(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_BARN_IN_VERTICAL: {
                     return this.createBarnInVertical(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_BARN_IN_HORIZONTAL: {
                     return this.createBarnInHorizontal(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_BARN_OUT_VERTICAL: {
                     return this.createBarnOutVertical(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_BARN_OUT_HORIZONTAL: {
                     return this.createBarnOutHorizontal(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_RANDOM_BARS_HORIZONTAL: {
                     return this.createRandomBarsHorizontal(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_RANDOM_BARS_VERTICAL: {
                     return this.createRandomBarsVertical(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_STRIPS_DOWN_LEFT: {
                     return this.createStripsDownLeft(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_STRIPS_UP_LEFT: {
                     return this.createStripsUpLeft(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_STRIPS_DOWN_RIGHT: {
                     return this.createStripsDownRight(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_STRIPS_UP_RIGHT: {
                     return this.createStripsUpRight(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_SLIDE_WEDGE: {
                     return this.createWedge(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WHEEL_1: {
                     return this.createWheel1(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WHEEL_2: {
                     return this.createWheel2(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WHEEL_3: {
                     return this.createWheel3(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WHEEL_4: {
                     return this.createWheel4(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WHEEL_8: {
                     return this.createWheel8(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WIPE_RIGHT: {
                     return this.createWipeRight(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WIPE_LEFT: {
                     return this.createWipeLeft(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WIPE_DOWN: {
                     return this.createWipeDown(dTime, nTransition);
-                    break;
                 }
                 case FILTER_TYPE_WIPE_UP: {
                     return this.createWipeUp(dTime, nTransition);
-                    break;
                 }
             }
         }

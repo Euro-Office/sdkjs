@@ -179,7 +179,7 @@ RgbColor.prototype =
 	{
 		switch(nType)
 		{
-		case this.Properties.rgb:return this.rgb;break;
+		case this.Properties.rgb:return this.rgb;
 		}
 	},
 	setProperty : function(nType, value)
@@ -257,9 +257,9 @@ ThemeColor.prototype =
 	{
 		switch(nType)
 		{
-		case this.Properties.rgb:return this.rgb;break;
-		case this.Properties.theme:return this.theme;break;
-		case this.Properties.tint:return this.tint;break;
+		case this.Properties.rgb:return this.rgb;
+		case this.Properties.theme:return this.theme;
+		case this.Properties.tint:return this.tint;
 		}
 	},
 	setProperty : function(nType, value)
@@ -3346,10 +3346,8 @@ var g_oFontProperties = {
 		switch (nType) {
 			case this.Properties.position:
 				return this.position;
-				break;
 			case this.Properties.color:
 				return this.color;
-				break;
 		}
 	};
 	GradientStop.prototype.setProperty = function (nType, value) {
@@ -3951,10 +3949,8 @@ var g_oFontProperties = {
 		switch (nType) {
 			case this.Properties.s:
 				return this.s;
-				break;
 			case this.Properties.c:
 				return this.c;
-				break;
 		}
 	};
 	BorderProp.prototype.setProperty = function (nType, value) {
@@ -4230,31 +4226,22 @@ var g_oFontProperties = {
 		switch (nType) {
 			case this.Properties.l:
 				return this.l;
-				break;
 			case this.Properties.t:
 				return this.t;
-				break;
 			case this.Properties.r:
 				return this.r;
-				break;
 			case this.Properties.b:
 				return this.b;
-				break;
 			case this.Properties.d:
 				return this.d;
-				break;
 			case this.Properties.ih:
 				return this.ih;
-				break;
 			case this.Properties.iv:
 				return this.iv;
-				break;
 			case this.Properties.dd:
 				return this.dd;
-				break;
 			case this.Properties.du:
 				return this.du;
-				break;
 		}
 	};
 	Border.prototype.setProperty = function (nType, value) {
@@ -4462,10 +4449,8 @@ var g_oFontProperties = {
 		switch (nType) {
 			case this.Properties.f:
 				return this.f;
-				break;
 			case this.Properties.id:
 				return this.id;
-				break;
 		}
 	};
 	Num.prototype.setProperty = function (nType, value) {
@@ -5237,25 +5222,18 @@ var g_oFontProperties = {
 		switch (nType) {
 			case this.Properties.Horizontal:
 				return this.hor;
-				break;
 			case this.Properties.Indent:
 				return this.indent;
-				break;
 			case this.Properties.RelativeIndent:
 				return this.RelativeIndent;
-				break;
 			case this.Properties.ShrinkToFit:
 				return this.shrink;
-				break;
 			case this.Properties.TextRotation:
 				return this.angle;
-				break;
 			case this.Properties.Vertical:
 				return this.ver;
-				break;
 			case this.Properties.WrapText:
 				return this.wrap;
-				break;
 		}
 	};
 	Align.prototype.setProperty = function (nType, value) {
@@ -7384,8 +7362,8 @@ CMultiTextElem.prototype =
 	{
 		switch(nType)
 		{
-			case this.Properties.text: return this.text;break;
-			case this.Properties.format: return this.format;break;
+			case this.Properties.text: return this.text;
+			case this.Properties.format: return this.format;
 		}
 	},
 	setProperty : function(nType, value)
@@ -7470,10 +7448,10 @@ CCellValue.prototype =
 	{
 		switch(nType)
 		{
-			case this.Properties.text: return this.text;break;
-			case this.Properties.multiText: return this.multiText;break;
-			case this.Properties.number: return this.number;break;
-			case this.Properties.type: return this.type;break;
+			case this.Properties.text: return this.text;
+			case this.Properties.multiText: return this.multiText;
+			case this.Properties.number: return this.number;
+			case this.Properties.type: return this.type;
 		}
 	},
 	setProperty : function(nType, value)
@@ -11092,8 +11070,8 @@ function RangeDataManagerElem(bbox, data)
 	};
 	CustomFilters.prototype.getProperty = function(nType) {
 		switch (nType) {
-			case this.Properties.And: return this.And; break;
-			case this.Properties.CustomFilters: return this.CustomFilters; break;
+			case this.Properties.And: return this.And;
+			case this.Properties.CustomFilters: return this.CustomFilters;
 		}
 		return null;
 	};
@@ -11258,8 +11236,8 @@ function RangeDataManagerElem(bbox, data)
 	};
 	CustomFilter.prototype.getProperty = function(nType) {
 		switch (nType) {
-			case this.Properties.Operator: return this.Operator; break;
-			case this.Properties.Val: return this.Val; break;
+			case this.Properties.Operator: return this.Operator;
+			case this.Properties.Val: return this.Val;
 		}
 		return null;
 	};
@@ -12103,8 +12081,8 @@ function RangeDataManagerElem(bbox, data)
 	};
 	ColorFilter.prototype.getProperty = function(nType) {
 		switch (nType) {
-			case this.Properties.CellColor: return this.CellColor; break;
-			case this.Properties.dxf: return this.dxf; break;
+			case this.Properties.CellColor: return this.CellColor;
+			case this.Properties.dxf: return this.dxf;
 		}
 		return null;
 	};
@@ -12334,10 +12312,10 @@ function RangeDataManagerElem(bbox, data)
 	};
 	Top10.prototype.getProperty = function(nType) {
 		switch (nType) {
-			case this.Properties.FilterVal: return this.FilterVal; break;
-			case this.Properties.Percent: return this.Percent; break;
-			case this.Properties.Top: return this.Top; break;
-			case this.Properties.Val: return this.Val; break;
+			case this.Properties.FilterVal: return this.FilterVal;
+			case this.Properties.Percent: return this.Percent;
+			case this.Properties.Top: return this.Top;
+			case this.Properties.Val: return this.Val;
 		}
 		return null;
 	};
