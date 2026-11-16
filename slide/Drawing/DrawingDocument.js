@@ -4187,6 +4187,7 @@ function CThumbnailsManager(editorPage)
 	this.m_dScrollY_max = 0;
 
 	this.m_bIsUpdate = false;
+	this.m_nLastUpdateTime = 0;
 
 	//regular mode
 	this.thumbnails = new CSlidesThumbnails();
@@ -5450,6 +5451,13 @@ function CThumbnailsManager(editorPage)
 
 		if (!this.m_bIsUpdate)
 			return;
+
+		// While others edit, every change asks for a thumbnail redraw. Redraw at most every 2 s then;
+		// a skipped redraw stays pending in m_bIsUpdate and runs on a later call.
+		var nNow = new Date().getTime();
+		if (!AscCommon.CollaborativeEditing.Is_SingleUser() && nNow - this.m_nLastUpdateTime < 2000)
+			return;
+		this.m_nLastUpdateTime = nNow;
 
 		for (var i = this.m_lDrawingFirst; i <= this.m_lDrawingEnd; i++)
 		{
