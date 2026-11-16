@@ -31,12 +31,16 @@
 	NON_LETTER_SYMBOLS[0x00A0] = 1;
 	NON_LETTER_SYMBOLS[0x00AE] = 1;
 	
+	// Emoji, skin tone modifiers, flag halves, flag tags, variation selectors and the keycap mark are
+	// never spelled. ZWJ stays a letter: Indic words use it
+	const EMOJI = /^[\p{Extended_Pictographic}\p{Emoji_Modifier}\p{Regional_Indicator}\u{E0020}-\u{E007F}\u{FE0E}\u{FE0F}\u{20E3}]$/u;
+	
 	function isNonLetter(code)
 	{
 		if (0x2070 <= code && code <= 0x209F)
 			return true;
 		
-		return !!NON_LETTER_SYMBOLS[code];
+		return !!NON_LETTER_SYMBOLS[code] || (code >= 0x00A9 && EMOJI.test(String.fromCodePoint(code)));
 	}
 	
 
