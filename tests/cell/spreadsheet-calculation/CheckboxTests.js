@@ -274,6 +274,26 @@ $(function () {
 		}
 	});
 
+	QUnit.test("protected range errors reach internal asc_onError listeners", function (assert) {
+		var errors = [];
+		var isUserProtectedRangesIntersection = ws.isUserProtectedRangesIntersection;
+		ws.isUserProtectedRangesIntersection = function () {
+			return true;
+		};
+		api.attachEvent("asc_onError", function (id) {
+			errors.push(id);
+		}, "checkboxTests");
+		try {
+			api.asc_replaceText({isReplaceAll: true, scanOnOnlySheet: Asc.c_oAscSearchBy.Sheet});
+			api.asc_setProtectedSheet(null);
+		} finally {
+			api.detachEvent("asc_onError", "checkboxTests");
+			ws.isUserProtectedRangesIntersection = isUserProtectedRangesIntersection;
+		}
+		var id = Asc.c_oAscError.ID.ProtectedRangeByOtherUser;
+		assert.deepEqual(errors, [id, id], "replace all and set protected sheet");
+	});
+
 	QUnit.test("cell info reports the flag on non-boolean cells and remove resets it to default", function (assert) {
 		reset();
 		cell("A2").setValue("x");
