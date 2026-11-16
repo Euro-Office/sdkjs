@@ -28,7 +28,7 @@ bundles (`sdk-all.js` / `sdk-all-min.js`) that the sibling **web-apps** repo loa
 | `visio/`    | Diagram editor with its own VSDX serialization (`model/`). |
 | `build/`    | Webpack build: `webpack.*.mjs`, `scripts/`, `lib/` (shared env/config helpers), `loaders/` (`sdk-concat.cjs`), `test/` (build-tooling unit/integration tests), `package.json`, `license.header`. Run npm from **here**. See `build/DEVELOPER-GUIDE.md` for the full workflow. |
 | `configs/`  | `<editor>.json` file-lists that drive the build (load order); `externs.json` for Closure. |
-| `tests/`    | QUnit suites per editor + `code-style/check.py` (the lint gate). |
+| `tests/`    | QUnit suites per editor + `code-style/check.py` (header/line-ending gate). |
 | `vendor/`   | Third-party libs (jQuery, XRegExp, etc.). Excluded from lint/build minification. |
 | `tools/`    | One-off Python maintenance scripts (color schemes, SVG cursors). |
 
@@ -125,8 +125,16 @@ Heaviest coverage is in `tests/cell/spreadsheet-calculation/` (formula engine) a
 
 ## Code style — the build-breakers
 
-The **only** enforced lint gate is `python tests/code-style/check.py` (run from repo root).
-ESLint config (`.eslintrc.yaml`) exists but is **not** wired into CI. `check.py` checks every
+Two lint gates run in CI. **ESLint** (`eslint.config.mjs`, `npm run lint` in `build/`) runs
+correctness rules (`no-unreachable`, `no-dupe-else-if`, `no-duplicate-case`, ...) plus a ratchet
+on `complexity` (20), `max-lines-per-function` (300) and `max-lines` (10000). It fails only on new
+problems: existing errors are in `eslint-suppressions.json` (ESLint bulk suppressions), existing
+metric values per function/file in `eslint-metrics-baseline.json`. A function that gets more
+complex than its baseline fails too (line counts get 10% slack). After fixing something, or
+when a renamed function shows up as new, run `npm run lint:update` and commit both files.
+Growing them for a new problem needs a reason in the PR.
+
+**`check.py`** is `python tests/code-style/check.py` (run from repo root). It checks every
 `.js`/`.cjs`/`.mjs` file (outside `vendor/`, `externs/`, `node_modules/`, `.webpack-cache/`) —
 the `.cjs`/`.mjs` extensions cover the build-tooling scripts added by the webpack migration
 (`build/scripts`, `build/lib`, `build/loaders`). `check.py` fails the build if such a file does
