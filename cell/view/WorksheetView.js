@@ -3133,11 +3133,15 @@ function isAllowPasteLink(pastedWb) {
     };
 
     // ----- Drawing for print -----
-    WorksheetView.prototype._calcPagesPrint = function(range, pageOptions, indexWorksheet, arrPages, printScale, adjustPrint, bPrintArea, opt_prepareTextMetrics) {
+    WorksheetView.prototype._calcPagesPrint = function(range, pageOptions, indexWorksheet, arrPages, printScale, adjustPrint, bPrintArea, opt_prepareTextMetrics, skipEmptyPages) {
         if (0 > range.r2 || 0 > range.c2) {
 			// Ничего нет
             return;
         }
+		if (skipEmptyPages) {
+			// Text extents measured for the empty page check hold for this layout pass only
+			skipEmptyPages.textEnds = null;
+		}
 
 		if (window["NATIVE_EDITOR_ENJINE"]) {
 			if (!this.rows.length) {
@@ -3390,6 +3394,9 @@ function isAllowPasteLink(pastedWb) {
 			if(isOnlyFirstPage && nCountPages > 0) {
 				break;
 			}
+			if (skipEmptyPages && skipEmptyPages.limitReached) {
+				break;
+			}
 
 			let newPagePrint = new asc_CPagePrint();
 
@@ -3567,8 +3574,9 @@ function isAllowPasteLink(pastedWb) {
 				newPagePrint.scale = scale;
 			}
 			recalculatePageMargins(newPagePrint);
-			arrPages.push(newPagePrint);
-			nCountPages++;
+			if (this._addPrintPage(arrPages, newPagePrint, skipEmptyPages)) {
+				nCountPages++;
+			}
 
 			if (bIsAddOffset) {
 				// Мы еще не дорисовали колонку
@@ -3605,6 +3613,174 @@ function isAllowPasteLink(pastedWb) {
 			}
 		}
     };
+
+	// Spreadsheets from OpenDocument files are printed the way LibreOffice Calc prints them: a page
+	// without content is left out (ScDocument::IsPrintEmpty). Excel prints such pages, so the print path
+	// passes skipEmptyPages (see WorkbookView.getSkipEmptyPrintPages) only for workbooks converted from
+	// ODS; page break preview and the page lines always get every page, as in LibreOffice.
+	// Left out pages do not count toward c_kMaxPrintPages; at most c_kMaxPrintPages of them are checked.
+	// Returns true when the page was added.
+	WorksheetView.prototype._addPrintPage = function (arrPages, page, skipEmptyPages) {
+		if (skipEmptyPages && this._isPrintPageEmpty(page.pageRange, skipEmptyPages)) {
+			if (!skipEmptyPages.firstEmptyPage) {
+				skipEmptyPages.firstEmptyPage = page;
+			}
+			if (++skipEmptyPages.skippedCount >= AscCommonExcel.c_kMaxPrintPages) {
+				skipEmptyPages.limitReached = true;
+			}
+			return false;
+		}
+		arrPages.push(page);
+		return true;
+	};
+
+	// A page is empty when its range has no cell with a value or formula (also one with an empty
+	// result), no comment, no sparkline, no border, no drawing object and no text running in from a cell
+	// on its left.
+	// A fill alone does not count, as in LibreOffice.
+	// opt_skipEmptyPages keeps the measured text extents, so that a cell is measured once per layout pass and
+	// not again for every page to its right.
+	WorksheetView.prototype._isPrintPageEmpty = function (range, opt_skipEmptyPages) {
+		let t = this;
+		let ws = this.model;
+		// Only left, right, top and bottom lines count (LibreOffice HasAttrFlags::Lines), no diagonals
+		let hasBorder = function (style) {
+			let border = style && style.border;
+			return !!(border && ((border.l && !border.l.isEmpty()) || (border.r && !border.r.isEmpty()) ||
+				(border.t && !border.t.isEmpty()) || (border.b && !border.b.isEmpty())));
+		};
+
+		let hasContent = ws.getRange3(range.r1, range.c1, range.r2, range.c2)._foreachNoEmpty(function (cell) {
+			if (!cell.isNullText() || hasBorder(cell.getStyle())) {
+				return true;
+			}
+		});
+		if (hasContent) {
+			return false;
+		}
+
+		let c, r, rowHasBorder = false;
+		for (c = range.c1; c <= range.c2; ++c) {
+			let col = ws._getColNoEmpty(c);
+			if (col && hasBorder(col.getStyle())) {
+				return false;
+			}
+		}
+		for (r = range.r1; r <= range.r2 && !rowHasBorder; ++r) {
+			ws._getRowNoEmpty(r, function (row) {
+				rowHasBorder = !!(row && hasBorder(row.getStyle()));
+			});
+		}
+		if (rowHasBorder) {
+			return false;
+		}
+
+		// A merged cell whose value sits outside the page (LibreOffice only looks at merges that start left
+		// of the page and counts them even without a value)
+		let merged = ws.getMergedByRange(range);
+		if (merged && merged.all) {
+			let mergedValue = false;
+			for (let i = 0; i < merged.all.length && !mergedValue; ++i) {
+				let bbox = merged.all[i].bbox;
+				if (bbox) {
+					ws._getCellNoEmpty(bbox.r1, bbox.c1, function (cell) {
+						mergedValue = !!(cell && !cell.isNullText());
+					});
+				}
+			}
+			if (mergedValue) {
+				return false;
+			}
+		}
+
+		let comments = ws.aComments;
+		if (comments) {
+			for (let i = 0; i < comments.length; ++i) {
+				if (null != comments[i].nRow && range.contains(comments[i].nCol, comments[i].nRow)) {
+					return false;
+				}
+			}
+		}
+
+		let sparklineGroups = ws.aSparklineGroups;
+		if (sparklineGroups) {
+			for (let i = 0; i < sparklineGroups.length; ++i) {
+				let sparklines = sparklineGroups[i].arrSparklines;
+				for (let j = 0; sparklines && j < sparklines.length; ++j) {
+					if (sparklines[j].sqRef && range.isIntersect(sparklines[j].sqRef)) {
+						return false;
+					}
+				}
+			}
+		}
+
+		let drawings = ws.Drawings;
+		if (drawings) {
+			for (let i = 0; i < drawings.length; ++i) {
+				let drawing = drawings[i];
+				let from = drawing.from, to = drawing.to;
+				if (drawing.Type !== AscCommon.c_oAscCellAnchorType.cellanchorTwoCell && drawing.boundsFromTo) {
+					from = drawing.boundsFromTo.from;
+					to = drawing.boundsFromTo.to;
+				}
+				if (!from || !to || to.col < from.col || to.row < from.row) {
+					// Unknown extent: keep the page
+					return false;
+				}
+				if (from.col <= range.c2 && to.col >= range.c1 && from.row <= range.r2 && to.row >= range.r1) {
+					return false;
+				}
+			}
+		}
+
+		// Unwrapped text of the last filled cell left of the page may run into it
+		if (range.c1 > 0) {
+			let lastCol = -1, curRow = -1, textFromLeft = false;
+			let textEnds = null;
+			if (opt_skipEmptyPages) {
+				textEnds = opt_skipEmptyPages.textEnds || (opt_skipEmptyPages.textEnds = new Map());
+			}
+			// The last column the unwrapped text of the cell runs into, -1 for none
+			let textEnd = function (col, row) {
+				let key = row * AscCommon.gc_nMaxCol + col;
+				let end = textEnds ? textEnds.get(key) : undefined;
+				if (undefined === end) {
+					let ct = t._addCellTextToCache(col, row, true);
+					end = ct && ct.flags && !ct.flags.isMerged() && !ct.flags.wrapText ? col + ct.sideR : -1;
+					if (textEnds) {
+						textEnds.set(key, end);
+					}
+				}
+				return end;
+			};
+			let checkRow = function () {
+				if (-1 !== lastCol && 0 !== t._getRowHeight(curRow) && textEnd(lastCol, curRow) >= range.c1) {
+					textFromLeft = true;
+				}
+			};
+			ws.getRange3(range.r1, 0, range.r2, range.c1 - 1)._foreachNoEmpty(function (cell) {
+				if (cell.nRow !== curRow) {
+					checkRow();
+					if (textFromLeft) {
+						return true;
+					}
+					curRow = cell.nRow;
+					lastCol = -1;
+				}
+				if (!cell.isEmptyTextString()) {
+					lastCol = cell.nCol;
+				}
+			});
+			if (!textFromLeft) {
+				checkRow();
+			}
+			if (textFromLeft) {
+				return false;
+			}
+		}
+
+		return true;
+	};
 
 	WorksheetView.prototype._checkPrintRange = function (range, doNotRecalc/*, _checkLargeRange*/) {
 		let t = this;
@@ -3782,7 +3958,7 @@ function isAllowPasteLink(pastedWb) {
 		return new AscCommon.CellBase(maxRow, maxCol);
 	};
 
-    WorksheetView.prototype.calcPagesPrint = function (pageOptions, printOnlySelection, indexWorksheet, arrPages, arrRanges, adjustPrint, doNotRecalc) {
+    WorksheetView.prototype.calcPagesPrint = function (pageOptions, printOnlySelection, indexWorksheet, arrPages, arrRanges, adjustPrint, doNotRecalc, skipEmptyPages) {
 		var range, maxCell, t = this;
 		//в опциях может прийти другая область печати. сделано на случай, когда при совместке меняется область в модели
 		var _printArea;
@@ -3875,7 +4051,7 @@ function isAllowPasteLink(pastedWb) {
 					range = new asc_Range(range.c1, range.r1, maxCell.col, maxCell.row);
 				}
 
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint);
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null, null, skipEmptyPages);
 			}
 		} else if(printArea && printAreaRanges) {
 
@@ -3901,7 +4077,7 @@ function isAllowPasteLink(pastedWb) {
 				}
 
 				let _startPages = arrPages.length;
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, true);
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, true, null, skipEmptyPages);
 
 				if(arrRanges) {
 					arrRanges.push({range: range, start: _startPages, end: arrPages.length});
@@ -3919,7 +4095,7 @@ function isAllowPasteLink(pastedWb) {
 					tempPrintScale = checkCustomScaleProps();
 				}
 
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null, true);
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null, true, skipEmptyPages);
 			} else {
 				range = new asc_Range(0, 0, _maxRowCol.col, _maxRowCol.row);
 
@@ -3930,7 +4106,7 @@ function isAllowPasteLink(pastedWb) {
 					tempPrintScale = checkCustomScaleProps();
 				}
 
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint);
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null, null, skipEmptyPages);
 			}
 		}
 

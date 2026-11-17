@@ -3275,6 +3275,9 @@
 		this.showHorizontalScroll = null;
 		this.App = null;
 		this.Core = null;
+		// File type (Asc.c_oAscFileType) of the document the workbook was converted from, when the
+		// converter recorded it; null otherwise.
+		this.sourceFileType = null;
 
 		AscFormat.ExecuteNoHistory(function () {
 			this.CustomProperties = new AscCommon.CCustomProperties();
@@ -5871,6 +5874,11 @@
 		return res;
 	};
 
+	Workbook.prototype.isOpenDocumentSource = function () {
+		let fileType = this.sourceFileType;
+		return fileType === Asc.c_oAscFileType.ODS || fileType === Asc.c_oAscFileType.FODS ||
+			fileType === Asc.c_oAscFileType.OTS;
+	};
 	Workbook.prototype.getPrintOptionsJson = function () {
 		var res = [];
 		for(var i = 0; i < this.aWorksheets.length; ++i) {
