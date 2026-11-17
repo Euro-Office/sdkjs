@@ -6764,6 +6764,35 @@ CDocument.prototype.SetParagraphTabs = function(Tabs)
 	this.UpdateInterface();
 	this.Api.Update_ParaTab(AscCommonWord.Default_Tab_Stop, Tabs);
 };
+/**
+ * Moves the indents of all selected paragraphs by the same distance, so their differences stay (e.g. the levels of a
+ * multilevel list), instead of giving them all the same indent. Used by the ruler when "keep indent differences" is on.
+ * @param {number} dLeft  change of the left indent (mm)
+ * @param {number} dRight change of the right indent (mm)
+ * @param {number} dFirst change of the position of the first line (mm)
+ * @returns {boolean} false when fewer than two paragraphs are selected (then the usual way applies)
+ */
+CDocument.prototype.ShiftParagraphIndents = function(dLeft, dRight, dFirst)
+{
+	let paragraphs = this.GetSelectedParagraphs();
+	if (!paragraphs || paragraphs.length < 2)
+		return false;
+
+	paragraphs.forEach(function(paragraph)
+	{
+		let ind = paragraph.Get_CompiledPr2(false).ParaPr.Ind;
+		paragraph.Set_Ind({
+			Left      : ind.Left + dLeft,
+			Right     : ind.Right + dRight,
+			FirstLine : ind.FirstLine + dFirst - dLeft
+		}, false);
+	});
+
+	this.Recalculate();
+	this.UpdateSelection();
+	this.UpdateInterface();
+	return true;
+};
 CDocument.prototype.SetParagraphIndent = function(Ind)
 {
 	this.Controller.SetParagraphIndent(Ind);

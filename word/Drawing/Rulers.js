@@ -1786,6 +1786,9 @@ function CHorRuler()
         AscCommon.check_MouseDownEvent(e, true);
         global_mouseEvent.LockMouse();
 
+        // the indents as shown when dragging starts: "keep indent differences" moves every paragraph by the change
+        this.m_oIndentAtDragStart = {left : this.m_dIndentLeft, right : this.m_dIndentRight, first : this.m_dIndentLeftFirst};
+
         this.SimpleChanges.Reinit();
 
         var dKoefPxToMM = 100 * g_dKoef_pix_to_mm / word_control.m_nZoomValue;
@@ -2271,6 +2274,18 @@ function CHorRuler()
 			logicDocument.TurnOff_InterfaceEvents();
 		
 		logicDocument.StartAction(AscDFH.historydescription_Document_SetParagraphIndentFromRulers);
+		let start = this.m_oIndentAtDragStart;
+		if (start && this.m_oWordControl.m_oApi.isRulerKeepIndentDifferences && logicDocument.ShiftParagraphIndents
+			&& logicDocument.ShiftParagraphIndents(left - start.left, right - start.right, this.m_dIndentLeftFirst - start.first))
+		{
+			logicDocument.FinalizeAction();
+			if (isTemporary)
+			{
+				AscCommon.History.SetLastPointTemporary();
+				logicDocument.TurnOn_InterfaceEvents();
+			}
+			return;
+		}
 		logicDocument.SetParagraphIndent({
 			Left      : left,
 			Right     : right,
