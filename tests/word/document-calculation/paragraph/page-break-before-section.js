@@ -12,7 +12,9 @@ $(function ()
 	let logicDocument = AscTest.CreateLogicDocument();
 
 	// Three paragraphs: the second one ends the first section, the third one is the first of the final section.
-	function initDocument(withFootnote, pageBreakBefore, sectionType)
+	// The footnote is in the first paragraph. With sectionEndOnNextPage the second paragraph starts a new page, so
+	// the first section ends on a page without footnotes.
+	function initDocument(withFootnote, pageBreakBefore, sectionType, sectionEndOnNextPage)
 	{
 		AscTest.ClearDocument();
 
@@ -34,6 +36,7 @@ $(function ()
 		sectPr.SetPageSize(400, 400);
 		sectPr.SetPageMargins(50, 50, 50, 50);
 		paragraphs[1].SetSectionPr(sectPr);
+		paragraphs[1].Set_PageBreakBefore(true === sectionEndOnNextPage);
 		paragraphs[2].Set_PageBreakBefore(pageBreakBefore);
 
 		if (withFootnote)
@@ -84,6 +87,18 @@ $(function ()
 		assert.strictEqual(p[2].IsEmptyPage(0) && !p[2].IsEmptyPage(1), true, "Its text is on its second page");
 		assert.strictEqual(p[2].GetAbsoluteStartPage(), 0, "The section starts on the first page");
 		assert.strictEqual(logicDocument.GetPagesCount(), 2, "The page break gives the second page");
+	});
+
+	QUnit.test("Continuous section after a page without footnotes, footnote on the page before", function (assert)
+	{
+		let p = initDocument(true, true, Asc.c_oAscSectionBreakType.Continuous, true);
+		assert.strictEqual(logicDocument.Footnotes.IsEmptyPage(0), false, "The first page has a footnote");
+		assert.strictEqual(logicDocument.Footnotes.IsEmptyPage(1), true, "The second page has no footnote");
+		assert.strictEqual(p[1].GetAbsolutePage(p[1].GetPagesCount() - 1), 1, "The first section ends on the second page");
+		assert.strictEqual(p[2].GetPagesCount(), 2, "The paragraph breaks the page");
+		assert.strictEqual(p[2].IsEmptyPage(0) && !p[2].IsEmptyPage(1), true, "Its text is on its second page");
+		assert.strictEqual(p[2].GetAbsoluteStartPage(), 1, "The section starts on the second page");
+		assert.strictEqual(logicDocument.GetPagesCount(), 3, "The page break gives the third page");
 	});
 
 	QUnit.test("Continuous section after a page with footnotes, no page break before", function (assert)
