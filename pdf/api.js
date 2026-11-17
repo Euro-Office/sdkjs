@@ -802,6 +802,16 @@
 			oDoc.RemovePages(aPages);
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
+	// page by page: a wheel step or PgUp/PgDn shows the next page instead of scrolling on
+	PDFEditorApi.prototype.asc_SetPageByPage = function(isOn) {
+		let viewer = this.getDocumentRenderer();
+		if (viewer && viewer.setPageByPage)
+			viewer.setPageByPage(isOn);
+	};
+	PDFEditorApi.prototype.asc_GetPageByPage = function() {
+		let viewer = this.getDocumentRenderer();
+		return !!(viewer && viewer.isPageByPage);
+	};
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();
 		let oDoc = this.getPDFDoc();
@@ -5301,6 +5311,8 @@
 	PDFEditorApi.prototype['asc_EditPage']                 = PDFEditorApi.prototype.asc_EditPage;
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;
 	PDFEditorApi.prototype['asc_RemovePage']			   = PDFEditorApi.prototype.asc_RemovePage;
+	PDFEditorApi.prototype['asc_SetPageByPage']            = PDFEditorApi.prototype.asc_SetPageByPage;
+	PDFEditorApi.prototype['asc_GetPageByPage']            = PDFEditorApi.prototype.asc_GetPageByPage;
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
