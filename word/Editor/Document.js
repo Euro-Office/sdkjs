@@ -14092,6 +14092,86 @@ CDocument.prototype.CanAddComment = function()
 
 	return this.Controller.CanAddComment();
 };
+/**
+ * Returns the comment after (or before) the cursor in document order, wrapping round at the end
+ * @param {boolean} isNext
+ * @returns {?string} the comment id, or null if the document has no visible comments
+ */
+CDocument.prototype.GetNextCommentId = function(isNext)
+{
+	let isUseSolved = this.Comments.IsUseSolved();
+	let arrComments = [];
+	let oAllComments = this.Comments.GetAllComments();
+	for (let sId in oAllComments)
+	{
+		let oComment = oAllComments[sId];
+		if (oComment && oComment.IsQuoted() && oComment.GetDocumentPosition() && (isUseSolved || !oComment.IsSolved()))
+			arrComments.push(oComment);
+	}
+
+	let nCount = arrComments.length;
+	if (!nCount)
+		return null;
+
+	arrComments.sort(function(oComment1, oComment2)
+	{
+		return AscWord.CompareDocumentPositions(oComment1.GetDocumentPosition(), oComment2.GetDocumentPosition()) || (oComment1.GetPosition() - oComment2.GetPosition());
+	});
+
+	let oCursorPos = this.private_GetCommentNavigationPosition();
+
+	// while the cursor stays where the last jump left it, continue from that comment
+	let oLastJump = this.LastCommentJump;
+	if (oLastJump && oCursorPos && 0 === AscWord.CompareDocumentPositions(oLastJump.Pos, oCursorPos))
+	{
+		for (let nIndex = 0; nIndex < nCount; ++nIndex)
+		{
+			if (arrComments[nIndex].GetId() === oLastJump.Id)
+				return arrComments[(nIndex + (isNext ? 1 : nCount - 1)) % nCount].GetId();
+		}
+	}
+
+	if (!oCursorPos)
+		return arrComments[isNext ? 0 : nCount - 1].GetId();
+
+	if (isNext)
+	{
+		for (let nIndex = 0; nIndex < nCount; ++nIndex)
+		{
+			if (AscWord.CompareDocumentPositions(arrComments[nIndex].GetDocumentPosition(), oCursorPos) > 0)
+				return arrComments[nIndex].GetId();
+		}
+		return arrComments[0].GetId();
+	}
+
+	for (let nIndex = nCount - 1; nIndex >= 0; --nIndex)
+	{
+		if (AscWord.CompareDocumentPositions(arrComments[nIndex].GetDocumentPosition(), oCursorPos) < 0)
+			return arrComments[nIndex].GetId();
+	}
+	return arrComments[nCount - 1].GetId();
+};
+/**
+ * Moves the cursor to the next (or previous) comment and makes it the current one
+ * @param {boolean} isNext
+ * @returns {?string} the comment id, or null if the document has no visible comments
+ */
+CDocument.prototype.GoToNextComment = function(isNext)
+{
+	let sId = this.GetNextCommentId(isNext);
+	if (!sId)
+		return null;
+
+	this.SelectComment(sId, true);
+	this.LastCommentJump = {Id : sId, Pos : this.private_GetCommentNavigationPosition()};
+	return sId;
+};
+CDocument.prototype.private_GetCommentNavigationPosition = function()
+{
+	let oParagraph   = this.GetCurrentParagraph();
+	let oTopDocument = oParagraph ? oParagraph.GetTopDocumentContent() : null;
+	return (oTopDocument && oTopDocument.GetContentPosition) ? oTopDocument.GetContentPosition(false) : null;
+};
 CDocument.prototype.SelectComment = function(sId, isScrollToComment)
 {
 	var sOldId = this.Comments.Get_CurrentId();
