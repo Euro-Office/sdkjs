@@ -18443,6 +18443,30 @@ CTable.prototype.Resize = function(nWidth, nHeight)
 	}
 };
 /**
+ * Puts the table between the margins of the place it stands in (page or column): a left-aligned table starts at the
+ * left margin, and the whole table gets the width between the margins, with the columns in the same proportions.
+ * The table must have been recalculated.
+ * @returns {boolean}
+ */
+CTable.prototype.FitToMargins = function()
+{
+	if (this.Pages.length <= 0)
+		return false;
+
+	let nWidth = this.XLimit - this.X;
+	if (nWidth < 1)
+		return false;
+
+	// the width first: Resize works on the grid as it is now; a changed indent would make the grid be squeezed again
+	let oFirst = this.GetPageBounds(0);
+	let oLast  = this.GetPageBounds(this.Pages.length - 1);
+	this.Resize(nWidth, oLast.Bottom - oLast.Top);
+
+	if (AscCommon.align_Left === this.Get_CompiledPr(false).TablePr.Jc && Math.abs(oFirst.Left - this.X) > 0.01)
+		this.Set_TableInd(this.Get_TableInd() + this.X - oFirst.Left);
+	return true;
+};
+/**
  * Изменяем размер тширину и высоту таблицы в документе (создается точка в истории и запускается пересчет)
  * @param nWidth
  * @param nHeight

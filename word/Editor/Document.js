@@ -11994,6 +11994,65 @@ CDocument.prototype.SplitTableCells = function(Cols, Rows)
 	this.UpdateSelection();
 	this.UpdateInterface();
 };
+/**
+ * Can the table at the cursor be split into two tables (like Word's Layout > Split Table)?
+ * Only a table directly in the main text, not a nested table or one in a header, footnote or text box.
+ * @returns {boolean}
+ */
+CDocument.prototype.CanSplitTable = function()
+{
+	let tables = this.GetCurrentTablesStack();
+	return (1 === tables.length && tables[0].GetParent() === this && -1 !== tables[0].GetIndex());
+};
+/**
+ * Splits the table at the cursor above the current row, with an empty paragraph between the two parts.
+ * The same as Ctrl+Shift+Enter in a table; a selection is collapsed to its start first.
+ * In the first row nothing is split, an empty paragraph is added above the table.
+ * @returns {boolean}
+ */
+CDocument.prototype.SplitTable = function()
+{
+	if (!this.CanSplitTable() || this.IsSelectionLocked(AscCommon.changestype_Document_Content_Add, null, false, false))
+		return false;
+
+	this.StartAction(AscDFH.historydescription_Document_AddPageBreak);
+	if (this.IsSelectionUse())
+		this.MoveCursorLeft(false, false);
+	this.AddToParagraph(new AscWord.CRunBreak(AscWord.break_Column));
+	this.Recalculate();
+	this.UpdateSelection();
+	this.UpdateInterface();
+	this.FinalizeAction();
+	return true;
+};
+/**
+ * Can the table at the cursor be fitted to the margins (like Word's AutoFit Window)? The same tables as for splitting,
+ * and only a table in the text flow (not a floating one).
+ * @returns {boolean}
+ */
+CDocument.prototype.CanFitTableToMargins = function()
+{
+	return this.CanSplitTable() && this.GetCurrentTablesStack()[0].IsInline();
+};
+/**
+ * Fits the table at the cursor between the margins: its left edge goes to the left margin and its width to the width
+ * between the margins, the columns keep their proportions. For tables from Word files that stick out of the page.
+ * @returns {boolean}
+ */
+CDocument.prototype.FitTableToMargins = function()
+{
+	if (!this.CanFitTableToMargins() || this.IsSelectionLocked(AscCommon.changestype_Table_Properties, null, true, false))
+		return false;
+
+	let table = this.GetCurrentTablesStack()[0];
+	this.StartAction(AscDFH.historydescription_Document_ResizeTable);
+	let result = table.FitToMargins();
+	this.Recalculate();
+	this.UpdateSelection();
+	this.UpdateInterface();
+	this.FinalizeAction();
+	return result;
+};
 CDocument.prototype.RemoveTableCells = function()
 {
 	this.Controller.RemoveTableCells();

@@ -61,6 +61,8 @@ const allTests = [
 
 	'word/unit-tests/paragraphContentPos.html',
 	'word/unit-tests/deleted-text-recovery.html',
+	'word/fit-table/fit-table.html',
+	'word/split-table/split-table.html',
 	'word/content-control/block-level/cursorAndSelection.html',
 	'word/content-control/inline-level/checkbox.html',
 	'word/content-control/inline-level/cursorAndSelection.html',
