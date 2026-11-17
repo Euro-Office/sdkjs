@@ -11096,6 +11096,82 @@ CDocument.prototype.Select_DrawingObject = function(Id)
 	this.Document_UpdateSelectionState();
 };
 /**
+ * Returns the drawing objects shown on the given page, from the front to the back
+ * @param {number} nPageIndex
+ * @returns {{Drawing: AscCommonWord.ParaDrawing, Layer: string, HdrFtr: boolean}[]}
+ */
+CDocument.prototype.GetPageDrawingObjects = function(nPageIndex)
+{
+	let oPage = this.DrawingObjects.graphicPages[nPageIndex];
+	if (!oPage)
+		return [];
+
+	let arrResult = [];
+	let oUsed     = new Set();
+
+	function add(arrObjects, sLayer, isHdrFtr)
+	{
+		if (!arrObjects)
+			return;
+
+		// the arrays are in drawing order, so the last object is in front
+		for (let nIndex = arrObjects.length - 1; nIndex >= 0; --nIndex)
+		{
+			let oDrawing = arrObjects[nIndex] ? arrObjects[nIndex].parent : null;
+			if (!(oDrawing instanceof AscCommonWord.ParaDrawing) || oUsed.has(oDrawing) || !oDrawing.IsUseInDocument())
+				continue;
+
+			oUsed.add(oDrawing);
+			arrResult.push({Drawing : oDrawing, Layer : sLayer, HdrFtr : isHdrFtr});
+		}
+	}
+
+	// headers and footers are drawn before the main text and its objects
+	let oHdrFtrPage = oPage.hdrFtrPage;
+	add(oPage.beforeTextObjects, "front", false);
+	add(oPage.inlineObjects, "inline", false);
+	add(oPage.behindDocObjects, "behind", false);
+	if (oHdrFtrPage)
+	{
+		add(oHdrFtrPage.beforeTextObjects, "front", true);
+		add(oHdrFtrPage.inlineObjects, "inline", true);
+		add(oHdrFtrPage.behindDocObjects, "behind", true);
+	}
+
+	return arrResult;
+};
+/**
+ * Selects the drawing object as an object and scrolls the view to it
+ * @param {string} sId - id of a ParaDrawing
+ * @param {number} [nPageIndex] - the page to show, needed for objects in a header or footer
+ * @returns {boolean}
+ */
+CDocument.prototype.SelectDrawingObjectById = function(sId, nPageIndex)
+{
+	let oDrawing = AscCommon.g_oTableId.GetById(sId);
+	if (!(oDrawing instanceof AscCommonWord.ParaDrawing) || !oDrawing.IsUseInDocument() || !oDrawing.GraphicObj)
+		return false;
+
+	let oDocContent = oDrawing.GetDocumentContent();
+	let oHdrFtr     = oDocContent ? oDocContent.IsHdrFtr(true) : null;
+	if (undefined === nPageIndex || null === nPageIndex)
+		nPageIndex = oDrawing.PageNum;
+
+	this.RemoveSelection();
+	if (oHdrFtr)
+	{
+		oHdrFtr.Set_CurrentElement(false, nPageIndex);
+		oHdrFtr.Set_Page(nPageIndex);
+	}
+	this.Select_DrawingObject(sId);
+
+	let oGraphic = oDrawing.GraphicObj;
+	if (oGraphic.transform && this.DrawingDocument && this.DrawingDocument.m_oWordControl)
+		this.DrawingDocument.m_oWordControl.ScrollToPosition(oGraphic.transform.tx, oGraphic.transform.ty, nPageIndex, oGraphic.extY);
+
+	return true;
+};
+/**
  * Получем ближайшую возможную позицию курсора.
  * @param PageNum
  * @param X

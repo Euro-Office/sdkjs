@@ -7833,6 +7833,60 @@ background-repeat: no-repeat;\
 	{
 		this.WordControl.GoToPage(number);
 	};
+	/**
+	 * Returns the drawing objects on the page, from the front to the back
+	 * @param {number} [nPageIndex] - the current page by default
+	 * @returns {{Id: string, Name: string, Type: string, Layer: string, HdrFtr: boolean, Selected: boolean}[]}
+	 */
+	asc_docs_api.prototype.asc_GetPageDrawingObjects = function(nPageIndex)
+	{
+		let oLogicDocument = this.private_GetLogicDocument();
+		if (!oLogicDocument)
+			return [];
+
+		if (undefined === nPageIndex || null === nPageIndex)
+			nPageIndex = this.WordControl.m_oDrawingDocument.m_lCurrentPage;
+
+		return oLogicDocument.GetPageDrawingObjects(nPageIndex).map(function(oItem)
+		{
+			let oDrawing = oItem.Drawing;
+			let oGraphic = oDrawing.GraphicObj;
+			let sType    = "shape";
+			switch (oGraphic ? oGraphic.getObjectType() : -1)
+			{
+				case AscDFH.historyitem_type_ImageShape: sType = "image"; break;
+				case AscDFH.historyitem_type_ChartSpace: sType = "chart"; break;
+				case AscDFH.historyitem_type_GroupShape:
+				case AscDFH.historyitem_type_LockedCanvas: sType = "group"; break;
+				case AscDFH.historyitem_type_SmartArt: sType = "smartart"; break;
+				case AscDFH.historyitem_type_OleObject: sType = "ole"; break;
+				case AscDFH.historyitem_type_Shape: sType = oGraphic.textBoxContent ? "textbox" : "shape"; break;
+			}
+
+			return {
+				"Id"       : oDrawing.GetId(),
+				"Name"     : oDrawing.docPr && oDrawing.docPr.name ? oDrawing.docPr.name : "",
+				"Type"     : sType,
+				"Layer"    : oItem.Layer,
+				"HdrFtr"   : oItem.HdrFtr,
+				"Selected" : !!(oGraphic && oGraphic.selected)
+			};
+		});
+	};
+	/**
+	 * Selects a drawing object listed by asc_GetPageDrawingObjects and scrolls to it
+	 * @param {string} sId
+	 * @param {number} [nPageIndex]
+	 * @returns {boolean}
+	 */
+	asc_docs_api.prototype.asc_SelectDrawingObjectById = function(sId, nPageIndex)
+	{
+		let oLogicDocument = this.private_GetLogicDocument();
+		if (!oLogicDocument)
+			return false;
+
+		return oLogicDocument.SelectDrawingObjectById(sId, nPageIndex);
+	};
 	asc_docs_api.prototype.getCountPages  = function()
 	{
 		return this.WordControl.m_oDrawingDocument.m_lPagesCount;
@@ -15415,6 +15469,8 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['zoom100']                                   = asc_docs_api.prototype.zoom100;
 	asc_docs_api.prototype['zoom']                                      = asc_docs_api.prototype.zoom;
 	asc_docs_api.prototype['goToPage']                                  = asc_docs_api.prototype.goToPage;
+	asc_docs_api.prototype['asc_GetPageDrawingObjects']                 = asc_docs_api.prototype.asc_GetPageDrawingObjects;
+	asc_docs_api.prototype['asc_SelectDrawingObjectById']               = asc_docs_api.prototype.asc_SelectDrawingObjectById;
 	asc_docs_api.prototype['getCountPages']                             = asc_docs_api.prototype.getCountPages;
 	asc_docs_api.prototype['getCurrentPage']                            = asc_docs_api.prototype.getCurrentPage;
 	asc_docs_api.prototype['sync_countPagesCallback']                   = asc_docs_api.prototype.sync_countPagesCallback;
