@@ -334,6 +334,23 @@ $(function ()
 		assert.strictEqual(shape.getCNvProps().hlinkClick.id, SLIDE_JUMP + "2", "Nothing was written into the later point");
 	});
 
+	QUnit.test("A stale order does not block the next slide change", function (assert)
+	{
+		const slides = MakeSlides(3);
+		const shape = LinkShape(slides[0], 2);
+
+		// A builder call that adds a slide at the end and never recalculates in its own point.
+		AscCommon.History.Create_NewPoint(AscDFH.historydescription_Presentation_AddNextSlide);
+		logicDocument.insertSlide(3, slides[1].createDuplicate());
+
+		// The next edit inserts a slide before the target.
+		NewSlideAfter(1);
+
+		assert.strictEqual(logicDocument.Slides.indexOf(slides[2]), 3, "The target is now at position 3");
+		assert.strictEqual(shape.getCNvProps().hlinkClick.id, SLIDE_JUMP + "3", "The link follows the target");
+		assert.notOk(logicDocument.slideOrderBeforeChange, "The noted order was used up");
+	});
+
 	QUnit.test("Reading the position from a link value", function (assert)
 	{
 		const read = AscCommonSlide.GetSlideJumpPosition;

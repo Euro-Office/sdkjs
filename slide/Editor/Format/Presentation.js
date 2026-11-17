@@ -9837,11 +9837,16 @@ CPresentation.prototype.CanRemoveMaster = function(oMaster) {
 // undo, redo and remote changes either run with the history off or never call these two
 // functions, so they never note an order.
 CPresentation.prototype.noteSlideOrderBeforeChange = function () {
-	if (this.slideOrderBeforeChange || !History.CanAddChanges())
+	if (!History.CanAddChanges())
+		return;
+	// A move notes the order at its remove and keeps it through its insert. An order noted in an
+	// earlier point that never got its Recalculate is stale and is replaced.
+	const point = History.Points[History.Index];
+	if (this.slideOrderBeforeChange && this.slideOrderBeforeChange.point === point)
 		return;
 	this.slideOrderBeforeChange = {
 		order : this.Slides.slice(),
-		point : History.Points[History.Index]
+		point : point
 	};
 };
 CPresentation.prototype.renumberSlideLinksAfterReorder = function () {
