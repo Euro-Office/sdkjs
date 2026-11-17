@@ -139,12 +139,12 @@ const testsToRun = allTests.filter(function (test)
 	return true;
 });
 
-// Each test spins up its own headless Chromium instance, so running too many at
-// once starves CI runners (and even strong dev machines): page navigation starts
-// timing out, which both fails tests and orphans node-qunit-puppeteer's internal
-// timeout timer (it is armed before page.goto but only cleared on the success
-// path). Keep the default conservative; override with TESTS_CONCURRENCY when the
-// machine can handle more.
+// All tests share one headless Chromium, each in its own tab. Running too many at
+// once still starves CI runners (and even strong dev machines): page navigation
+// starts timing out, which both fails tests and orphans node-qunit-puppeteer's
+// internal timeout timer (it is armed before page.goto but only cleared on the
+// success path). Keep the default conservative; override with TESTS_CONCURRENCY
+// when the machine can handle more.
 const maxTestsAtOnce = parseInt(process.env.TESTS_CONCURRENCY, 10) || 4;
 
 // An orphaned timeout timer (see above) rejects after its test already failed and
@@ -157,8 +157,9 @@ process.on('unhandledRejection', function (reason)
 
 const {performance} = require('perf_hooks');
 
+const puppeteer = require("puppeteer");
 const {
-  runQunitPuppeteer,
+  runQunitWithPage,
   printResultSummary,
   printFailedTests
 } = require("node-qunit-puppeteer");
@@ -169,6 +170,20 @@ const {
 	let count  = 0;
 	let failed = [];
 	let promiseTests = [];
+	const browser = await puppeteer.launch({args : ["--no-sandbox", "--disable-setuid-sandbox"]});
+
+	async function runTest(test)
+	{
+		const page = await browser.newPage();
+		try
+		{
+			return await runQunitWithPage(page, {targetUrl : "file://" + path.join(__dirname, test), timeout : 60000});
+		}
+		finally
+		{
+			await page.close().catch(function () {});
+		}
+	}
 	
 	async function flushTests()
 	{
@@ -178,7 +193,7 @@ const {
 	
 	for (let nIndex = 0, nCount = testsToRun.length; nIndex < nCount; ++nIndex)
 	{
-		promiseTests.push(runQunitPuppeteer({targetUrl : "file://" + path.join(__dirname, testsToRun[nIndex]), timeout : 60000, puppeteerArgs : ["--no-sandbox", "--disable-setuid-sandbox"]})
+		promiseTests.push(runTest(testsToRun[nIndex])
 			.then(result =>
 			{
 				count++;
@@ -203,6 +218,7 @@ const {
 	}
 	
 	await flushTests();
+	await browser.close();
 	
 	console.log("\nOverall Elapsed " + (Math.round(( ((performance.now() - startTime) / 1000) + Number.EPSILON) * 1000) / 1000) + "s");
 	console.log("\n"+ (count - failed.length) + "/" + count + " modules successfully passed the tests");
@@ -221,5 +237,9 @@ const {
 	}
 	
 	process.exit(failed.length ? 1 : 0);
-})();
+})().catch(function (err)
+{
+	console.error(err);
+	process.exit(1);
+});
 

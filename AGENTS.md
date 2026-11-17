@@ -99,6 +99,14 @@ node tests/runAll.js
 node node_modules/node-qunit-puppeteer/cli.js tests/word/api/api.html 30000 "--no-sandbox"
 ```
 
+**Keep local runs light** (several agents often build and test on one machine at once):
+
+- Tests only need `npm run develop` (a file list, seconds). Don't run `npm run build` for
+  tests; it bundles and minifies all four editors and is the heaviest step in the repo.
+- While iterating, run only the suites you touched (single-suite command above).
+  `runAll.js` shares one Chromium across all suites (`TESTS_CONCURRENCY` tabs, default 4),
+  don't raise that locally.
+
 CI (`.github/workflows/check-build.yml`, `ubuntu-latest` runners, not self-hosted) runs the
 whole suite via the aggregate runner (`node tests/runAll.js`) in its `unit-tests` job. Suites
 that can't pass yet are listed with reasons in `skippedTests` at the top of `tests/runAll.js`,
