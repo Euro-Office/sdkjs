@@ -104,6 +104,9 @@ var editor;
 
     this.collaborativeEditing = null;
 
+    // Declines the large paste waiting for its confirm, so a newer paste can replace it
+    this.declinePendingPaste = null;
+
     // AutoSave
     this.autoSaveGapRealTime = 30;	  // Интервал быстрого автосохранения (когда выставлен флаг realtime) - 30 мс.
 
@@ -1011,6 +1014,11 @@ var editor;
     if (!this.canEdit()) {
       return;
     }
+    // A paste still waiting for its confirm would land wherever this one leaves the selection, and an HTML paste's
+    // iframe may already hold this one's content, so it is declined. Its dialog may stay open; answering it does nothing.
+    if (this.declinePendingPaste) {
+      this.declinePendingPaste();
+    }
     var t = this;
     var paste = function () {
       t.wb.pasteData(_format, data1, data2, text_data, doNotShowButton, callback);
@@ -1047,24 +1055,35 @@ var editor;
         }
         // The confirm runs after the paste event has returned; special paste relies on data1 surviving that too
         var answered = false;
-        this.sendEvent("asc_onConfirmLargePaste", cellCount, AscCommonExcel.getPasteMinSeconds(_format, cellCount), function (can) {
+        var answer = function (can) {
           // Every registered listener gets this callback; only the first answer counts
           if (answered) {
             return;
           }
           answered = true;
+          if (t.declinePendingPaste === decline) {
+            t.declinePendingPaste = null;
+          }
           if (can && t.canEdit()) {
             // An HTML paste reads styles from the iframe it was parsed into, which was hidden when the paste event
             // returned; Firefox computes no styles in a hidden frame
             var clipboard = AscCommon.g_clipboardBase;
             var isOwnFrame = !!data2 && data2 === clipboard.CommonIframe;
             isOwnFrame && clipboard.CommonIframe_PasteShow();
-            paste();
-            isOwnFrame && clipboard.CommonIframe_PasteHide();
+            try {
+              paste();
+            } finally {
+              isOwnFrame && clipboard.CommonIframe_PasteHide();
+            }
           } else if (callback) {
             callback(false);
           }
-        });
+        };
+        var decline = function () {
+          answer(false);
+        };
+        this.declinePendingPaste = decline;
+        this.sendEvent("asc_onConfirmLargePaste", cellCount, AscCommonExcel.getPasteMinSeconds(_format, cellCount), answer);
         break;
       default:
         paste();

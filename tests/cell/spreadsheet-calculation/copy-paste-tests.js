@@ -529,6 +529,33 @@ $(function () {
 		done();
 	});
 
+	QUnit.test("Test: a newer paste declines the one waiting for its confirm", function (assert) {
+		let answers = [];
+		let results = [];
+		let onConfirm = function (cellCount, minSeconds, answer) {
+			answers.push(answer);
+		};
+		api.asc_registerCallback("asc_onConfirmLargePaste", onConfirm);
+		try {
+			withPasteSizeAction(AscCommonExcel.c_oAscPasteSizeAction.Confirm, function () {
+				api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Text, "first", undefined, undefined, undefined, function (success) {
+					results.push("first " + success);
+				});
+			});
+			assert.strictEqual(answers.length, 1, "First paste waits for its confirm");
+			withPasteSizeAction(AscCommonExcel.c_oAscPasteSizeAction.Paste, function () {
+				api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Text, "second", undefined, undefined, undefined, function (success) {
+					results.push("second " + success);
+				});
+			});
+			answers[0](true);
+		} finally {
+			api.asc_unregisterCallback("asc_onConfirmLargePaste", onConfirm);
+		}
+		assert.deepEqual(results, ["first false", "second true"], "First declined, second pasted, a late answer ignored");
+		assert.strictEqual(api.declinePendingPaste, null, "Nothing left waiting");
+	});
+
 	// Cuts range for real and returns what went on the clipboard
 	function cutRange(range) {
 		let data = {};
