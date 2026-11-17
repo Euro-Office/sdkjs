@@ -18229,6 +18229,100 @@ CDocument.prototype.private_SelectRevisionChange = function(oChange, isSkipCompl
 		this.CheckComplexFieldsInSelection();
 	}
 };
+/**
+ * All tracked changes in the order of the document (main text first, then headers, footnotes and the like), for a
+ * list of changes like the comment list. Internal move marks are left out.
+ * @returns {CRevisionsChange[]}
+ */
+CDocument.prototype.GetRevisionChangesInOrder = function()
+{
+	let manager    = this.TrackRevisionsManager;
+	let allChanges = manager.Get_AllChanges();
+	let elements   = [];
+	for (let elementId in allChanges)
+	{
+		let changes = allChanges[elementId];
+		if (!changes || !changes.length)
+			continue;
+
+		let element = changes[0].GetElement();
+		if (!element || !element.IsUseInDocument())
+			continue;
+
+		elements.push({pos : element.GetDocumentPositionFromObject(), changes : changes});
+	}
+
+	elements.sort(function(a, b)
+	{
+		return manager.private_CompareDocumentPositions(a.pos, b.pos);
+	});
+
+	let result = [];
+	elements.forEach(function(item)
+	{
+		item.changes.forEach(function(change)
+		{
+			let type = change.get_Type();
+			if (c_oAscRevisionsChangeType.MoveMark !== type && c_oAscRevisionsChangeType.MoveMarkRemove !== type)
+				result.push(change);
+		});
+	});
+	return result;
+};
+/**
+ * Selects one tracked change and makes it the current one (as "Next change" does), so the document scrolls to it
+ * @param {CRevisionsChange} change
+ * @returns {boolean}
+ */
+CDocument.prototype.SelectRevisionChange = function(change)
+{
+	if (!change || !change.IsValid())
+		return false;
+
+	this.RemoveSelection();
+	this.private_SelectRevisionChange(change);
+	this.TrackRevisionsManager.SetCurrentChange(change);
+	this.UpdateSelection(false);
+	this.UpdateInterface(true);
+	this.HideCurrentComment();
+	return true;
+};
+/**
+ * Accepts or rejects all tracked changes of one author, as one undo step
+ * @param {string} userName
+ * @param {boolean} isAccept
+ * @returns {number} how many changes were processed
+ */
+CDocument.prototype.ProcessRevisionChangesOfUser = function(userName, isAccept)
+{
+	let count = 0;
+	let history = this.History;
+	history.startGroupPoints();
+	// the list is read again after each change: accepting or rejecting one change can split or join others
+	for (let guard = 0; guard < 10000; ++guard)
+	{
+		let change = this.GetRevisionChangesInOrder().find(function(c) { return c.get_UserName() === userName; });
+		if (!change)
+			break;
+
+		let before = this.GetRevisionChangesInOrder().length;
+		if (isAccept)
+			this.AcceptRevisionChange(change);
+		else
+			this.RejectRevisionChange(change);
+
+		if (this.GetRevisionChangesInOrder().length >= before)
+			break; // locked or nothing happened: stop instead of looping
+
+		++count;
+	}
+	history.endGroupPoints();
+	this.RemoveSelection();
+	this.Recalculate();
+	this.UpdateSelection();
+	this.UpdateInterface();
+	return count;
+};
 CDocument.prototype.AcceptRevisionChange = function(oChange)
 {
 	if (!oChange || !oChange.IsValid())

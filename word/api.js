@@ -10182,6 +10182,26 @@ background-repeat: no-repeat;\
 
 		return oResult;
 	};
+	asc_docs_api.prototype.asc_GetRevisionChangesInOrder = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return logicDocument ? logicDocument.GetRevisionChangesInOrder() : [];
+	};
+	asc_docs_api.prototype.asc_SelectRevisionChange = function(oChange)
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return !!(logicDocument && logicDocument.SelectRevisionChange(oChange));
+	};
+	asc_docs_api.prototype.asc_AcceptRevisionChangesOfUser = function(sUserName)
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return logicDocument ? logicDocument.ProcessRevisionChangesOfUser(sUserName, true) : 0;
+	};
+	asc_docs_api.prototype.asc_RejectRevisionChangesOfUser = function(sUserName)
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return logicDocument ? logicDocument.ProcessRevisionChangesOfUser(sUserName, false) : 0;
+	};
 	asc_docs_api.prototype.asc_FollowRevisionMove = function(oChange)
 	{
 		var oLogicDocument = this.private_GetLogicDocument();
@@ -15549,6 +15569,10 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_GetPrevRevisionsChange']                = asc_docs_api.prototype.asc_GetPrevRevisionsChange;
 	asc_docs_api.prototype['sync_UpdateRevisionsChangesPosition']       = asc_docs_api.prototype.sync_UpdateRevisionsChangesPosition;
 	asc_docs_api.prototype['asc_AcceptAllChanges']                      = asc_docs_api.prototype.asc_AcceptAllChanges;
+	asc_docs_api.prototype['asc_GetRevisionChangesInOrder']             = asc_docs_api.prototype.asc_GetRevisionChangesInOrder;
+	asc_docs_api.prototype['asc_SelectRevisionChange']                  = asc_docs_api.prototype.asc_SelectRevisionChange;
+	asc_docs_api.prototype['asc_AcceptRevisionChangesOfUser']           = asc_docs_api.prototype.asc_AcceptRevisionChangesOfUser;
+	asc_docs_api.prototype['asc_RejectRevisionChangesOfUser']           = asc_docs_api.prototype.asc_RejectRevisionChangesOfUser;
 	asc_docs_api.prototype['asc_RejectAllChanges']                      = asc_docs_api.prototype.asc_RejectAllChanges;
 	asc_docs_api.prototype['asc_GetTrackRevisionsReportByAuthors']      = asc_docs_api.prototype.asc_GetTrackRevisionsReportByAuthors;
 	asc_docs_api.prototype['asc_FollowRevisionMove']                    = asc_docs_api.prototype.asc_FollowRevisionMove;
