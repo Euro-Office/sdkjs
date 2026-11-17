@@ -529,63 +529,100 @@ $(function () {
 		done();
 	});
 
-	// Pastes binaryData as an internal paste with cutRange cut and pending, on a sheet whose data spans dataRows x
-	// dataCols, with the size check forced to refuse; returns the errors raised
-	function pasteWithCutPending(binaryData, cutRange, dataRows, dataCols) {
-		let cutWs = api.wb.getWorksheetById(ws.getId());
-		let cutIdSheet = api.wb.cutIdSheet;
-		let copyCutRange = cutWs.copyCutRange;
+	// Cuts range for real and returns what went on the clipboard
+	function cutRange(range) {
+		let data = {};
+		let clipboard = {
+			pushData: function (format, value) {
+				data[format] = value;
+			}
+		};
+		let bCut = AscCommon.g_clipboardBase.bCut;
+		ws.selectionRange.ranges = [range];
+		ws.selectionRange.setActiveCell(range.r1, range.c1);
+		AscCommon.g_clipboardBase.bCut = true;
+		try {
+			AscCommonExcel.g_clipboardExcel.checkCopyToClipboard(wsView, clipboard,
+				AscCommon.c_oAscClipboardDataFormat.Text | AscCommon.c_oAscClipboardDataFormat.Internal);
+		} finally {
+			AscCommon.g_clipboardBase.bCut = bCut;
+		}
+		return {text: data[AscCommon.c_oAscClipboardDataFormat.Text], binary: data[AscCommon.c_oAscClipboardDataFormat.Internal]};
+	}
+
+	// Pastes as an internal paste with the size check forced to refuse; returns the errors raised
+	function pasteInternalRefusingSize(binary, text) {
 		let errors = [];
 		let onError = function (id) {
 			errors.push(id);
 		};
 		api.asc_registerCallback("asc_onError", onError);
-		api.wb.cutIdSheet = ws.getId();
-		cutWs.copyCutRange = [cutRange];
-		cutWs.model.getRowsCount = function () {
-			return dataRows;
-		};
-		cutWs.model.getColsCount = function () {
-			return dataCols;
-		};
 		try {
 			withPasteSizeAction(AscCommonExcel.c_oAscPasteSizeAction.Refuse, function () {
-				api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Internal, binaryData, undefined, undefined, undefined, function () {
+				api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.Internal, binary, undefined, text, undefined, function () {
 				});
 			});
 		} finally {
-			delete cutWs.model.getRowsCount;
-			delete cutWs.model.getColsCount;
-			cutWs.copyCutRange = copyCutRange;
-			api.wb.cutIdSheet = cutIdSheet;
 			api.asc_unregisterCallback("asc_onError", onError);
 		}
 		return errors;
 	}
 
-	function getBinaryCellCount(assert) {
-		let binaryData = AscCommonExcel.g_clipboardExcel.copyProcessor.getBinaryForCopy(ws, wsView.objectRender);
-		let cellCount = AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Internal, binaryData);
-		assert.ok(cellCount > 1, "Binary counted as more than one cell");
-		return {binaryData: binaryData, cellCount: cellCount};
+	// A2:B4 holds multi-line text and a tab, which the text copy counts as extra cells; row 5 is empty
+	function fillCutSource() {
+		ws.getRange2("A2:B5").cleanAll();
+		ws.getRange2("A2").setValue("one\ntwo\nthree");
+		ws.getRange2("B2").setValue("tab\there");
+		ws.getRange2("A3").setValue("x");
+		ws.getRange2("B4").setValue("four\nlines\nin\none");
+		return getRange(0, 1, 1, 4);
 	}
 
-	QUnit.test("Test: internal paste no larger than the pending cut isn't refused", function (assert) {
-		let copied = getBinaryCellCount(assert);
-		let errors = pasteWithCutPending(copied.binaryData, new Asc.Range(0, 0, 0, copied.cellCount - 1), copied.cellCount, 1);
-		assert.strictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Not refused for size");
+	QUnit.test("Test: internal paste of the pending cut isn't refused, whatever its cells hold", function (assert) {
+		let range = fillCutSource();
+		let cut = cutRange(range);
+		try {
+			assert.strictEqual(api.wb.cutIdSheet, ws.getId(), "Cut pending");
+			assert.ok(AscCommonExcel.getPasteCellCount(AscCommon.c_oAscClipboardDataFormat.Internal, cut.binary, cut.text) > 8,
+				"Text copy counts more cells than the cut holds");
+			let errors = pasteInternalRefusingSize(cut.binary, cut.text);
+			assert.strictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Not refused for size");
+		} finally {
+			api.wb.cleanCutData(false, false);
+		}
 	});
 
 	QUnit.test("Test: internal paste larger than the pending cut is checked for size", function (assert) {
-		let copied = getBinaryCellCount(assert);
-		let errors = pasteWithCutPending(copied.binaryData, new Asc.Range(0, 0, 0, copied.cellCount - 2), copied.cellCount, 1);
-		assert.notStrictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Refused for size");
+		let range = fillCutSource();
+		let cut = cutRange(range);
+		try {
+			let errors = pasteInternalRefusingSize(cut.binary, cut.text + "\textra");
+			assert.notStrictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Refused for size");
+		} finally {
+			api.wb.cleanCutData(false, false);
+		}
 	});
 
-	QUnit.test("Test: a whole-column cut only counts the cells with data", function (assert) {
-		let copied = getBinaryCellCount(assert);
-		let errors = pasteWithCutPending(copied.binaryData, new Asc.Range(0, 0, 0, AscCommon.gc_nMaxRow0), copied.cellCount - 1, 1);
-		assert.notStrictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Refused for size");
+	QUnit.test("Test: internal paste with the cut's sheet deleted is checked for size", function (assert) {
+		let cut = cutRange(fillCutSource());
+		// Deleting the sheet leaves cutIdSheet pointing at it
+		api.wb.cutIdSheet = "deleted sheet";
+		try {
+			let errors = pasteInternalRefusingSize(cut.binary, cut.text);
+			assert.notStrictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Refused for size");
+		} finally {
+			api.wb.cutIdSheet = ws.getId();
+			api.wb.cleanCutData(false, false);
+		}
+	});
+
+	QUnit.test("Test: clearing the cut clears its cell count", function (assert) {
+		let cut = cutRange(fillCutSource());
+		assert.ok(api.wb.cutCellCount > 0, "Counted when cut");
+		api.wb.cleanCutData(false, false);
+		assert.strictEqual(api.wb.cutCellCount, 0, "Cleared with the cut");
+		let errors = pasteInternalRefusingSize(cut.binary, cut.text);
+		assert.notStrictEqual(errors.indexOf(Asc.c_oAscError.ID.PasteSizeLimitError), -1, "Checked for size once the cut is gone");
 	});
 
 	/**

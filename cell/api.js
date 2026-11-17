@@ -1022,18 +1022,13 @@ var editor;
     var cellCount = AscCommonExcel.getPasteCellCount(_format, data1, text_data);
     // A cut pasted back into this document becomes a move in the paste engine, which sends almost no changes. The
     // move is only recognised once the clipboard binary has been read, so an internal paste with a cut pending is let
-    // through unless it holds more cells than the cut, and so can't be the cut. The cut is clamped to the sheet's data,
-    // so a whole-column or select-all cut doesn't let everything through.
-    if (AscCommon.c_oAscClipboardDataFormat.Internal === _format && null !== this.wb.cutIdSheet) {
-      var cutWs = this.wb.getWorksheetById(this.wb.cutIdSheet);
-      var cutRanges = cutWs && cutWs.getCutRange();
-      var cutRange = cutRanges && cutRanges[0];
-      var cutRows = cutRange ? Math.min(cutRange.r2, cutWs.model.getRowsCount() - 1) - cutRange.r1 + 1 : 0;
-      var cutCols = cutRange ? Math.min(cutRange.c2, cutWs.model.getColsCount() - 1) - cutRange.c1 + 1 : 0;
-      if (cutRows > 0 && cutCols > 0 && cellCount <= cutRows * cutCols) {
-        paste();
-        return;
-      }
+    // through if it counts no more cells than the cut's own text copy did when it was cut. Both are counted the same
+    // way, so the cut always matches whatever its cells hold, and anything larger can't be the cut. Deleting the cut's
+    // sheet leaves the cut set, so the sheet must still exist.
+    if (AscCommon.c_oAscClipboardDataFormat.Internal === _format && null !== this.wb.cutIdSheet &&
+      cellCount <= this.wb.cutCellCount && this.wbModel.getWorksheetById(this.wb.cutIdSheet)) {
+      paste();
+      return;
     }
 
     var getChangesSize = function () {

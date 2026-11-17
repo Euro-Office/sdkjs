@@ -306,6 +306,7 @@
 
 		Clipboard.prototype.checkCopyToClipboard = function (ws, _clipboard, _formats) {
 			var _data = null;
+			var textData = null;
 			var wb = window["Asc"]["editor"].wb;
 
 			window['AscCommon'].g_specialPasteHelper.SpecialPasteButton_Hide();
@@ -365,7 +366,7 @@
 
 				//TEXT
 				if (AscCommon.c_oAscClipboardDataFormat.Text & _formats) {
-					_data = this.copyProcessor.getText(activeRange, ws);
+					_data = textData = this.copyProcessor.getText(activeRange, ws);
 
 					if (null !== _data) {
 						_clipboard.pushData(AscCommon.c_oAscClipboardDataFormat.Text, _data);
@@ -407,6 +408,8 @@
 					if (!ws.isNeedSelectionCut() && false === ws.isMultiSelect()) {
 						ws.workbook.cutIdSheet = ws.model.Id;
 						ws.setCutRange([ws.model.selectionRange.getLast()]);
+						// Counted as a paste of it will count it, so asc_PasteData can tell the cut from a larger paste
+						ws.workbook.cutCellCount = getTextCellCount(textData);
 					}
 				} else if (!ws.objectRender.selectedGraphicObjectsExists()) {
 					ws.setCutRange(ws.model.selectionRange.ranges);
