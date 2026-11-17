@@ -7131,8 +7131,19 @@ background-repeat: no-repeat;\
 		this.sendEvent("asc_onSpellCheckVariantsFound");
 	};
 
-	asc_docs_api.prototype.asc_replaceMisspelledWord = function(Word, SpellCheckProperty)
+	/**
+	 * @param {string} Word - The replacement
+	 * @param {AscCommon.asc_CSpellCheckProperty} SpellCheckProperty - The misspelled word
+	 * @param {boolean} [bAll=false] - Replace this misspelled word everywhere in the document
+	 */
+	asc_docs_api.prototype.asc_replaceMisspelledWord = function(Word, SpellCheckProperty, bAll)
 	{
+		if (true === bAll)
+		{
+			this.WordControl.m_oLogicDocument.ReplaceAllMisspelledWords(SpellCheckProperty.Word, Word);
+			return;
+		}
+
 		var ParaId = SpellCheckProperty.ParaId;
 
 		var Paragraph = g_oTableId.Get_ById(ParaId);
@@ -7149,6 +7160,37 @@ background-repeat: no-repeat;\
 			this.WordControl.m_oLogicDocument.UpdateSelection();
 			this.WordControl.m_oLogicDocument.FinalizeAction();
 		}
+	};
+
+	/**
+	 * Selects the next misspelled word after the cursor
+	 * @returns {boolean} false if the document has no misspelled words
+	 */
+	asc_docs_api.prototype.asc_SelectNextMisspelledWord = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return logicDocument ? logicDocument.SelectNextMisspelledWord() : false;
+	};
+
+	/**
+	 * The progress of the background spellcheck
+	 * @param {boolean} [withLanguages=false] - Also list the text languages without a dictionary
+	 * @returns {?{Checked: number, Total: number, IsComplete: boolean, IsStopped: boolean, MissingLanguages: number[]}}
+	 */
+	asc_docs_api.prototype.asc_GetSpellCheckState = function(withLanguages)
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		if (!logicDocument)
+			return null;
+
+		let state = logicDocument.GetSpellCheckState(withLanguages);
+		return {
+			"Checked"          : state.Checked,
+			"Total"            : state.Total,
+			"IsComplete"       : state.IsComplete,
+			"IsStopped"        : state.IsStopped,
+			"MissingLanguages" : state.MissingLanguages
+		};
 	};
 
 	asc_docs_api.prototype.asc_ignoreMisspelledWord = function(SpellCheckProperty, bAll)
@@ -15371,6 +15413,8 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['sync_SpellCheckVariantsFound']              = asc_docs_api.prototype.sync_SpellCheckVariantsFound;
 	asc_docs_api.prototype['asc_replaceMisspelledWord']                 = asc_docs_api.prototype.asc_replaceMisspelledWord;
 	asc_docs_api.prototype['asc_ignoreMisspelledWord']                  = asc_docs_api.prototype.asc_ignoreMisspelledWord;
+	asc_docs_api.prototype['asc_SelectNextMisspelledWord']              = asc_docs_api.prototype.asc_SelectNextMisspelledWord;
+	asc_docs_api.prototype['asc_GetSpellCheckState']                    = asc_docs_api.prototype.asc_GetSpellCheckState;
     asc_docs_api.prototype['asc_spellCheckAddToDictionary']       		= asc_docs_api.prototype.asc_spellCheckAddToDictionary;
     asc_docs_api.prototype['asc_spellCheckClearDictionary']       		= asc_docs_api.prototype.asc_spellCheckClearDictionary;
 	asc_docs_api.prototype['asc_setDefaultLanguage']                    = asc_docs_api.prototype.asc_setDefaultLanguage;

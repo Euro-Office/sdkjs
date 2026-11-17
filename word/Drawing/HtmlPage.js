@@ -1770,6 +1770,17 @@ function CEditorPage(api)
 			this.m_oScrollVerApi.scrollToY(pos.Y + this.m_dScrollY);
 	};
 
+	this.ScrollToCenterPosition = function(x, y, page)
+	{
+		let pos = this.m_oDrawingDocument.ConvertCoordsToCursor(x, y, page);
+		if (pos.Error)
+			return;
+
+		let offset = pos.Y - AscCommon.AscBrowser.convertToRetinaValue(this.m_oEditor.HtmlElement.height) / 2;
+		if (0 !== offset)
+			this.m_oScrollVerApi.scrollToY(offset + this.m_dScrollY);
+	};
+
 	// events ---
 	this.onMouseDown = function(e, isTouch)
 	{

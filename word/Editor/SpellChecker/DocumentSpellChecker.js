@@ -28,7 +28,6 @@
 (function(window, undefined)
 {
 	const DOCUMENT_SPELLING_MAX_PARAGRAPHS = 50;   // максимальное количество параграфов, которые мы проверяем в таймере
-	const DOCUMENT_SPELLING_MAX_ERRORS     = 2000; // максимальное количество ошибок, которые отрисовываются
 
 	const DOCUMENT_SPELLING_EXCEPTIONAL_WORDS = {
 		"Teamlab" : true, "teamlab" : true, "OnlyOffice" : true, "ONLYOFFICE" : true, "API" : true
@@ -44,7 +43,6 @@
 	{
 		this.Use          = true;
 		this.Active       = 1;
-		this.ErrorsExceed = false;
 		this.Paragraphs  = {}; // Параграфы, в которых есть ошибки в орфографии (объект с ключом - Id параграфа)
 		this.Words       = {}; // Слова, которые пользователь решил пропустить(нажал "пропустить все") при проверке орфографии
 		this.CheckPara   = {}; // Параграфы, в которых нужно запустить проверку орфографии
@@ -83,10 +81,6 @@
 	{
 		return (1 === this.Active);
 	};
-	CDocumentSpellChecker.prototype.IsErrorsExceed = function()
-	{
-		return this.ErrorsExceed;
-	};
 	CDocumentSpellChecker.prototype.AddParagraphWithErrors = function(oParagraph)
 	{
 		this.Paragraphs[oParagraph.GetId()] = oParagraph;
@@ -102,8 +96,6 @@
 		this.CurPara    = {};
 
 		this.WaitingParagraphs = {};
-
-		this.ErrorsExceed = false;
 	};
 	CDocumentSpellChecker.prototype.IsIgnored = function(sWord)
 	{
@@ -134,7 +126,7 @@
 	};
 	CDocumentSpellChecker.prototype.ContinueSpellCheck = function()
 	{
-		if (!this.IsOn() || this.IsErrorsExceed())
+		if (!this.IsOn())
 			return;
 
 		// Пока не обработались предыдущие параграфы, новые не стартуем
@@ -157,8 +149,6 @@
 				if (nCounter > DOCUMENT_SPELLING_MAX_PARAGRAPHS)
 					break;
 			}
-
-			this.private_CheckErrorsExceed();
 		}
 
 
@@ -170,6 +160,23 @@
 			oParagraph.SpellChecker.Check();
 		}
 	};
+	/**
+	 * The paragraphs that are not checked yet: queued for a check, waiting for the answer of the spellchecker,
+	 * or with a word at the cursor left for later
+	 * @returns {number}
+	 */
+	CDocumentSpellChecker.prototype.GetPendingParagraphsCount = function()
+	{
+		let ids = {};
+		[this.CheckPara, this.WaitingParagraphs, this.CurPara].forEach(function(paragraphs)
+		{
+			for (let id in paragraphs)
+			{
+				ids[id] = true;
+			}
+		});
+		return Object.keys(ids).length;
+	};
 	CDocumentSpellChecker.prototype.private_HaveWaitingParagraphs = function()
 	{
 		for (let sId in this.WaitingParagraphs)
@@ -178,12 +185,6 @@
 		}
 
 		return false;
-	};
-	CDocumentSpellChecker.prototype.private_CheckErrorsExceed = function()
-	{
-		// TODO: Послать сообщение
-		if (this.GetErrorsCount() > DOCUMENT_SPELLING_MAX_ERRORS)
-			this.ErrorsExceed = true;
 	};
 	CDocumentSpellChecker.prototype.AddCurrentParagraph = function(oParagraph)
 	{

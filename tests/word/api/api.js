@@ -587,6 +587,357 @@ $(function () {
 		assert.strictEqual(stats.PageCount, -1, "Pages are not counted");
 	});
 
+	QUnit.module("Test spellcheck navigation");
+
+	// Marks a word of a single-run paragraph as misspelled, the way a spellcheck response does
+	function MarkMisspelled(paragraph, word, occurrence)
+	{
+		let run   = paragraph.Content.filter(function(item)
+		{
+			return item instanceof AscWord.CRun && -1 !== item.GetText().indexOf(word);
+		})[0];
+		let text  = run.GetText();
+		let start = -1;
+		for (let i = 0; i <= (occurrence || 0); ++i)
+		{
+			start = text.indexOf(word, start + 1);
+		}
+		let element = new AscWord.CParagraphSpellCheckerElement(run, start, run, start + word.length, word, 1033);
+		run.AddSpellCheckerElement(new AscWord.SpellMarkStart(element));
+		run.AddSpellCheckerElement(new AscWord.SpellMarkEnd(element));
+		paragraph.SpellChecker.Elements.push(element);
+		element.SetWrong(["fixed"]);
+		return element;
+	}
+
+	function CreateMisspelledDocument()
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("Helo wrld good");
+		let p2 = CreateParagraphWithText("Fine tset");
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		MarkMisspelled(p1, "Helo");
+		MarkMisspelled(p1, "wrld");
+		MarkMisspelled(p2, "tset");
+		return [p1, p2];
+	}
+
+	QUnit.test("Select the next misspelled word", function (assert)
+	{
+		let paragraphs = CreateMisspelledDocument();
+		AscTest.MoveCursorToParagraph(paragraphs[0], true);
+
+		let selectNext = Asc.asc_docs_api.prototype.asc_SelectNextMisspelledWord;
+		assert.strictEqual(selectNext.call(AscTest.Editor), true, "A misspelled word is found");
+		assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "First word");
+		let spellCheck = null;
+		let syncSpellCheck = window.editor.sync_SpellCheckCallback;
+		window.editor.sync_SpellCheckCallback = function(word, checked, variants)
+		{
+			spellCheck = {word : word, variants : variants};
+		};
+		paragraphs[0].Document_UpdateInterfaceState();
+		window.editor.sync_SpellCheckCallback = syncSpellCheck;
+		assert.deepEqual(spellCheck, {word : "Helo", variants : ["fixed"]}, "Interface gets the misspelled word and the suggestions");
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "wrld", "Second word");
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "tset", "Word in the next paragraph");
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "Continues from the start of the document");
+	});
+
+	QUnit.test("The view moves to the misspelled word", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("First page");
+		let p2 = CreateParagraphWithText("Secnd page");
+		p2.Set_PageBreakBefore(true);
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		MarkMisspelled(p2, "Secnd");
+		AscTest.Recalculate();
+		AscTest.MoveCursorToParagraph(p1, true);
+
+		// The test editor has no drawing document for the cursor, so give it one that records the cursor page
+		let targetPage = -1;
+		let drawingDocument = Object.create(logicDocument.GetDrawingDocument());
+		drawingDocument.UpdateTarget = function(x, y, pageIndex)
+		{
+			targetPage = pageIndex;
+		};
+		let getDrawingDocument = Asc.editor.getDrawingDocument;
+		Asc.editor.getDrawingDocument = function()
+		{
+			return drawingDocument;
+		};
+		try
+		{
+			logicDocument.SelectNextMisspelledWord();
+		}
+		finally
+		{
+			Asc.editor.getDrawingDocument = getDrawingDocument;
+		}
+		assert.strictEqual(logicDocument.GetSelectedText(), "Secnd", "Word on the second page is selected");
+		assert.strictEqual(targetPage, 1, "The view is moved to the second page");
+	});
+
+	QUnit.test("The misspelled word is scrolled to the middle of the screen", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("First page");
+		let p2 = CreateParagraphWithText("Secnd page");
+		p2.Set_PageBreakBefore(true);
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		MarkMisspelled(p2, "Secnd");
+		AscTest.Recalculate();
+		AscTest.MoveCursorToParagraph(p1, true);
+
+		let wordControl = logicDocument.GetDrawingDocument().m_oWordControl;
+		let centered = null;
+		wordControl.ScrollToCenterPosition = function(x, y, pageIndex)
+		{
+			centered = {Y : y, Page : pageIndex};
+		};
+		try
+		{
+			logicDocument.SelectNextMisspelledWord();
+		}
+		finally
+		{
+			delete wordControl.ScrollToCenterPosition;
+		}
+		assert.strictEqual(logicDocument.GetSelectedText(), "Secnd", "Word on the second page is selected");
+		assert.ok(centered, "The view is asked to centre a position");
+		assert.strictEqual(centered && centered.Page, 1, "The centred position is on the page of the word");
+		assert.ok(centered && centered.Y > 0, "The centred position is inside the page");
+	});
+
+	QUnit.test("Word with the cursor inside is found", function (assert)
+	{
+		let paragraphs = CreateMisspelledDocument();
+		AscTest.MoveCursorToParagraph(paragraphs[0], true);
+		paragraphs[0].MoveCursorRight(false, false);
+		paragraphs[0].MoveCursorRight(false, false);
+
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "Word with the cursor");
+	});
+
+	QUnit.test("Ignored and correct words are skipped", function (assert)
+	{
+		let paragraphs = CreateMisspelledDocument();
+		paragraphs[0].SpellChecker.Elements[0].SetCorrect();
+		paragraphs[0].SpellChecker.Elements[1].Checked = true;
+		AscTest.MoveCursorToParagraph(paragraphs[0], true);
+
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "tset", "Only the misspelled word is found");
+
+		paragraphs[1].SpellChecker.Elements[0].SetCorrect();
+		assert.strictEqual(logicDocument.SelectNextMisspelledWord(), false, "No misspelled words left");
+	});
+
+	QUnit.test("Headers and footers are checked after the main text", function (assert)
+	{
+		let paragraphs = CreateMisspelledDocument();
+		let sectPr = logicDocument.GetFinalSectPr();
+		let header = AscTest.CreateDefaultHeader(sectPr);
+		let headerParagraph = header.GetElement(0);
+		AscTest.AddTextToParagraph(headerParagraph, "Hedaer text");
+		MarkMisspelled(headerParagraph, "Hedaer");
+
+		let footer = new AscCommonWord.CHeaderFooter(logicDocument.HdrFtr, logicDocument, logicDocument.DrawingDocument, AscCommon.hdrftr_Footer);
+		sectPr.Set_Footer_Default(footer);
+		let footerParagraph = footer.GetContent().GetElement(0);
+		AscTest.AddTextToParagraph(footerParagraph, "Footre text");
+		MarkMisspelled(footerParagraph, "Footre");
+		AscTest.Recalculate();
+
+		AscTest.MoveCursorToParagraph(paragraphs[1], false);
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "Hedaer", "Header after the main text");
+		assert.strictEqual(logicDocument.GetDocPosType(), AscCommonWord.docpostype_HdrFtr, "Cursor is in the header");
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "Footre", "Footer after the header");
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "Continues from the start of the main text");
+		assert.strictEqual(logicDocument.GetDocPosType(), AscCommonWord.docpostype_Content, "Cursor is back in the main text");
+
+		sectPr.Set_Header_Default(null);
+		sectPr.Set_Footer_Default(null);
+	});
+
+	QUnit.test("Footnotes and endnotes are checked after the main text", function (assert)
+	{
+		let isDocumentEditor = editor.isDocumentEditor;
+		editor.isDocumentEditor = true;
+		try
+		{
+			AscTest.ClearDocument();
+			let p = CreateParagraphWithText("Helo body");
+			logicDocument.AddToContent(0, p);
+			MarkMisspelled(p, "Helo");
+
+			AscTest.MoveCursorToParagraph(p, false);
+			let footnote = logicDocument.AddFootnote();
+			AscTest.AddTextToParagraph(footnote.GetElement(0), "Fotnote text");
+			MarkMisspelled(footnote.GetElement(0), "Fotnote");
+
+			logicDocument.SetDocPosType(AscCommonWord.docpostype_Content);
+			AscTest.MoveCursorToParagraph(p, false);
+			let endnote = logicDocument.AddEndnote();
+			AscTest.AddTextToParagraph(endnote.GetElement(0), "Endnte text");
+			MarkMisspelled(endnote.GetElement(0), "Endnte");
+			AscTest.Recalculate();
+
+			logicDocument.SetDocPosType(AscCommonWord.docpostype_Content);
+			AscTest.MoveCursorToParagraph(p, true);
+			logicDocument.SelectNextMisspelledWord();
+			assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "Main text first");
+			logicDocument.SelectNextMisspelledWord();
+			assert.strictEqual(logicDocument.GetSelectedText(), "Fotnote", "Then the footnote");
+			assert.strictEqual(logicDocument.GetDocPosType(), AscCommonWord.docpostype_Footnotes, "Cursor is in the footnote");
+			logicDocument.SelectNextMisspelledWord();
+			assert.strictEqual(logicDocument.GetSelectedText(), "Endnte", "Then the endnote");
+			assert.strictEqual(logicDocument.GetDocPosType(), AscCommonWord.docpostype_Endnotes, "Cursor is in the endnote");
+			logicDocument.SelectNextMisspelledWord();
+			assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "Continues from the start of the main text");
+			assert.strictEqual(logicDocument.GetDocPosType(), AscCommonWord.docpostype_Content, "Cursor is back in the main text");
+		}
+		finally
+		{
+			logicDocument.SetDocPosType(AscCommonWord.docpostype_Content);
+			editor.isDocumentEditor = isDocumentEditor;
+		}
+	});
+
+	QUnit.test("Text boxes are checked with the paragraph they are anchored to", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p = CreateParagraphWithText("Helo body");
+		logicDocument.AddToContent(0, p);
+		MarkMisspelled(p, "Helo");
+
+		AscTest.MoveCursorToParagraph(p, false);
+		let drawing = new ParaDrawing(100, 100, null, logicDocument.GetDrawingDocument(), logicDocument, null);
+		let shapeTrack = new AscFormat.NewShapeTrack('rect', 0, 0, logicDocument.theme, null, null, null, 0);
+		shapeTrack.track({}, 100, 100);
+		let shape = shapeTrack.getShape(true, logicDocument.GetDrawingDocument(), null);
+		shape.setBDeleted(false);
+		shape.setParent(drawing);
+		drawing.Set_GraphicObject(shape);
+		drawing.Set_DrawingType(drawing_Anchor);
+		drawing.Set_WrappingType(WRAPPING_TYPE_NONE);
+		drawing.Set_Distance(0, 0, 0, 0);
+		p.AddToParagraph(drawing);
+		shape.createTextBoxContent();
+		let boxParagraph = shape.getDocContent().GetElement(0);
+		AscTest.AddTextToParagraph(boxParagraph, "Txet box");
+		MarkMisspelled(boxParagraph, "Txet");
+		AscTest.Recalculate();
+
+		logicDocument.RemoveSelection();
+		AscTest.MoveCursorToParagraph(p, false);
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "Txet", "Word in the text box is found");
+		logicDocument.SelectNextMisspelledWord();
+		assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "Then the main text again");
+	});
+
+	QUnit.test("Spellcheck progress", function (assert)
+	{
+		let paragraphs = CreateMisspelledDocument();
+		let spelling = logicDocument.Spelling;
+		spelling.Reset();
+
+		let state = logicDocument.GetSpellCheckState();
+		let total = state.Total;
+		assert.ok(total >= 2, "Both paragraphs are counted");
+		assert.deepEqual([state.Checked, state.IsComplete], [total, true], "Nothing left to check");
+
+		spelling.AddParagraphToCheck(paragraphs[0]);
+		state = logicDocument.GetSpellCheckState();
+		assert.deepEqual([state.Checked, state.Total, state.IsComplete], [total - 1, total, false], "One paragraph queued");
+
+		spelling.AddWaitingParagraph(paragraphs[1], 0, ["tset"], [1033]);
+		state = logicDocument.GetSpellCheckState();
+		assert.deepEqual([state.Checked, state.IsComplete], [total - 2, false], "Waiting for the spellchecker counts as not checked");
+
+		spelling.Reset();
+		assert.strictEqual(logicDocument.GetSpellCheckState().IsStopped, false, "Checking is running");
+
+		spelling.Use = false;
+		assert.strictEqual(logicDocument.GetSpellCheckState().IsStopped, true, "Spellcheck turned off");
+		spelling.Use = true;
+	});
+
+	QUnit.test("Spellcheck lists languages without a dictionary", function (assert)
+	{
+		let paragraphs = CreateMisspelledDocument();
+		let checkDictionary = editor.SpellCheckApi && editor.SpellCheckApi.checkDictionary;
+		editor.SpellCheckApi = editor.SpellCheckApi || {};
+		editor.SpellCheckApi.checkDictionary = function(lang)
+		{
+			return 1033 === lang;
+		};
+		try
+		{
+			let textPr = new AscCommonWord.CTextPr();
+			textPr.Lang.Val = 3079;
+			paragraphs[1].GetElement(0).Apply_TextPr(textPr, undefined, true);
+			let defaultLang = logicDocument.GetStyles().Default.TextPr.Lang.Val;
+
+			let state = logicDocument.GetSpellCheckState(true);
+			assert.deepEqual(state.MissingLanguages.sort(), [defaultLang, 3079].filter(function(lang)
+			{
+				return 1033 !== lang;
+			}).sort(), "German (Austria) has no dictionary");
+			assert.deepEqual(logicDocument.GetSpellCheckState().MissingLanguages, [], "Languages are listed only on request");
+		}
+		finally
+		{
+			editor.SpellCheckApi.checkDictionary = checkDictionary;
+		}
+	});
+
+	QUnit.test("Change all occurrences in the header too", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p = CreateParagraphWithText("tset one");
+		logicDocument.AddToContent(0, p);
+		MarkMisspelled(p, "tset");
+		let sectPr = logicDocument.GetFinalSectPr();
+		let headerParagraph = AscTest.CreateDefaultHeader(sectPr).GetElement(0);
+		AscTest.AddTextToParagraph(headerParagraph, "tset header");
+		MarkMisspelled(headerParagraph, "tset");
+
+		logicDocument.ReplaceAllMisspelledWords("tset", "test");
+		assert.strictEqual(AscTest.GetParagraphText(p), "test one", "Main text is replaced");
+		assert.strictEqual(AscTest.GetParagraphText(headerParagraph), "test header", "Header is replaced");
+		sectPr.Set_Header_Default(null);
+	});
+
+	QUnit.test("Change all occurrences of a misspelled word", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("tset one tset");
+		let p2 = CreateParagraphWithText("two tset tsets");
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		MarkMisspelled(p1, "tset");
+		MarkMisspelled(p1, "tset", 1);
+		MarkMisspelled(p2, "tset");
+		MarkMisspelled(p2, "tsets");
+
+		logicDocument.ReplaceAllMisspelledWords("tset", "test");
+		assert.strictEqual(AscTest.GetParagraphText(p1), "test one test", "Both words in a paragraph are replaced");
+		assert.strictEqual(AscTest.GetParagraphText(p2), "two test tsets", "Other misspelled words are kept");
+	});
+
 	QUnit.test("asc_GetSelectionDocInfo", function (assert)
 	{
 		let getSelectionDocInfo = Asc.asc_docs_api.prototype.asc_GetSelectionDocInfo;
