@@ -1466,7 +1466,54 @@ function CHorRuler()
                 break;
             }
         }
+
+        this.LivePreview();
     }
+
+    // While an indent marker or a tab stop is dragged, the text follows it (a temporary history point that the next
+    // step or the final apply on mouse up replaces), so the end of a line can be seen, not only the guide line.
+    this.LivePreview = function()
+    {
+        let logicDocument = this.m_oWordControl.m_oLogicDocument;
+        if (!this.m_bIsMouseDown || this.SimpleChanges.IsSimple || !logicDocument || !logicDocument.IsDocumentEditor || !logicDocument.IsDocumentEditor())
+            return;
+
+        let type = this.DragType;
+        let isIndent = (AscWord.RULER_DRAG_TYPE.leftFirstInd === type || AscWord.RULER_DRAG_TYPE.leftInd === type
+            || AscWord.RULER_DRAG_TYPE.firstInd === type || AscWord.RULER_DRAG_TYPE.rightInd === type);
+        if (!isIndent && AscWord.RULER_DRAG_TYPE.tab !== type)
+            return;
+
+        let now = Date.now();
+        if (now - (this.m_nLivePreviewTime || 0) < 40)
+            return;
+        this.m_nLivePreviewTime = now;
+
+        this.m_bLivePreviewActive = true;
+        if (isIndent)
+        {
+            this.SetPrProperties(true);
+        }
+        else
+        {
+            let tabs = [];
+            for (let i = 0; i < this.m_arrTabs.length; ++i)
+            {
+                let tab = this.m_arrTabs[i];
+                if (i === this.m_lCurrentTab)
+                {
+                    if (!this.IsDrawingCurTab)
+                        continue; // dragged off the ruler: shown without this tab
+                    tabs.push({type : tab.type, pos : this.m_dCurrentTabNewPosition, leader : tab.leader});
+                }
+                else
+                {
+                    tabs.push(tab);
+                }
+            }
+            this.SetTabsProperties(true, tabs);
+        }
+    };
 
     this.CheckMouseType = function(x, y, isMouseDown, isNegative)
     {
@@ -2230,16 +2277,33 @@ function CHorRuler()
         this.SimpleChanges.Clear();
     }
 
-    this.SetTabsProperties = function()
+    this.SetTabsProperties = function(isTemporary, arrTabs)
 	{
 		// потом заменить на объекты CTab (когда Илюха реализует не только левые табы)
+		var _src = arrTabs || this.m_arrTabs;
 		var _arr = new CParaTabs();
-		var _c   = this.m_arrTabs.length;
+		var _c   = _src.length;
 		for (var i = 0; i < _c; i++)
 		{
-			if (this.m_arrTabs[i].type == tab_Left || this.m_arrTabs[i].type == tab_Right || this.m_arrTabs[i].type == tab_Center)
-				_arr.Add(new CParaTab(this.m_arrTabs[i].type, this.m_arrTabs[i].pos, this.m_arrTabs[i].leader));
+			if (_src[i].type == tab_Left || _src[i].type == tab_Right || _src[i].type == tab_Center)
+				_arr.Add(new CParaTab(_src[i].type, _src[i].pos, _src[i].leader));
 		}
+
+		if (isTemporary)
+		{
+			// preview while dragging: replaced by the next step or by the final apply on mouse up
+			let logicDocument = this.m_oWordControl.m_oLogicDocument;
+			if (false !== logicDocument.Document_Is_SelectionLocked(AscCommon.changestype_Paragraph_Properties))
+				return;
+			logicDocument.TurnOff_InterfaceEvents();
+			logicDocument.StartAction(AscDFH.historydescription_Document_SetParagraphTabs);
+			logicDocument.SetParagraphTabs(_arr);
+			logicDocument.FinalizeAction();
+			AscCommon.History.SetLastPointTemporary();
+			logicDocument.TurnOn_InterfaceEvents();
+			return;
+		}
+		this.m_bLivePreviewActive = false;
 
 		if (false === this.m_oWordControl.m_oLogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_Paragraph_Properties))
 		{
@@ -2253,6 +2317,8 @@ function CHorRuler()
 
     this.SetPrProperties = function(isTemporary)
 	{
+		if (!isTemporary)
+			this.m_bLivePreviewActive = false;
 		let left      = this.m_dIndentLeft;
 		let right     = this.m_dIndentRight;
 		let firstLine = this.m_dIndentLeftFirst - this.m_dIndentLeft;
@@ -2667,7 +2733,7 @@ function CHorRuler()
 	
 	this.UpdateParaInd = function(paraInd, isRtl)
 	{
-		if (!paraInd)
+		if (!paraInd || (this.m_bIsMouseDown && this.m_bLivePreviewActive))
 			return 0;
 		
 		let left      = undefined !== paraInd.Left ? paraInd.Left : 0;
