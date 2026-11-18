@@ -6558,6 +6558,38 @@ background-repeat: no-repeat;\
 	{
 		this.sendEvent("asc_onHideForeignCursorLabel", UserId);
 	};
+	asc_docs_api.prototype.asc_moveToUserCursor = function(UserId)
+	{
+		var DocPos = AscCommon.CollaborativeEditing.m_aForeignCursors[UserId];
+		if (!DocPos || DocPos.length <= 0 || !this.WordControl)
+			return false;
+
+		var Run       = DocPos[DocPos.length - 1].Class;
+		var Paragraph = Run instanceof AscCommonWord.ParaRun ? Run.GetParagraph() : null;
+		if (!Paragraph || !Paragraph.Parent)
+			return false;
+
+		// The shape, or the table, with the cursor of the user
+		var Drawing = Paragraph.GetParentShape();
+		var Cell    = Paragraph.Parent.IsTableCellContent(true);
+		if (!Drawing && Cell && Cell.GetTable())
+			Drawing = Cell.GetTable().Parent;
+		if (!Drawing || !Drawing.parent)
+			return false;
+
+		// A shape on a layout or a master has no slide to go to
+		var Slide = Drawing.parent instanceof AscCommonSlide.CNotes ? Drawing.parent.slide : Drawing.parent;
+		if (!(Slide instanceof AscCommonSlide.Slide) || !this.WordControl.m_oLogicDocument)
+			return false;
+
+		// The slide master view lists the masters and layouts, and a removed slide is in no list
+		var SlideIndex = this.WordControl.m_oLogicDocument.GetSlideIndex(Slide);
+		if (SlideIndex < 0)
+			return false;
+
+		this.WordControl.GoToPage(SlideIndex);
+		return true;
+	};
 
 	asc_docs_api.prototype.ShowThumbnails = function (bIsShow) {
 		const savedSplitterPosition = this.WordControl.splitters[0].savedPosition;
@@ -9524,6 +9556,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_coAuthoringChatSendMessage']      = asc_docs_api.prototype.asc_coAuthoringChatSendMessage;
 	asc_docs_api.prototype['asc_coAuthoringChatGetMessages']      = asc_docs_api.prototype.asc_coAuthoringChatGetMessages;
 	asc_docs_api.prototype['asc_coAuthoringGetUsers']             = asc_docs_api.prototype.asc_coAuthoringGetUsers;
+	asc_docs_api.prototype['asc_moveToUserCursor']                = asc_docs_api.prototype.asc_moveToUserCursor;
 	asc_docs_api.prototype['syncCollaborativeChanges']            = asc_docs_api.prototype.syncCollaborativeChanges;
 	asc_docs_api.prototype['SetCollaborativeMarksShowType']       = asc_docs_api.prototype.SetCollaborativeMarksShowType;
 	asc_docs_api.prototype['GetCollaborativeMarksShowType']       = asc_docs_api.prototype.GetCollaborativeMarksShowType;
