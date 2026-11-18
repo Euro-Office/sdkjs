@@ -105,6 +105,8 @@ node node_modules/node-qunit-puppeteer/cli.js tests/word/api/api.html 30000 "--n
 
 - Tests only need `npm run develop` (a file list, seconds). Don't run `npm run build` for
   tests; it bundles and minifies all four editors and is the heaviest step in the repo.
+  Exception: the `tests/common/api/api-*-compiled.html` suites load
+  `deploy/sdkjs/*/sdk-all-min.js`, so they need a fresh build.
 - While iterating, run only the suites you touched (single-suite command above).
   `runAll.js` shares one Chromium across all suites (`TESTS_CONCURRENCY` tabs, default 4),
   don't raise that locally.

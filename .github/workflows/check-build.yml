@@ -19,10 +19,10 @@ on:
       - 'release/**'
       - 'hotfix/**'
 
-# A new push to a pull request cancels its previous run. Other runs are never
-# cancelled, they wait instead.
+# A new push to a pull request cancels its previous run. Other runs get their
+# own group (run id), so they neither wait nor get cancelled.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
