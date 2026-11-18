@@ -164,4 +164,112 @@ $(function ()
 		assert.strictEqual(stats.WordsCount, 3, "eins, zwei, drei: the dash separates, deleted text and the footnote text are not counted");
 		assert.strictEqual(count().Words, 6, "The document total still includes the footnote");
 	});
+
+	// the full count as the status bar does it: text, then the drawings per page, then headers and footers
+	function countWithLayout(includeHdrFtr)
+	{
+		AscTest.Recalculate();
+		let stats = logicDocument.Statistics;
+		stats.Reset();
+		stats.IncludeHdrFtr = !!includeHdrFtr;
+		logicDocument.Content.forEach(function(element)
+		{
+			element.CollectDocumentStatistics(stats);
+		});
+		for (let page = 0; page < logicDocument.Pages.length; ++page)
+		{
+			logicDocument.DrawingObjects.documentStatistics(page, stats);
+		}
+		if (includeHdrFtr)
+			logicDocument.CollectHdrFtrStatistics(stats);
+		stats.IncludeHdrFtr = false;
+		return stats;
+	}
+
+	function createTextBox(text, isInline, docContent)
+	{
+		let drawing    = new AscWord.ParaDrawing(50, 20, null, logicDocument.GetDrawingDocument(), docContent || logicDocument, null);
+		let shapeTrack = new AscFormat.NewShapeTrack("rect", 0, 0, logicDocument.theme, null, null, null, 0);
+		shapeTrack.track({}, 50, 20);
+		let shape = shapeTrack.getShape(true, logicDocument.GetDrawingDocument(), null);
+		shape.setBDeleted(false);
+		shape.setParent(drawing);
+		drawing.Set_GraphicObject(shape);
+		if (!isInline)
+		{
+			drawing.Set_DrawingType(drawing_Anchor);
+			drawing.Set_WrappingType(WRAPPING_TYPE_NONE);
+			drawing.Set_Distance(0, 0, 0, 0);
+		}
+		shape.createTextBoxContent();
+		shape.getDocContent().GetElement(0).AddToContentToEnd(createRun(text));
+		return drawing;
+	}
+
+	QUnit.test("A deleted or hidden part inside an inserted word does not split it", function (assert)
+	{
+		AscTest.ClearDocument();
+		let hidden = createRun("y", reviewtype_Add);
+		hidden.Pr.Vanish = true;
+		hidden.Recalc_CompiledPr(true);
+		createParagraph(createRun("neu", reviewtype_Add), createRun("x", reviewtype_Remove), createRun("e", reviewtype_Add),
+			createRun(" alt"), createRun("er", reviewtype_Add), hidden, createRun("e", reviewtype_Add));
+
+		let stats = count();
+		assert.strictEqual(stats.Words, 2, "neue, altere");
+		assert.strictEqual(stats.AddedWords, 2, "neue and the inserted ending of altere, each once");
+		assert.strictEqual(stats.DeletedWords, 1, "x");
+	});
+
+	QUnit.test("Deleted hidden text is not counted as deleted", function (assert)
+	{
+		AscTest.ClearDocument();
+		let hidden = createRun("verborgen gelöscht ", reviewtype_Remove);
+		hidden.Pr.Vanish = true;
+		hidden.Recalc_CompiledPr(true);
+		createParagraph(createRun("eins "), hidden, createRun("zwei ", reviewtype_Remove));
+
+		let stats = count();
+		assert.strictEqual(stats.Words, 1, "eins");
+		assert.strictEqual(stats.DeletedWords, 1, "only the visible deleted word");
+	});
+
+	QUnit.test("A text box in a footnote is counted once", function (assert)
+	{
+		[false, true].forEach(function(isInline)
+		{
+			AscTest.ClearDocument();
+			let footnote = logicDocument.Footnotes.CreateFootnote();
+			footnote.LogicDocument = logicDocument;
+			let notePara = footnote.GetElement(0);
+			notePara.LogicDocument = logicDocument;
+			let noteRun = createRun("foot note text");
+			noteRun.AddToContent(noteRun.GetElementsCount(), createTextBox("alpha beta gamma delta", isInline));
+			notePara.AddToContentToEnd(noteRun);
+
+			let run = createRun("one two three");
+			run.AddToContent(run.GetElementsCount(), new AscWord.CRunFootnoteReference(footnote));
+			createParagraph(run);
+
+			let stats = countWithLayout(false);
+			let kind  = isInline ? "inline" : "floating";
+			assert.strictEqual(stats.Words, 10, kind + ": 3 words of the text, 3 of the note and 4 of its text box");
+			assert.strictEqual(stats.Paragraphs, 3, kind + ": text, note and text box paragraph");
+		});
+	});
+
+	QUnit.test("Headers and footers count only with the option, once each", function (assert)
+	{
+		AscTest.ClearDocument();
+		createParagraph(createRun("body text"));
+		let header = AscTest.CreateDefaultHeader(logicDocument.GetFinalSectPr());
+		header.GetElement(0).LogicDocument = logicDocument;
+		let headerRun = createRun("Kopfzeile mit Text");
+		headerRun.AddToContent(headerRun.GetElementsCount(), createTextBox("im Kasten", true, header));
+		header.GetElement(0).AddToContentToEnd(headerRun);
+
+		assert.strictEqual(countWithLayout(false).Words, 2, "without the option only the body counts");
+		assert.strictEqual(countWithLayout(true).Words, 7, "with the option the header text and its text box count too");
+		AscTest.GetFinalSection().Set_Header_Default(null);
+	});
 });

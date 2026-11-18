@@ -3065,7 +3065,10 @@ background-repeat: no-repeat;\
 		}
 	};
 	/**
+	 * Starts counting the statistics of the whole document, sent with asc_onDocInfo and asc_onGetDocInfoEnd
 	 * @param {boolean} [includeHdrFtr=false] - Also count the text of headers and footers
+	 * @param {boolean} [includeComments=false] - Also count the text of comments and their replies; each comment line
+	 *     then also counts as a paragraph
 	 */
 	asc_docs_api.prototype.startGetDocInfo              = function(includeHdrFtr, includeComments)
 	{

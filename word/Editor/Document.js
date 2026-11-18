@@ -201,7 +201,7 @@ function CStatistics(LogicDocument)
     // counting a selection: notes are counted only when they are selected themselves
     this.IsSelection = false;
 
-    // drawings of the main text are counted per page; elsewhere (headers, footnotes) they are counted in the runs
+    // drawings of the main text and of the notes are counted per page; those of headers and footers in the runs
     this.CountDrawingsInRuns = false;
 
     this.Reset();
@@ -351,11 +351,11 @@ CStatistics.prototype.AddText = function(text)
 
 		let isSpace = AscCommon.IsSpace(codePoint) || 0x09 === codePoint || 0xA0 === codePoint;
 		this.Add_Symbol(isSpace);
-		if (isSpace || AscWord.IsWordSeparatorDash(codePoint))
+		if (isSpace || AscCommon.isWordSeparatorDash(codePoint))
 		{
 			isWord = false;
 		}
-		else if (AscWord.IsCJWordChar(codePoint))
+		else if (AscCommon.isCJWordChar(codePoint))
 		{
 			this.Add_Word();
 			isWord = false;
@@ -371,35 +371,6 @@ CStatistics.prototype.AddText = function(text)
 
 	if (!isEmptyLine)
 		this.Add_Paragraph();
-};
-/**
- * En and em dashes separate words, as in the word count of LibreOffice
- * @param {number} codePoint
- * @returns {boolean}
- */
-AscWord.IsWordSeparatorDash = function(codePoint)
-{
-	return (0x2013 === codePoint || 0x2014 === codePoint);
-};
-/**
- * Chinese and Japanese characters, their punctuation and full-width forms are each a word of their own, as in the word
- * count of LibreOffice. Korean (Hangul) is separated by spaces like other scripts.
- * @param {number} codePoint
- * @returns {boolean}
- */
-AscWord.IsCJWordChar = function(codePoint)
-{
-	return ((0x2E80 <= codePoint && codePoint <= 0x2FDF)    // radicals
-		|| (0x3001 <= codePoint && codePoint <= 0x303F)     // punctuation, 0x3000 is a space
-		|| (0x3040 <= codePoint && codePoint <= 0x312F)     // Hiragana, Katakana, Bopomofo
-		|| (0x3190 <= codePoint && codePoint <= 0x31FF)     // Kanbun, strokes, Katakana extensions
-		|| (0x3200 <= codePoint && codePoint <= 0x4DBF)     // enclosed and compatibility forms, extension A
-		|| (0x4E00 <= codePoint && codePoint <= 0x9FFF)     // unified ideographs
-		|| (0xF900 <= codePoint && codePoint <= 0xFAFF)     // compatibility ideographs
-		|| (0xFE30 <= codePoint && codePoint <= 0xFE4F)     // compatibility forms
-		|| (0xFF01 <= codePoint && codePoint <= 0xFF9F)     // full-width forms and half-width Katakana
-		|| (0xFFE0 <= codePoint && codePoint <= 0xFFEE)     // full-width signs
-		|| (0x20000 <= codePoint && codePoint <= 0x3FFFF)); // ideographs, extensions B and later
 };
 
 function CDocumentRecalcInfo()
