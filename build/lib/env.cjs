@@ -43,16 +43,12 @@ const DEFAULT_PUBLISHER_URL = 'https://github.com/Euro-Office/';
 
 // Reads build/license.header and substitutes the @@AppCopyright/@@PublisherUrl/
 // @@Version/@@Build placeholders. Shared by webpack.sdk.factory.mjs (banner
-// injected via BannerPlugin, kept for StripBundlePostprocessPlugin's later match)
-// and deploy-assets.cjs (banner prepended directly to each copied JS file) so a
-// future change to a placeholder or the default copyright string can't be
-// applied to only one copy.
+// injected via BannerPlugin after minification) and deploy-assets.cjs (banner
+// prepended directly to each copied JS file) so a future change to a placeholder
+// or the default copyright string can't be applied to only one copy.
 //
 // buildDir is the caller's build/ directory (where license.header lives).
-// stripSentinel: deploy-assets.cjs never runs Terser over the banner text, so
-// it must strip ' @@license-banner@@' itself instead of relying on
-// StripBundlePostprocessPlugin (webpack-only).
-function buildLicenseHeader(buildDir, { stripSentinel = false, env } = {}) {
+function buildLicenseHeader(buildDir, { env } = {}) {
     env = env || process.env;
 
     const appCopyright = env.APP_COPYRIGHT || defaultAppCopyright();
@@ -66,14 +62,6 @@ function buildLicenseHeader(buildDir, { stripSentinel = false, env } = {}) {
         .replace('@@PublisherUrl', publisherUrl)
         .replace('@@Version', version)
         .replace('@@Build', buildNumber);
-
-    if (stripSentinel) {
-        // @@license-banner@@ only exists so webpack.sdk.factory.mjs's Terser pass
-        // can distinguish this banner from per-file headers — irrelevant here
-        // since this script never runs Terser over the banner text, so it must
-        // not ship.
-        licenseText = licenseText.replace(/\s?@@license-banner@@/, '');
-    }
 
     return licenseText;
 }

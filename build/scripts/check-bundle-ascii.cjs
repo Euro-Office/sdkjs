@@ -55,14 +55,14 @@ function checkFile(file) {
     let nonAscii = 0;
     for (const byte of buf) if (byte > 0x7f) nonAscii++;
     if (nonAscii > 0) {
-        problems.push(`${nonAscii} raw non-ASCII byte(s); Terser format.ascii_only must stay enabled`);
+        problems.push(`${nonAscii} raw non-ASCII byte(s); esbuild charset 'ascii' must stay enabled and regex literals must spell non-ASCII as \\uXXXX escapes`);
     }
 
     const text = buf.toString('utf8');
     for (const [label, re] of [['raw', BARE_ASTRAL_RAW], ['escaped', BARE_ASTRAL_ESC]]) {
         if (re.test(text)) {
             const samples = sampleAround(text, re).map((s) => JSON.stringify(s)).join(', ');
-            problems.push(`bare astral object key (${label} form); Terser format.quote_keys must stay enabled -- e.g. ${samples}`);
+            problems.push(`bare astral object key (${label} form); the minifier must keep astral keys quoted -- e.g. ${samples}`);
         }
     }
 
