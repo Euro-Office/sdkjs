@@ -13756,7 +13756,7 @@
 				}
 			}
 			if (nFlags & (1 << 6)) {
-				bIsField = this.NewCreated && this.NewCreated instanceof Date;
+				bIsField = this.NewCreated instanceof Date;
 				Writer.WriteBool(bIsField);
 				if (bIsField) {
 					Writer.WriteString2(this.NewCreated.toISOString().slice(0, 19) + 'Z');
@@ -13791,14 +13791,14 @@
 				}
 			}
 			if (nFlags & (1 << 11)) {
-				bIsField = this.NewLastPrinted && this.NewLastPrinted instanceof Date;
+				bIsField = this.NewLastPrinted instanceof Date;
 				Writer.WriteBool(bIsField);
 				if (bIsField) {
 					Writer.WriteString2(this.NewLastPrinted.toISOString().slice(0, 19) + 'Z');
 				}
 			}
 			if (nFlags & (1 << 12)) {
-				bIsField = this.NewModified && this.NewModified instanceof Date;
+				bIsField = this.NewModified instanceof Date;
 				Writer.WriteBool(bIsField);
 				if (bIsField) {
 					Writer.WriteString2(this.NewModified.toISOString().slice(0, 19) + 'Z');
