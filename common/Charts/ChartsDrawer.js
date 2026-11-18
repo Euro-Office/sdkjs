@@ -1968,14 +1968,13 @@ CChartsDrawer.prototype =
 					pointVal = oErrVal.val;
 				}
 
-				const remainder = oErrVal.plusErrVal % 1;
-				var plusErrVal = remainder <= 0.5 ? Math.floor(oErrVal.plusErrVal) : Math.ceil(oErrVal.plusErrVal);
-				var minusErrVal = Math.floor(oErrVal.minusErrVal);
+				var plusErrVal = oErrVal.plusErrVal;
+				var minusErrVal = oErrVal.minusErrVal;
 				if (!AscFormat.isRealNumber(plusErrVal)) {
 					plusErrVal = 0;
 				}
 				if (!AscFormat.isRealNumber(minusErrVal)) {
-					plusErrVal = 0;
+					minusErrVal = 0;
 				}
 				switch (errBar.errBarType) {
 					case AscFormat.st_errbartypeBOTH: {
@@ -17837,6 +17836,14 @@ CErrBarsDraw.prototype = {
 							minusErrVal = minusErrVal.val;
 						}
 					}
+					if (errBars.plus || errBars.minus) {
+						if (null == plusErrVal) {
+							plusErrVal = 0;
+						}
+						if (null == minusErrVal) {
+							minusErrVal = 0;
+						}
+					}
 					break;
 				}
 				case AscFormat.st_errvaltypeFIXEDVAL: {
@@ -17866,7 +17873,7 @@ CErrBarsDraw.prototype = {
 		}
 
 		if (null == minusErrVal) {
-			minusErrVal = plusErrVal;
+			minusErrVal = (errBars && errBars.errValType === AscFormat.st_errvaltypeCUST) ? 0 : plusErrVal;
 		}
 
 		return plusErrVal !== null ? {startVal: startVal, plusErrVal: Math.abs(plusErrVal), minusErrVal: Math.abs(minusErrVal), val: pointVal} : null;

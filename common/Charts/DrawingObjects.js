@@ -3014,7 +3014,7 @@ CSparklineView.prototype.setMinMaxValAx = function(minVal, maxVal, oSparklineGro
 				return;
 
 			worksheet.setSelectionShape(true);
-			_this.controller.addChartDrawingObject(chart);
+			return _this.controller.addChartDrawingObject(chart);
 		} else if (isObject(chart) && chart["binary"])
 		{
             if (window["IS_NATIVE_EDITOR"])
