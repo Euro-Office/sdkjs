@@ -8758,6 +8758,29 @@ var editor;
 	spreadsheet_api.prototype.hideForeignSelectLabel = function (UserId) {
 		this.sendEvent("asc_onHideForeignCursorLabel", UserId);
 	};
+	spreadsheet_api.prototype.asc_moveToUserCursor = function (UserId) {
+		if (!this.wb || this.asc_getCellEditMode()) {
+			return false;
+		}
+		var cursor = this.wb.collaborativeEditing.m_aForeignCursorsData[UserId];
+		if (!cursor || !cursor.ranges || 0 === cursor.ranges.length) {
+			return false;
+		}
+		var ws = this.wbModel.getWorksheetById(cursor.sheetId);
+		if (!ws || ws.getHidden()) {
+			return false;
+		}
+		if (this.asc_getActiveWorksheetIndex() !== ws.getIndex()) {
+			this.asc_showWorksheet(ws.getIndex());
+		}
+
+		// The label of the user is drawn at the first range
+		var wsView = this.wb.getWorksheet();
+		wsView._scrollToRange(cursor.ranges[0]);
+		cursor.needDrawLabel = true;
+		wsView._drawSelection();
+		return true;
+	};
 
 	//TODO временно положил в прототип. перенести!
 	spreadsheet_api.prototype.sheetViewManagerLocks = [];
@@ -10486,6 +10509,7 @@ var editor;
   /////////////////////////////////////////////////////////////////////////
   prot["asc_coAuthoringChatSendMessage"] = prot.asc_coAuthoringChatSendMessage;
   prot["asc_coAuthoringGetUsers"] = prot.asc_coAuthoringGetUsers;
+  prot["asc_moveToUserCursor"] = prot.asc_moveToUserCursor;
   prot["asc_coAuthoringChatGetMessages"] = prot.asc_coAuthoringChatGetMessages;
   prot["asc_coAuthoringDisconnect"] = prot.asc_coAuthoringDisconnect;
 
