@@ -1041,7 +1041,8 @@ function (window, undefined) {
 			arg0 = arg0.getValue();
 		}
 
-		if (arg0 instanceof cNumber) {
+		// Excel reads an empty cell as the number 0
+		if (arg0 instanceof cNumber || arg0 instanceof cEmpty) {
 			return new cNumber(1);
 		} else if (arg0 instanceof cString) {
 			return new cNumber(2);

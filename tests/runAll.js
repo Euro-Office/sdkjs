@@ -52,6 +52,7 @@ const allTests = [
 	'cell/spreadsheet-calculation/ExternalReference.html',
 	'cell/spreadsheet-calculation/SheetMemoryTest.html',
 	'cell/spreadsheet-calculation/PrintJsonParamsTests.html',
+	'cell/spreadsheet-calculation/OpenRecalcTests.html',
 	'cell/js-api/js-api.html',
 
 	'common/api/api.html',
