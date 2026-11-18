@@ -1317,8 +1317,6 @@ CChartsDrawer.prototype =
 			result = defMargin + defMargin / 2;
 		} else if (labelsMargin !== 0 && keyMargin !== 0 && textMargin === 0 && topMainTitleMargin === 0) {
 			result = defMargin;
-		} else if (labelsMargin === 0 && keyMargin !== 0 && textMargin !== 0 && topMainTitleMargin === 0) {
-			result = defMargin + defMargin / 2;
 		} else if (labelsMargin === 0 && keyMargin === 0 && topMainTitleMargin !== 0) {
 			result = defMargin + defMargin / 2;
 		} else if (labelsMargin === 0 && keyMargin !== 0 && topMainTitleMargin !== 0) {

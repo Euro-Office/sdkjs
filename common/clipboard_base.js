@@ -421,8 +421,6 @@
 				this.CommonDiv_Select();
 				return;
 			}
-
-			return false;
 		},
 
 		_private_onbeforecopy_select : function()

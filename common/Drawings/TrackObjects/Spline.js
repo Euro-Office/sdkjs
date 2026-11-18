@@ -112,35 +112,6 @@ function Spline(drawingObjects, theme, master, layout, slide, pageIndex)
         }
         this.splineForDraw.Draw(g);
         return;
-        for(var i = 0; i < this.path.length; ++i)
-        {
-            var lastX, lastY;
-            switch (this.path[i].id )
-            {
-                case 0 :
-                {
-                    g._m(this.path[i].x, this.path[i].y);
-                    lastX = this.path[i].x;
-                    lastY = this.path[i].y;
-                    break;
-                }
-                case 1 :
-                {
-                    g._l(this.path[i].x, this.path[i].y);
-                    lastX = this.path[i].x;
-                    lastY = this.path[i].y;
-                    break;
-                }
-                case 2 :
-                {
-                    g._c(this.path[i].x1, this.path[i].y1, this.path[i].x2, this.path[i].y2, this.path[i].x3, this.path[i].y3);
-                    lastX = this.path[i].x3;
-                    lastY = this.path[i].y3;
-                    break;
-                }
-            }
-        }
-        g.ds();
     };
 
     this.getShape =  function(bWord, drawingDocument, drawingObjects)

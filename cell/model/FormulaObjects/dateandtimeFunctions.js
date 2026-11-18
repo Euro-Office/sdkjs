@@ -739,13 +739,10 @@ function (window, undefined) {
 		switch (arg2.getValue().toUpperCase()) {
 			case "Y":
 				return new cNumber(newDateDiff(val0, val1)[0]);
-				break;
 			case "M":
 				return new cNumber(newDateDiff(val0, val1)[1]);
-				break;
 			case "D":
 				return new cNumber(parseInt((val1 - val0) / c_msPerDay));
-				break;
 			case "MD":
 				if (val0.getUTCDate() > val1.getUTCDate()) {
 					return new cNumber(Math.abs(
@@ -755,11 +752,9 @@ function (window, undefined) {
 				} else {
 					return new cNumber(val1.getUTCDate() - val0.getUTCDate());
 				}
-				break;
 			case "YM":
 				let d = newDateDiff(val0, val1);
 				return new cNumber(d[1] - d[0] * 12);
-				break;
 			case "YD":
 				if (val0.getUTCMonth() > val1.getUTCMonth()) {
 					return new cNumber(Math.abs(
@@ -772,7 +767,6 @@ function (window, undefined) {
 						new cDate(Date.UTC(val0.getUTCFullYear(), val1.getUTCMonth(), val1.getUTCDate()))) /
 						c_msPerDay);
 				}
-				break;
 			default:
 				return new cError(cErrorType.not_numeric)
 		}

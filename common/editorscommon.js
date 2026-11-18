@@ -1775,220 +1775,149 @@
 			case c_oAscFileType.PDF:
 			case c_oAscFileType.PDFA:
 				return 'pdf';
-				break;
 			case c_oAscFileType.DJVU:
 				return 'djvu';
-				break;
 			case c_oAscFileType.XPS:
 				return 'xps';
-				break;
 			case c_oAscFileType.HTML:
 				return 'html';
-				break;
 			// Word
 			case c_oAscFileType.DOCX:
 				return 'docx';
-				break;
 			case c_oAscFileType.DOC:
 				return 'doc';
-				break;
 			case c_oAscFileType.ODT:
 				return 'odt';
-				break;
 			case c_oAscFileType.RTF:
 				return 'rtf';
-				break;
 			case c_oAscFileType.TXT:
 				return 'txt';
-				break;
 			case c_oAscFileType.MHT:
 				return 'mht';
-				break;
 			case c_oAscFileType.EPUB:
 				return 'epub';
-				break;
 			case c_oAscFileType.FB2:
 				return 'fb2';
-				break;
 			case c_oAscFileType.MOBI:
 				return 'mobi';
-				break;
 			case c_oAscFileType.DOCM:
 				return 'docm';
-				break;
 			case c_oAscFileType.DOTX:
 				return 'dotx';
-				break;
 			case c_oAscFileType.DOTM:
 				return 'dotm';
-				break;
 			case c_oAscFileType.FODT:
 				return 'fodt';
-				break;
 			case c_oAscFileType.OTT:
 				return 'ott';
-				break;
 			case c_oAscFileType.DOC_FLAT:
 				return 'doc';
-				break;
 			case c_oAscFileType.DOCX_FLAT:
 				return 'docx';
-				break;
 			case c_oAscFileType.HTML_IN_CONTAINER:
 				return 'zip';
-				break;
 			case c_oAscFileType.DOCX_PACKAGE:
 				return 'xml';
-				break;
 			case c_oAscFileType.OFORM:
 				return 'oform';
-				break;
 			case c_oAscFileType.DOCXF:
 				return 'docxf';
-				break;
 			case c_oAscFileType.MD:
 				return 'md';
-				break;
 			case c_oAscFileType.DOCY:
 				return 'doct';
-				break;
 			case c_oAscFileType.CANVAS_WORD:
 				return 'bin';
-				break;
 			case c_oAscFileType.JSON:
 				return 'json';
-				break;
 			// Excel
 			case c_oAscFileType.XLSX:
 				return 'xlsx';
-				break;
 			case c_oAscFileType.XLS:
 				return 'xls';
-				break;
 			case c_oAscFileType.ODS:
 				return 'ods';
-				break;
 			case c_oAscFileType.CSV:
 				return 'csv';
-				break;
 			case c_oAscFileType.XLSM:
 				return 'xlsm';
-				break;
 			case c_oAscFileType.XLTX:
 				return 'xltx';
-				break;
 			case c_oAscFileType.XLTM:
 				return 'xltm';
-				break;
 			case c_oAscFileType.XLSB:
 				return 'xlsb';
-				break;
 			case c_oAscFileType.FODS:
 				return 'fods';
-				break;
 			case c_oAscFileType.OTS:
 				return 'ots';
-				break;
 			case c_oAscFileType.XLSY:
 				return 'xlst';
-				break;
 			// PowerPoint
 			case c_oAscFileType.PPTX:
 				return 'pptx';
-				break;
 			case c_oAscFileType.PPT:
 				return 'ppt';
-				break;
 			case c_oAscFileType.ODP:
 				return 'odp';
-				break;
 			case c_oAscFileType.PPSX:
 				return 'ppsx';
-				break;
 			case c_oAscFileType.PPTM:
 				return 'pptm';
-				break;
 			case c_oAscFileType.PPSM:
 				return 'ppsm';
-				break;
 			case c_oAscFileType.POTX:
 				return 'potx';
-				break;
 			case c_oAscFileType.POTM:
 				return 'potm';
-				break;
 			case c_oAscFileType.FODP:
 				return 'fodp';
-				break;
 			case c_oAscFileType.OTP:
 				return 'otp';
-				break;
 			case c_oAscFileType.PPTY:
 				return 'pptt';
-				break;
 			case c_oAscFileType.VSDX:
 				return 'vsdx';
-				break;
 			case c_oAscFileType.VSSX:
 				return 'vssx';
-				break;
 			case c_oAscFileType.VSTX:
 				return 'vstx';
-				break;
 			case c_oAscFileType.VSDM:
 				return 'vsdm';
-				break;
 			case c_oAscFileType.VSSM:
 				return 'vssm';
-				break;
 			case c_oAscFileType.VSTM:
 				return 'vstm';
-				break;
 			case c_oAscFileType.VSDY:
 				return 'vsdt';
-				break;
 			case c_oAscFileType.IMG:
 				return 'zip';
-				break;
 			case c_oAscFileType.JPG:
 				return 'jpg';
-				break;
 			case c_oAscFileType.TIFF:
 				return 'tiff';
-				break;
 			case c_oAscFileType.TGA:
 				return 'tga';
-				break;
 			case c_oAscFileType.GIF:
 				return 'gif';
-				break;
 			case c_oAscFileType.PNG:
 				return 'png';
-				break;
 			case c_oAscFileType.EMF:
 				return 'emf';
-				break;
 			case c_oAscFileType.WMF:
 				return 'wmf';
-				break;
 			case c_oAscFileType.BMP:
 				return 'bmp';
-				break;
 			case c_oAscFileType.CR2:
 				return 'cr2';
-				break;
 			case c_oAscFileType.PCX:
 				return 'pcx';
-				break;
 			case c_oAscFileType.RAS:
 				return 'ras';
-				break;
 			case c_oAscFileType.PSD:
 				return 'psd';
-				break;
 			case c_oAscFileType.ICO:
 				return 'ico';
-				break;
 		}
 		return '';
 	}
@@ -11362,10 +11291,6 @@
 				nIndex = 64;
 			} else if (unR == 0xFF && unG == 0xFF && unB == 0xFF) {
 				nIndex = 65;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0x00) {
-				nIndex = 0;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0xFF) {
-				nIndex = 1;
 			} else if (unR == 0xFF && unG == 0x00 && unB == 0x00) {
 				nIndex = 2;
 			} else if (unR == 0x00 && unG == 0xFF && unB == 0x00) {
@@ -11378,22 +11303,6 @@
 				nIndex = 6;
 			} else if (unR == 0x00 && unG == 0xFF && unB == 0xFF) {
 				nIndex = 7;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0x00) {
-				nIndex = 8;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0xFF) {
-				nIndex = 9;
-			} else if (unR == 0xFF && unG == 0x00 && unB == 0x00) {
-				nIndex = 10;
-			} else if (unR == 0x00 && unG == 0xFF && unB == 0x00) {
-				nIndex = 11;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0xFF) {
-				nIndex = 12;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0x00) {
-				nIndex = 13;
-			} else if (unR == 0xFF && unG == 0x00 && unB == 0xFF) {
-				nIndex = 14;
-			} else if (unR == 0x00 && unG == 0xFF && unB == 0xFF) {
-				nIndex = 15;
 			} else if (unR == 0x80 && unG == 0x00 && unB == 0x00) {
 				nIndex = 16;
 			} else if (unR == 0x00 && unG == 0x80 && unB == 0x00) {
@@ -11426,26 +11335,8 @@
 				nIndex = 30;
 			} else if (unR == 0xCC && unG == 0xCC && unB == 0xFF) {
 				nIndex = 31;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0x80) {
-				nIndex = 32;
-			} else if (unR == 0xFF && unG == 0x00 && unB == 0xFF) {
-				nIndex = 33;
-			} else if (unR == 0xFF && unG == 0xFF && unB == 0x00) {
-				nIndex = 34;
-			} else if (unR == 0x00 && unG == 0xFF && unB == 0xFF) {
-				nIndex = 35;
-			} else if (unR == 0x80 && unG == 0x00 && unB == 0x80) {
-				nIndex = 36;
-			} else if (unR == 0x80 && unG == 0x00 && unB == 0x00) {
-				nIndex = 37;
-			} else if (unR == 0x00 && unG == 0x80 && unB == 0x80) {
-				nIndex = 38;
-			} else if (unR == 0x00 && unG == 0x00 && unB == 0xFF) {
-				nIndex = 39;
 			} else if (unR == 0x00 && unG == 0xCC && unB == 0xFF) {
 				nIndex = 40;
-			} else if (unR == 0xCC && unG == 0xFF && unB == 0xFF) {
-				nIndex = 41;
 			} else if (unR == 0xCC && unG == 0xFF && unB == 0xCC) {
 				nIndex = 42;
 			} else if (unR == 0xFF && unG == 0xFF && unB == 0x99) {
@@ -11484,8 +11375,6 @@
 				nIndex = 59;
 			} else if (unR == 0x99 && unG == 0x33 && unB == 0x00) {
 				nIndex = 60;
-			} else if (unR == 0x99 && unG == 0x33 && unB == 0x66) {
-				nIndex = 61;
 			} else if (unR == 0x33 && unG == 0x33 && unB == 0x99) {
 				nIndex = 62;
 			} else if (unR == 0x33 && unG == 0x33 && unB == 0x33) {

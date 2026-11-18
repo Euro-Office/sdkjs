@@ -1773,7 +1773,6 @@
 					return oDrawingToCheck;
 				}
 			}
-			return oCurCandidate;
 		};
 		CGroupShape.prototype.checkDrawingPartWithHistory = function() {};
 		CGroupShape.prototype.generateSmartArtDrawingPart = function () {

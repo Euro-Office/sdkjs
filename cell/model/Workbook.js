@@ -17555,32 +17555,23 @@
 			switch (sUpText){
 				case cErrorLocal["nil"]:
 					return cErrorOrigin["nil"];
-					break;
 				case cErrorLocal["div"]:
 					return cErrorOrigin["div"];
-					break;
 				case cErrorLocal["value"]:
 					return cErrorOrigin["value"];
-					break;
 				case cErrorLocal["ref"]:
 					return cErrorOrigin["ref"];
-					break;
 				case cErrorLocal["name"]:
 				case cErrorLocal["name"].replace('\\', ''): // ToDo это неправильная правка для бага 32463 (нужно переделать parse формул)
 					return cErrorOrigin["name"];
-					break;
 				case cErrorLocal["num"]:
 					return cErrorOrigin["num"];
-					break;
 				case cErrorLocal["na"]:
 					return cErrorOrigin["na"];
-					break;
 				case cErrorLocal["getdata"]:
 					return cErrorOrigin["getdata"];
-					break;
 				case cErrorLocal["uf"]:
 					return cErrorOrigin["uf"];
-					break;
 			}
 			return false;
 		}
@@ -17850,40 +17841,28 @@
 		switch (text){
 			case cErrorOrigin["nil"]:
 				return cErrorLocal["nil"];
-				break;
 			case cErrorOrigin["div"]:
 				return cErrorLocal["div"];
-				break;
 			case cErrorOrigin["value"]:
 				return cErrorLocal["value"];
-				break;
 			case cErrorOrigin["ref"]:
 				return cErrorLocal["ref"];
-				break;
 			case cErrorOrigin["name"]:
 				return cErrorLocal["name"].replace('\\', ''); // ToDo это неправильная правка для бага 32463 (нужно переделать parse формул)
-				break;
 			case cErrorOrigin["num"]:
 				return cErrorLocal["num"];
-				break;
 			case cErrorOrigin["na"]:
 				return cErrorLocal["na"];
-				break;
 			case cErrorOrigin["getdata"]:
 				return cErrorLocal["getdata"];
-				break;
 			case cErrorOrigin["uf"]:
 				return cErrorLocal["uf"];
-				break;
 			case cErrorOrigin["calc"]:
 				return cErrorLocal["calc"];
-				break;
 			case cErrorOrigin["spill"]:
 				return cErrorLocal["spill"];
-				break;
 			case cErrorOrigin["busy"]:
 				return cErrorLocal["busy"];
-				break;
 		}
 		return cErrorLocal["nil"];
 	};

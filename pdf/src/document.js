@@ -6013,7 +6013,6 @@ var CPresentation = CPresentation || function(){};
                     conditionFunc(maxVal);
                     return maxVal;
                 }
-                return conditionFunc(minVal) ? minVal : maxVal;
             }
             bisectionMethod(oShape.extX, dMaxExtX, function (dVal) {
                 return fContentCondition(oContent, dVal);

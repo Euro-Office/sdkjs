@@ -549,10 +549,8 @@
 				switch (nType) {
 					case this.Properties.title:
 						return this.title;
-						break;
 					case this.Properties.description:
 						return this.description;
-						break;
 				}
 
 				return null;
@@ -762,10 +760,8 @@
 				switch (nType) {
 					case this.Properties.range:
 						return this.range;
-						break;
 					case this.Properties.isTitle:
 						return this.isTitle;
-						break;
 				}
 				return null;
 			},

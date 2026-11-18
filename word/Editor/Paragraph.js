@@ -19861,10 +19861,6 @@ CParaDrawingRangeLines.prototype =
 			else if (undefined !== PrevEl.Additional.Comb)
 			{
 				return false;
-				return (PrevEl.Additional.Comb === Element.Additional.Comb
-					&& Math.abs(PrevEl.Additional.Y - Element.Additional.Y) < 0.001
-					&& Math.abs(PrevEl.Additional.H - Element.Additional.H) < 0.001
-					&& PrevEl.Additional.Form === Element.Additional.Form);
 			} else if (PrevEl.Additional.TextDrawer && Element.Additional.TextDrawer) {
 				const oPrevTextInfo = PrevEl.Additional.TextDrawer;
 				if (oPrevTextInfo.SplitType === null) {

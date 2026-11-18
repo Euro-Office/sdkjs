@@ -5807,7 +5807,6 @@ function(window, undefined) {
 				return AscFormat.CROSS_BETWEEN_BETWEEN;
 			}
 		}
-		return AscFormat.CROSS_BETWEEN_BETWEEN;
 	};
 	CChartSpace.prototype.getValAxisCrossType = function () {
 		if (this.chart && this.chart.plotArea && this.chart.plotArea.charts[0]) {

@@ -513,7 +513,7 @@ Binary_CommonReader.prototype.Read2 = function(stLen, fRead)
             case c_oSerPropLenType.Long:
             case c_oSerPropLenType.Double: nRealLen = 4;break;
 			case c_oSerPropLenType.Double64: nRealLen = 8;break;
-			case c_oSerPropLenType.Long: nRealLen = 8;break;
+			case c_oSerPropLenType.Long64: nRealLen = 8;break;
             case c_oSerPropLenType.Variable:
                 nRealLen = this.stream.GetULongLE();
                 nCurPosShift += 4;
@@ -553,7 +553,7 @@ Binary_CommonReader.prototype.Read2Spreadsheet = function(stLen, fRead)
             case c_oSerPropLenType.Long: nRealLen = 4;break;
             case c_oSerPropLenType.Double: nRealLen = 8;break;
 			case c_oSerPropLenType.Double64: nRealLen = 8;break;
-			case c_oSerPropLenType.Long: nRealLen = 8;break;
+			case c_oSerPropLenType.Long64: nRealLen = 8;break;
             case c_oSerPropLenType.Variable:
                 nRealLen = this.stream.GetULongLE();
                 nCurPosShift += 4;
@@ -766,11 +766,6 @@ FT_Stream2.prototype.GetDoubleLE = function() {
 	tempHelpUnit[6] = this.GetUChar();
 	tempHelpUnit[7] = this.GetUChar();
 	return tempHelpFloat[0];
-
-	var arr = [];
-	for(var i = 0; i < 8; ++i)
-		arr.push(this.GetUChar());
-	return this.doubleDecodeLE754(arr);
 };
 FT_Stream2.prototype.doubleDecodeLE754 = function(a) {
 	var s, e, m, i, d, nBits, mLen, eLen, eBias, eMax;

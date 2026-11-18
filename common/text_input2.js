@@ -938,14 +938,6 @@
 	CTextInputPrototype.externalChangeFocus = function()
 	{
 		return;
-		if (!this.IsComposition)
-			return false;
-
-		setTimeout(function() {
-			window['AscCommon'].g_inputContext.clear();
-		}, 10);
-
-		return true;
 	};
 
 	// html element

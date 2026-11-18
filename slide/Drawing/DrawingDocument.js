@@ -324,8 +324,6 @@ function CTableOutlineDr()
 				}
 			}
 		}
-
-		return false;
 	};
 
 	this.checkMouseUp = function (X, Y, word_control)

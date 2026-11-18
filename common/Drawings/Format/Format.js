@@ -170,6 +170,7 @@
 			const oApi = window.editor || Asc.editor;
 			return !!(oApi && oApi.isSkipAddIdToBaseObject);
 		};
+		/* eslint-disable no-debugger -- debug-only helper */
 		//Method for debug
 		CBaseObject.prototype.compareTypes = function (oOther) {
 			if (!oOther || !oOther.compareTypes) {
@@ -208,6 +209,7 @@
 				}
 			}
 		};
+		/* eslint-enable no-debugger */
 
 		function InitClassWithoutType(fClass, fBase) {
 			fClass.prototype = Object.create(fBase.prototype);
@@ -15465,135 +15467,102 @@
 			switch (name) {
 				case "vector": {
 					return c_oVariantTypes.vtVector;
-					break;
 				}
 				case "array": {
 					return c_oVariantTypes.vtArray;
-					break;
 				}
 				case "blob": {
 					return c_oVariantTypes.vtBlob;
-					break;
 				}
 				case "oblob": {
 					return c_oVariantTypes.vtOBlob;
-					break;
 				}
 				case "empty": {
 					return c_oVariantTypes.vtEmpty;
-					break;
 				}
 				case "null": {
 					return c_oVariantTypes.vtNull;
-					break;
 				}
 				case "i1": {
 					return c_oVariantTypes.vtI1;
-					break;
 				}
 				case "i2": {
 					return c_oVariantTypes.vtI2;
-					break;
 				}
 				case "i4": {
 					return c_oVariantTypes.vtI4;
-					break;
 				}
 				case "i8": {
 					return c_oVariantTypes.vtI8;
-					break;
 				}
 				case "int": {
 					return c_oVariantTypes.vtInt;
-					break;
 				}
 				case "ui1": {
 					return c_oVariantTypes.vtUi1;
-					break;
 				}
 				case "ui2": {
 					return c_oVariantTypes.vtUi2;
-					break;
 				}
 				case "ui4": {
 					return c_oVariantTypes.vtUi4;
-					break;
 				}
 				case "ui8": {
 					return c_oVariantTypes.vtUi8;
-					break;
 				}
 				case "uint": {
 					return c_oVariantTypes.vtUint;
-					break;
 				}
 				case "r4": {
 					return c_oVariantTypes.vtR4;
-					break;
 				}
 				case "r8": {
 					return c_oVariantTypes.vtR8;
-					break;
 				}
 				case "decimal": {
 					return c_oVariantTypes.vtDecimal;
-					break;
 				}
 				case "lpstr": {
 					return c_oVariantTypes.vtLpstr;
-					break;
 				}
 				case "lpwstr": {
 					return c_oVariantTypes.vtLpwstr;
-					break;
 				}
 				case "bstr": {
 					return c_oVariantTypes.vtBstr;
-					break;
 				}
 				case "date": {
 					return c_oVariantTypes.vtDate;
-					break;
 				}
 				case "filetime": {
 					return c_oVariantTypes.vtFiletime;
-					break;
 				}
 				case "bool": {
 					return c_oVariantTypes.vtBool;
-					break;
 				}
 				case "cy": {
 					return c_oVariantTypes.vtCy;
-					break;
 				}
 				case "error": {
 					return c_oVariantTypes.vtError;
-					break;
 				}
 				case "stream": {
 					return c_oVariantTypes.vtStream;
-					break;
 				}
 				case "ostream": {
 					return c_oVariantTypes.vtOStream;
-					break;
 				}
 				case "storage": {
 					return c_oVariantTypes.vtStorage;
-					break;
 				}
 				case "ostorage": {
 					return c_oVariantTypes.vtOStorage;
-					break;
 				}
 				case "vstream": {
 					return c_oVariantTypes.vtVStream;
-					break;
 				}
 				case "clsid": {
 					return c_oVariantTypes.vtClsid;
-					break;
 				}
 			}
 			return null;

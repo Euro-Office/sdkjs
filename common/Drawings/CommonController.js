@@ -9890,7 +9890,6 @@
 							return new AscCommon.CPluginCtxMenuInfo(Asc.c_oPluginContextMenuTypes.Shape);
 						}
 					}
-					return new AscCommon.CPluginCtxMenuInfo();
 				},
 				getHorGuidesPos: function () {
 					return [];
@@ -11620,7 +11619,6 @@
 					}
 					return null;
 				}
-				return;
 			}
 			if(oSelectionState2.groupSelection) {
 				if(oSelectionState1.groupObject !== oSelectionState2.groupObject) {

@@ -749,8 +749,8 @@
 		setStyleHeading			: function(name){return "\tdoc.GetRangeBySelect().SetStyle(doc.GetStyle(\"" + name + "\"));\n"},
 		clearFormat				: function(){return "\tdoc.GetRangeBySelect().ClearFormating()\n"},
 		cut						: function(){return "\tdoc.GetRangeBySelect().Cut();\n"},
-		changeTextCase			: function(changeType){return ""; return "\tdoc.GetRangeBySelect().SetTextCase(\"" + changeType + "\");\n"},
-		incFontSize				: function(){return ""; return "\tdoc.GetRangeBySelect().Grow();\n"},
+		changeTextCase			: function(changeType){return "";},
+		incFontSize				: function(){return "";},
 		addLetter				: function(textArr){
 			let textStr = "";
 			for (let i = 0; i < textArr.length; ++i)
@@ -1545,7 +1545,6 @@
 		setCellChangeFontSize	: function(isInc){
 			// todo create api
 			return "";
-			return isInc ? "\tApi.asc_increaseFontSize();\n" : "\tApi.asc_decreaseFontSize();\n";
 		},
 		setCellBorder			: function(borderArray){
 			if (!Array.isArray(borderArray) || borderArray.length === 0) {
@@ -1831,15 +1830,11 @@
 		setDrawingFlipH			: function(isFlip)
 		{
 			return ""
-			return "\tworksheet.GetSelectedShapes()\n"
-				+ "\t\t.forEach(shape => {shape.SetHorFlip(" + isFlip +")});\n";
 
 		},
 		setDrawingFlipV			: function(isFlip)
 		{
 			return ""
-			return "\tworksheet.GetSelectedShapes()\n"
-				+ "\t\t.forEach(shape => {shape.SetVertFlip(" + isFlip + ")});\n";
 
 		},
 		setDrawingPos			: function(obj)

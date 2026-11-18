@@ -435,7 +435,6 @@
                         return FontStyle.FontStyleItalic;
                     else
                         return FontStyle.FontStyleRegular;
-                    break;
                 }
                 case FontStyle.FontStyleBold:
                 {
@@ -447,7 +446,6 @@
                         return FontStyle.FontStyleBoldItalic;
                     else
                         return FontStyle.FontStyleItalic;
-                    break;
                 }
                 case FontStyle.FontStyleItalic:
                 {
@@ -459,7 +457,6 @@
                         return FontStyle.FontStyleBoldItalic;
                     else
                         return FontStyle.FontStyleBold;
-                    break;
                 }
                 case FontStyle.FontStyleRegular:
                 {

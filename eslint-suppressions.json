@@ -1,0 +1,50 @@
+{
+	"cell/apiBuilder.js": {
+		"no-duplicate-case": {
+			"count": 21
+		},
+		"no-unsafe-negation": {
+			"count": 1
+		}
+	},
+	"cell/model/FormulaObjects/lookupandreferenceFunctions.js": {
+		"no-dupe-else-if": {
+			"count": 1
+		}
+	},
+	"cell/model/FormulaObjects/statisticalFunctions.js": {
+		"no-unsafe-negation": {
+			"count": 1
+		}
+	},
+	"common/workerspeech.js": {
+		"no-dupe-else-if": {
+			"count": 1
+		}
+	},
+	"word/Editor/StructuredDocumentTags/BlockLevel.js": {
+		"no-dupe-else-if": {
+			"count": 1
+		}
+	},
+	"word/Editor/revisions/track-revisions-manager.js": {
+		"no-dupe-else-if": {
+			"count": 1
+		}
+	},
+	"word/Math/LaTeXParser.js": {
+		"no-dupe-else-if": {
+			"count": 1
+		}
+	},
+	"word/Math/NamesOfLiterals.js": {
+		"no-unsafe-negation": {
+			"count": 2
+		}
+	},
+	"word/Math/math-ml.js": {
+		"no-dupe-else-if": {
+			"count": 1
+		}
+	}
+}

@@ -2659,8 +2659,6 @@ CHeaderFooterController.prototype =
             return Header;
         else
             return Footer;
-
-        return null;
     },
 
 //-----------------------------------------------------------------------------------
