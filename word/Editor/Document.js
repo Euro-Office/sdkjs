@@ -6766,31 +6766,88 @@ CDocument.prototype.SetParagraphTabs = function(Tabs)
 };
 /**
  * Moves the indents of all selected paragraphs by the same distance, so their differences stay (e.g. the levels of a
- * multilevel list), instead of giving them all the same indent. Used by the ruler when "keep indent differences" is on.
+ * multilevel list), instead of giving them all the same indent. Used by the ruler when several paragraphs are selected,
+ * like Word does. Each paragraph is kept inside the page edges and the text area, the same way the ruler limits the
+ * current paragraph. Paragraphs whose direction (RTL/LTR) differs from the ruler's are left as they are.
+ * Does not recalculate; the caller (inside an action) does that.
  * @param {number} dLeft  change of the left indent (mm)
  * @param {number} dRight change of the right indent (mm)
  * @param {number} dFirst change of the position of the first line (mm)
+ * @param {boolean} [isRtl] direction the changes are given in (the ruler's); by default that of the current paragraph
  * @returns {boolean} false when fewer than two paragraphs are selected (then the usual way applies)
  */
-CDocument.prototype.ShiftParagraphIndents = function(dLeft, dRight, dFirst)
+CDocument.prototype.ShiftParagraphIndents = function(dLeft, dRight, dFirst, isRtl)
 {
 	let paragraphs = this.GetSelectedParagraphs();
 	if (!paragraphs || paragraphs.length < 2)
 		return false;
 
+	if (undefined === isRtl)
+	{
+		let current = this.GetCurrentParagraph(false, false);
+		isRtl = !!(current && current.isRtlDirection());
+	}
+
+	// Moves value by delta, but not beyond [min, max]. A paragraph that is already outside is not pulled back.
+	function clampShift(delta, value, min, max)
+	{
+		if (delta > 0)
+			return Math.max(0, Math.min(delta, max - value));
+		else if (delta < 0)
+			return Math.min(0, Math.max(delta, min - value));
+		return 0;
+	}
+
+	let logicDocument = this;
 	paragraphs.forEach(function(paragraph)
 	{
-		let ind = paragraph.Get_CompiledPr2(false).ParaPr.Ind;
+		let paraRtl = paragraph.isRtlDirection();
+		if (paraRtl !== isRtl)
+			return;
+
+		let ind   = paragraph.Get_CompiledPr2(false).ParaPr.Ind;
+		let left  = ind.Left;
+		let right = ind.Right;
+		let first = ind.Left + ind.FirstLine;
+
+		let sLeft  = dLeft;
+		let sRight = dRight;
+		let sFirst = dFirst;
+
+		let textWidth = paragraph.XLimit - paragraph.X;
+		if (textWidth > 0)
+		{
+			// Space between the text area and the page edge, on the start and the end side of the paragraph
+			let pageWidth = logicDocument.Get_PageLimits(paragraph.GetAbsolutePage(0)).XLimit;
+			let startGap  = paraRtl ? pageWidth - paragraph.XLimit : paragraph.X;
+			let endGap    = paraRtl ? paragraph.X : pageWidth - paragraph.XLimit;
+
+			// The right indent: not past the page edge, and at least 20 mm of text left (as the ruler does)
+			sRight = clampShift(dRight, right, -endGap, textWidth - 20 - Math.max(0, left, first));
+
+			let maxStart = textWidth - 20 - Math.max(0, right + sRight);
+			if (Math.abs(dLeft - dFirst) < 0.001)
+			{
+				// Left and first line move together: keep the distance between them
+				sLeft  = dLeft > 0
+					? clampShift(dLeft, Math.max(left, first), -startGap, maxStart)
+					: clampShift(dLeft, Math.min(left, first), -startGap, maxStart);
+				sFirst = sLeft;
+			}
+			else
+			{
+				sLeft  = clampShift(dLeft, left, -startGap, maxStart);
+				sFirst = clampShift(dFirst, first, -startGap, maxStart);
+			}
+		}
+
 		paragraph.Set_Ind({
-			Left      : ind.Left + dLeft,
-			Right     : ind.Right + dRight,
-			FirstLine : ind.FirstLine + dFirst - dLeft
+			Left      : left + sLeft,
+			Right     : right + sRight,
+			FirstLine : (first + sFirst) - (left + sLeft)
 		}, false);
 	});
 
-	this.Recalculate();
-	this.UpdateSelection();
-	this.UpdateInterface();
 	return true;
 };
 CDocument.prototype.SetParagraphIndent = function(Ind)
