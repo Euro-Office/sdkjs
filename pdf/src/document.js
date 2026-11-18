@@ -4051,6 +4051,7 @@ var CPresentation = CPresentation || function(){};
 			case AscDFH.historydescription_Document_ChangeComment:
 			case AscDFH.historydescription_Pdf_AddComment:
 			case AscDFH.historydescription_Pdf_RemoveComment:
+			case AscDFH.historydescription_Document_RemovePersonalInformation:
 				nChangesType = AscCommon.changestype_2_Comment;
 				break;
 			default:

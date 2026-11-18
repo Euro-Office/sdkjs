@@ -451,6 +451,40 @@
 		if (this.DocumentRenderer.isFullText)
 			this.sync_GetDocInfoEndCallback();
 	};
+	/**
+	 * Replaces the author of every annotation, comment and reply with one name and removes the user ids, as the
+	 * document inspector of Word does. Dates are kept. One undo step.
+	 * The document properties of the PDF (title, author ...) can't be changed by this editor.
+	 * @param {string} [sName="Author"]
+	 */
+	PDFEditorApi.prototype.asc_RemovePersonalInformation = function(sName) {
+		let oDoc = this.getPDFDoc();
+		if (!oDoc)
+			return;
+		sName = sName || "Author";
+
+		let aAll = [];
+		oDoc.annots.forEach(function collect(oAnnot) {
+			aAll.push(oAnnot);
+			(oAnnot.GetReplies && oAnnot.GetReplies() || []).forEach(collect);
+		});
+		oDoc.DoAction(function() {
+			aAll.forEach(function(oAnnot) {
+				oAnnot.SetAuthor(sName);
+				oAnnot.SetUserId("");
+			});
+		}, AscDFH.historydescription_Document_RemovePersonalInformation, this, aAll.map(function(oAnnot) {return oAnnot.GetId();}));
+
+		let t = this;
+		oDoc.annots.forEach(function(oAnnot) {
+			let oAscData = oAnnot.GetAscCommentData && oAnnot.GetAscCommentData();
+			if (!oAscData)
+				return;
+			let oData = new AscCommon.CCommentData();
+			oData.Read_FromAscCommentData(oAscData);
+			t.sync_ChangeCommentData(oAnnot.GetId(), oData);
+		});
+	};
 	PDFEditorApi.prototype.stopGetDocInfo = function() {
 		this.sync_GetDocInfoStopCallback();
 		this.DocumentRenderer.endStatistics();
@@ -5257,6 +5291,7 @@
 	PDFEditorApi.prototype['asc_getCanUndo']				= PDFEditorApi.prototype.asc_getCanUndo;
 	PDFEditorApi.prototype['asc_setAdvancedOptions']		= PDFEditorApi.prototype.asc_setAdvancedOptions;
 	PDFEditorApi.prototype['startGetDocInfo']				= PDFEditorApi.prototype.startGetDocInfo;
+	PDFEditorApi.prototype['asc_RemovePersonalInformation']	= PDFEditorApi.prototype.asc_RemovePersonalInformation;
 	PDFEditorApi.prototype['stopGetDocInfo']				= PDFEditorApi.prototype.stopGetDocInfo;
 	PDFEditorApi.prototype['can_CopyCut']					= PDFEditorApi.prototype.can_CopyCut;
 	PDFEditorApi.prototype['asc_searchEnabled']				= PDFEditorApi.prototype.asc_searchEnabled;
