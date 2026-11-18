@@ -1484,6 +1484,11 @@ CFieldInstructionParser.prototype.private_ReadNext = function()
 		}
 		else if (34 === nCharCode && (0 === this.Pos || 92 !== this.Line.charCodeAt(this.Pos - 1)))
 		{
+			// A switch written directly before a quoted argument (\@"dd.MM.yyyy" without a space) ends here,
+			// so that the quoted text is read as its argument - as Word does.
+			if (bWord && 2 === this.Buffer.length && '\\' === this.Buffer.charAt(0))
+				return true;
+
 			// Кавычки
 			this.Pos++;
 			bWord = true;
