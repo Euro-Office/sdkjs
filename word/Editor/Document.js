@@ -20952,8 +20952,12 @@ CDocument.prototype.controller_SetParagraphBorders = function(Borders)
 			var StartPos = Item.Index;
 			var EndPos   = Item.Index;
 			var CurBrd   = Item.Get_CompiledPr().ParaPr.Brd;
+			// Only paragraphs that have a border form a group (as in Word). Without this, paragraphs without any border
+			// counted as one group too, so a border set in one of them went on all its plain neighbours (e.g. every
+			// empty line up to the next table) and the line was drawn under the last of them.
+			var isInGroup = !!(CurBrd && ['Top', 'Bottom', 'Left', 'Right', 'Between'].some(function(sSide) { return CurBrd[sSide] && !CurBrd[sSide].IsNone(); }));
 
-			while (true != CurBrd.First)
+			while (isInGroup && true != CurBrd.First)
 			{
 				StartPos--;
 				if (StartPos < 0)
@@ -20973,7 +20977,7 @@ CDocument.prototype.controller_SetParagraphBorders = function(Borders)
 			}
 
 			CurBrd = Item.Get_CompiledPr().ParaPr.Brd;
-			while (true != CurBrd.Last)
+			while (isInGroup && true != CurBrd.Last)
 			{
 				EndPos++;
 				if (EndPos >= this.Content.length)

@@ -465,6 +465,21 @@ $(function () {
 		CheckStatistics(assert, total, "Select all");
 	});
 
+	QUnit.test("A bullet is counted as a symbol, not as a word", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p = CreateParagraphWithText("Bulleted item");
+		logicDocument.AddToContent(0, p);
+		AscTest.SelectParagraph(p);
+		AscTest.AddNumbering(0, 1);
+		assert.strictEqual(p.GetNumPr() && logicDocument.GetNumbering().GetNum(p.GetNumPr().NumId).GetLvl(0).IsBulleted(), true, "Paragraph has a bullet");
+
+		logicDocument.SelectAll();
+		let stats = logicDocument.GetSelectionStatistics();
+		assert.strictEqual(stats.WordsCount, 2, "Only the text words are counted");
+		assert.strictEqual(stats.SymbolsCount, "Bulleteditem".length + 1, "The bullet is counted as a symbol");
+	});
+
 	QUnit.test("List number counts only when the paragraph start is selected", function (assert)
 	{
 		AscTest.ClearDocument();

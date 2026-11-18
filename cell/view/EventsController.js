@@ -1327,6 +1327,17 @@
 						}
 						bIsNeedCheckActiveCellChanged = true;
 						break;
+					case 86: // V
+						if ((oEvent.IsShortcutCtrl() || oEvent.IsCmd()) && bIsSelect && !oEvent.IsAlt()) {
+							// Ctrl+Shift+V pastes only the text, so the target cells keep their formatting
+							window['AscCommon']['isDisableRawPaste'] = true;
+							// the paste event follows the keydown; drop the flag if it never comes
+							setTimeout(function () {
+								delete window['AscCommon']['isDisableRawPaste'];
+							}, 50);
+						}
+						nRetValue = keydownresult_PreventNothing;
+						break;
 					case 93:
 						if (!oEvent.MacCmdKey) {
 							nRetValue = keydownresult_PreventAll;
