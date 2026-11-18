@@ -108,6 +108,40 @@
 		
 		return this.DocumentRenderer.getPDFDoc();
 	};
+	PDFEditorApi.prototype.asc_moveToUserCursor = function(UserId) {
+		let oDoc	= this.getPDFDoc();
+		let oViewer	= this.getDocumentRenderer();
+		if (!oDoc || !oViewer)
+			return false;
+
+		// The text cursor of the user, or else the first object the user has selected that is still in the
+		// document (as Draw_ForeingSelection draws them)
+		let oCoEditing	= oDoc.CollaborativeEditing;
+		let oCursor		= oCoEditing.m_aForeignCursorsXY[UserId];
+		let oObject		= (oCoEditing.m_oSelectedObjects[UserId] || []).find(function(oObj) {
+			return oObj.IsUseInDocument() && oDoc.pagesTransform[oObj.GetPage()];
+		});
+		let oPoint;
+		if (oCursor) {
+			oPoint = oViewer.ConvertCoordsToCursor(oCursor.Transform ? oCursor.X0 : oCursor.X, oCursor.Transform ? oCursor.Y0 : oCursor.Y, oCursor.PageIndex);
+		}
+		else if (oObject) {
+			let aRect = oObject.IsAnnot() && oObject.IsShapeBased() ? AscPDF.CPdfDrawingPrototype.prototype.GetRect.call(oObject) : oObject.GetRect();
+			oPoint = oDoc.pagesTransform[oObject.GetPage()].invert.TransformPoint(aRect[0], aRect[1]);
+		}
+		if (!oPoint)
+			return false;
+
+		// Into the middle of the view. As after any scroll, the own active object loses the focus when its page
+		// leaves the view.
+		oViewer.scrollToXY(oViewer.scrollY + oPoint.y - oViewer.height / 2, oViewer.scrollX + oPoint.x - oViewer.width / 2);
+
+		if (oCursor)
+			oCoEditing.Show_ForeignCursorLabel(UserId);
+		else
+			oDoc.Show_ForeignSelectedObjectLabel(UserId, oObject, AscCommon.getUserColorById(oCoEditing.m_aForeignCursorsId[UserId], null, true));
+		return true;
+	};
 	PDFEditorApi.prototype.IsNeedDefaultFonts = function() {
 		return false;
 	};
@@ -5527,6 +5561,7 @@
 	
 	PDFEditorApi.prototype['asc_CheckEditPassword']			= PDFEditorApi.prototype.asc_CheckEditPassword;
 	PDFEditorApi.prototype['asc_CheckPrintPassword']		= PDFEditorApi.prototype.asc_CheckPrintPassword;
+	PDFEditorApi.prototype['asc_moveToUserCursor']			= PDFEditorApi.prototype.asc_moveToUserCursor;
 	
 	PDFEditorApi.prototype['getJsApi'] = PDFEditorApi.prototype.getJsApi;
 	
