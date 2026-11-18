@@ -802,6 +802,60 @@
 			oDoc.RemovePages(aPages);
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
+	/**
+	 * Inserts all pages of another PDF (as bytes) at a position, with their annotations and form fields; one undo step.
+	 * @param {number} [nPos] the index of the first new page; default: at the end
+	 * @param {Uint8Array} aBytes
+	 * @returns {boolean}
+	 */
+	PDFEditorApi.prototype.asc_InsertPagesFromBytes = function(nPos, aBytes) {
+		let oDoc = this.getPDFDoc();
+		if (!oDoc || !aBytes || !aBytes.length || oDoc.IsMergeLock())
+			return false;
+		if (undefined === nPos || null === nPos || nPos < 0 || nPos > oDoc.GetPagesCount())
+			nPos = oDoc.GetPagesCount();
+
+		let isDone = false;
+		oDoc.DoAction(function() {
+			isDone = !!oDoc.MergePagesBinary(nPos, aBytes);
+		}, AscDFH.historydescription_Pdf_AddPage, this);
+		return isDone;
+	};
+	/**
+	 * Asks for a PDF file and inserts its pages at a position
+	 * @param {number} [nPos] the index of the first new page; default: at the end
+	 */
+	PDFEditorApi.prototype.asc_InsertPagesFromFile = function(nPos) {
+		let t = this;
+		let oDesktop = window["AscDesktopEditor"];
+		if (oDesktop && oDesktop["OpenFilenameDialog"] && oDesktop["loadLocalFile"]) {
+			oDesktop["OpenFilenameDialog"]("PDF (*.pdf)", false, function(file) {
+				if (Array.isArray(file))
+					file = file[0];
+				if (!file)
+					return;
+				oDesktop["loadLocalFile"](file, function(data) {
+					data && t.asc_InsertPagesFromBytes(nPos, new Uint8Array(data));
+				});
+			});
+			return;
+		}
+
+		let oInput = document.createElement("input");
+		oInput.type = "file";
+		oInput.accept = ".pdf,application/pdf";
+		oInput.onchange = function() {
+			let oFile = oInput.files && oInput.files[0];
+			if (!oFile)
+				return;
+			let oReader = new FileReader();
+			oReader.onload = function() {
+				t.asc_InsertPagesFromBytes(nPos, new Uint8Array(oReader.result));
+			};
+			oReader.readAsArrayBuffer(oFile);
+		};
+		oInput.click();
+	};
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();
 		let oDoc = this.getPDFDoc();
@@ -5306,6 +5360,8 @@
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;
 	PDFEditorApi.prototype['asc_RemovePage']			   = PDFEditorApi.prototype.asc_RemovePage;
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
+	PDFEditorApi.prototype['asc_InsertPagesFromBytes']     = PDFEditorApi.prototype.asc_InsertPagesFromBytes;
+	PDFEditorApi.prototype['asc_InsertPagesFromFile']      = PDFEditorApi.prototype.asc_InsertPagesFromFile;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
