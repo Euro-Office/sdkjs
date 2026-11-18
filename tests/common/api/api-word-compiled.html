@@ -13,9 +13,8 @@
     <!-- Loaded directly from deploy/, not develop/sdkjs/word/scripts.js: that manifest
          under COMPILED=1 only ever references sdk-all-min.js, never sdk-all.js, so it
          can't be used to smoke-test the "all" chunk. Order mirrors the non-compiled
-         writeScripts() file list (polyfill, AllFonts, then the sdk bundle), followed by
+         writeScripts() file list (AllFonts, then the sdk bundle), followed by
          the "all" chunk — the same min-then-all order editorscommon.js uses at runtime. -->
-    <script type="text/javascript" src="../../../vendor/polyfill.js"></script>
     <script type="text/javascript" src="../../../common/AllFonts.js"></script>
     <script type="text/javascript" src="../../../deploy/sdkjs/word/sdk-all-min.js"></script>
     <script type="text/javascript" src="../../../deploy/sdkjs/word/sdk-all.js"></script>

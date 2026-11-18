@@ -13,7 +13,6 @@
 			"common/apiCommon.js",
 			"common/SerializeCommonWordExcel.js",
 			"vendor/string.js",
-			"vendor/array.js",
 			"common/editorscommon.js",
           "common/frameManager.js",
           "common/BulletPreviewDrawer.js",

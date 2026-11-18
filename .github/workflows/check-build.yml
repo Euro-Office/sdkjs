@@ -18,6 +18,13 @@ on:
       - develop
       - 'release/**'
       - 'hotfix/**'
+
+# A new push to a pull request cancels its previous run. Other runs are never
+# cancelled, they wait instead.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   code-style:
     runs-on: ubuntu-latest
