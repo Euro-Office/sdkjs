@@ -17,7 +17,8 @@
     "webpack-cli": "^6.0.1"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3"
+    "cross-env": "^7.0.3",
+    "eslint": "10.14.0"
   },
   "scripts": {
     "build": "node scripts/build-pipeline.cjs",
@@ -30,6 +31,8 @@
     "watch:slide": "cross-env NODE_ENV=development webpack --config webpack.slide.mjs --watch",
     "watch:visio": "cross-env NODE_ENV=development webpack --config webpack.visio.mjs --watch",
     "develop": "node scripts/build-develop.cjs",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "lint": "node scripts/lint.cjs --cache",
+    "lint:update": "node scripts/lint.cjs --update"
   }
 }
