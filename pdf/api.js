@@ -802,6 +802,13 @@
 			oDoc.RemovePages(aPages);
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
+	/**
+	 * Puts a picture (e.g. a rendered watermark text, as a data URL) centred on every page
+	 * @param {string} sUrl
+	 */
+	PDFEditorApi.prototype.asc_AddWatermarkImage = function(sUrl) {
+		this.AddImageUrl([sUrl], undefined, undefined, {isWatermark: true});
+	};
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();
 		let oDoc = this.getPDFDoc();
@@ -3901,6 +3908,26 @@
 						oOptionObject.AddImage(oImage, oOptionObject.asc_curImageState);
 						return;
 					}
+					else if (oOptionObject.isWatermark) {
+						// the same picture centred on every page, at most 80 % of the page; one undo step
+						oDoc.BlurActiveObject();
+						oDoc.DoAction(function() {
+							for (let nPage = 0, nCount = oDoc.GetPagesCount(); nPage < nCount; ++nPage) {
+								let nPageW = oDoc.GetPageWidthMM(nPage);
+								let nPageH = oDoc.GetPageHeightMM(nPage);
+								let nK = Math.min(0.8 * nPageW / oImage.Image.width, 0.8 * nPageH / oImage.Image.height);
+								let nW = oImage.Image.width * nK;
+								let nH = oImage.Image.height * nK;
+								let oPicture = new AscPDF.CPdfImage();
+								AscFormat.fillImage(oPicture, oImage.src, 0, 0, nW, nH);
+								let oXfrm = oPicture.getXfrm();
+								oXfrm.setOffX((nPageW - nW) / 2);
+								oXfrm.setOffY((nPageH - nH) / 2);
+								oDoc.AddDrawing(oPicture, nPage);
+							}
+						}, AscDFH.historydescription_Presentation_AddFlowImage, oApi);
+						return;
+					}
 					else if (oOptionObject.isStamp) {
 						// an image stamp, e.g. a saved signature: one undo step
 						oDoc.BlurActiveObject();
@@ -5306,6 +5333,7 @@
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;
 	PDFEditorApi.prototype['asc_RemovePage']			   = PDFEditorApi.prototype.asc_RemovePage;
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
+	PDFEditorApi.prototype['asc_AddWatermarkImage']        = PDFEditorApi.prototype.asc_AddWatermarkImage;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
