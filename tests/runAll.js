@@ -52,6 +52,7 @@ const allTests = [
 	'cell/spreadsheet-calculation/ExternalReference.html',
 	'cell/spreadsheet-calculation/SheetMemoryTest.html',
 	'cell/spreadsheet-calculation/PrintJsonParamsTests.html',
+	'cell/spreadsheet-calculation/OpenRecalcTests.html',
 	'cell/js-api/js-api.html',
 
 	'common/api/api.html',
@@ -61,6 +62,8 @@ const allTests = [
 
 	'word/unit-tests/paragraphContentPos.html',
 	'word/unit-tests/deleted-text-recovery.html',
+	'word/unit-tests/fieldInstructionParser.html',
+	'word/paragraph-borders/paragraph-borders.html',
 	'word/content-control/block-level/cursorAndSelection.html',
 	'word/content-control/inline-level/checkbox.html',
 	'word/content-control/inline-level/cursorAndSelection.html',
@@ -175,14 +178,15 @@ const {
 
 	async function runTest(test)
 	{
-		const page = await browser.newPage();
+		const context = await browser.createBrowserContext();
 		try
 		{
+			const page = await context.newPage();
 			return await runQunitWithPage(page, {targetUrl : "file://" + path.join(__dirname, test), timeout : 60000});
 		}
 		finally
 		{
-			await page.close().catch(function () {});
+			await context.close().catch(function () {});
 		}
 	}
 	

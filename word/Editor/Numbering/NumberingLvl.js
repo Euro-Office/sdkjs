@@ -1135,6 +1135,8 @@ CNumberingLvl.prototype.GetLvlTextFormat = function() {
  */
 CNumberingLvl.prototype.CollectDocumentStatistics = function(oStats)
 {
+	// A bullet is a symbol, not a word
+	var isBullet = this.IsBulleted();
 	var bWord = false;
 	for (var nIndex = 0, nCount = this.LvlText.length; nIndex < nCount; ++nIndex)
 	{
@@ -1161,7 +1163,7 @@ CNumberingLvl.prototype.CollectDocumentStatistics = function(oStats)
 		if (true === bSymbol)
 			oStats.Add_Symbol(bSpace);
 
-		if (true === bNewWord)
+		if (true === bNewWord && !isBullet)
 			oStats.Add_Word();
 	}
 
