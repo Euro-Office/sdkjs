@@ -4766,6 +4766,16 @@
 	{
 		this.getPDFDoc().GoToAnnot(Id);
 	};
+	/**
+	 * Goes to the next (or previous) comment, page by page and from top to bottom, and wraps round at the end
+	 * @param {boolean} isNext
+	 * @returns {?string} the id of the comment, so the interface can show it; null if comments are hidden or there is none
+	 */
+	PDFEditorApi.prototype.asc_GotoComment = function(isNext)
+	{
+		let oDoc = this.getPDFDoc();
+		return oDoc ? oDoc.GotoComment(!!isNext) : null;
+	};
 
 	PDFEditorApi.prototype.asc_EditSelectAll = function()
 	{
@@ -5302,6 +5312,7 @@
 	PDFEditorApi.prototype['asc_removeAnnots']             = PDFEditorApi.prototype.asc_removeAnnots;
 	PDFEditorApi.prototype['asc_changeComment']            = PDFEditorApi.prototype.asc_changeComment;
 	PDFEditorApi.prototype['asc_selectComment']            = PDFEditorApi.prototype.asc_selectComment;
+	PDFEditorApi.prototype['asc_GotoComment']              = PDFEditorApi.prototype.asc_GotoComment;
 	PDFEditorApi.prototype['asc_EditPage']                 = PDFEditorApi.prototype.asc_EditPage;
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;
 	PDFEditorApi.prototype['asc_RemovePage']			   = PDFEditorApi.prototype.asc_RemovePage;

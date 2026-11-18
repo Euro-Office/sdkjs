@@ -4562,6 +4562,109 @@ var CPresentation = CPresentation || function(){};
 			});
         }
     };
+    /**
+	 * The annotations shown in the comments panel that the user can see, page by page and from top to bottom
+	 * (then from left to right). Replies are not included, they belong to their annotation.
+	 * @memberof CPDFDoc
+	 * @typeofeditors ["PDF"]
+	 * @returns {AscPDF.CAnnotationBase[]}
+	 */
+    CPDFDoc.prototype.GetCommentsInOrder = function() {
+        if (this.IsAnnotsHidden())
+            return [];
+
+        let aComments = [];
+        this.annots.forEach(function(oAnnot) {
+            if (oAnnot.IsHidden())
+                return;
+
+            let oData = oAnnot.GetAscCommentData();
+            if (!oData || false === AscCommon.UserInfoParser.canViewComment(oData.asc_getUserName()))
+                return;
+
+            let aRect = oAnnot.GetRect();
+            aComments.push({annot: oAnnot, page: oAnnot.GetPage(), y: aRect[1], x: aRect[0]});
+        });
+
+        aComments.sort(compareCommentPositions);
+        return aComments.map(function(oItem) {
+            return oItem.annot;
+        });
+    };
+    function compareCommentPositions(oItem1, oItem2) {
+        return (oItem1.page - oItem2.page) || (oItem1.y - oItem2.y) || (oItem1.x - oItem2.x);
+    }
+    /**
+	 * Returns the comment after (or before) the selected annotation, or after (or before) the current page if no
+	 * annotation is selected, and wraps round at the end of the document.
+	 * @memberof CPDFDoc
+	 * @typeofeditors ["PDF"]
+     * @param {boolean} isNext
+	 * @returns {?string} the id of the annotation, or null if comments are hidden or there is no comment to go to
+	 */
+    CPDFDoc.prototype.GetNextCommentId = function(isNext) {
+        let aComments = this.GetCommentsInOrder();
+        let nCount = aComments.length;
+        if (!nCount)
+            return null;
+
+        let nFound = -1;
+        let oSelected = this.mouseDownAnnot;
+        let nSelected = oSelected ? aComments.indexOf(oSelected) : -1;
+        if (-1 !== nSelected) {
+            // a selected comment works like the cursor in the text editor: go on from it
+            nFound = (nSelected + (isNext ? 1 : nCount - 1)) % nCount;
+        }
+        else if (oSelected && oSelected.IsUseInDocument()) {
+            // another annotation is selected: the comments after (or before) its place
+            let aRect = oSelected.GetRect();
+            let oPos = {page: oSelected.GetPage(), y: aRect[1], x: aRect[0]};
+            for (let nIndex = 0; nIndex < nCount; ++nIndex) {
+                let oAnnot = aComments[nIndex];
+                let aAnnotRect = oAnnot.GetRect();
+                let nCompare = compareCommentPositions({page: oAnnot.GetPage(), y: aAnnotRect[1], x: aAnnotRect[0]}, oPos);
+                if (isNext && nCompare > 0) {
+                    nFound = nIndex;
+                    break;
+                }
+                if (!isNext && nCompare < 0)
+                    nFound = nIndex;
+            }
+        }
+        else {
+            // nothing selected: the first comment from the current page on, or the last one before it
+            let nCurPage = this.GetCurPage();
+            for (let nIndex = 0; nIndex < nCount; ++nIndex) {
+                let nPage = aComments[nIndex].GetPage();
+                if (isNext && nPage >= nCurPage) {
+                    nFound = nIndex;
+                    break;
+                }
+                if (!isNext && nPage < nCurPage)
+                    nFound = nIndex;
+            }
+        }
+
+        if (-1 === nFound)
+            nFound = isNext ? 0 : nCount - 1;
+
+        return aComments[nFound].GetId();
+    };
+    /**
+	 * Goes to the next (or previous) comment, selects it and scrolls to it if it is not visible
+	 * @memberof CPDFDoc
+	 * @typeofeditors ["PDF"]
+     * @param {boolean} isNext
+	 * @returns {?string} the id of the annotation, or null if comments are hidden or there is no comment to go to
+	 */
+    CPDFDoc.prototype.GotoComment = function(isNext) {
+        let sId = this.GetNextCommentId(isNext);
+        if (!sId)
+            return null;
+
+        this.GoToAnnot(sId);
+        return sId;
+    };
     CPDFDoc.prototype.HideComments = function() {
         editor.sync_HideComment();
         this.showedCommentId = undefined;
