@@ -11056,7 +11056,12 @@ CDocument.prototype.Get_TextBackGroundColor = function()
 {
 	return undefined;
 };
-CDocument.prototype.Select_DrawingObject = function(Id)
+/**
+ * Selects the drawing object as an object
+ * @param {string} Id - id of a ParaDrawing
+ * @param {number} [nPageIndex] - the page to select it on, needed for objects in a header or footer (the current page by default)
+ */
+CDocument.prototype.Select_DrawingObject = function(Id, nPageIndex)
 {
 	let drawingObject = AscCommon.g_oTableId.GetById(Id);
 	if (!drawingObject || !drawingObject.IsUseInDocument())
@@ -11090,7 +11095,7 @@ CDocument.prototype.Select_DrawingObject = function(Id)
 		oDocContent.Selection.Start = true;
 	}
 
-	this.DrawingObjects.selectById(Id, this.CurPage);
+	this.DrawingObjects.selectById(Id, AscFormat.isRealNumber(nPageIndex) ? nPageIndex : this.CurPage);
 
 	this.Document_UpdateInterfaceState();
 	this.Document_UpdateSelectionState();
@@ -11102,43 +11107,7 @@ CDocument.prototype.Select_DrawingObject = function(Id)
  */
 CDocument.prototype.GetPageDrawingObjects = function(nPageIndex)
 {
-	let oPage = this.DrawingObjects.graphicPages[nPageIndex];
-	if (!oPage)
-		return [];
-
-	let arrResult = [];
-	let oUsed     = new Set();
-
-	function add(arrObjects, sLayer, isHdrFtr)
-	{
-		if (!arrObjects)
-			return;
-
-		// the arrays are in drawing order, so the last object is in front
-		for (let nIndex = arrObjects.length - 1; nIndex >= 0; --nIndex)
-		{
-			let oDrawing = arrObjects[nIndex] ? arrObjects[nIndex].parent : null;
-			if (!(oDrawing instanceof AscCommonWord.ParaDrawing) || oUsed.has(oDrawing) || !oDrawing.IsUseInDocument())
-				continue;
-
-			oUsed.add(oDrawing);
-			arrResult.push({Drawing : oDrawing, Layer : sLayer, HdrFtr : isHdrFtr});
-		}
-	}
-
-	// headers and footers are drawn before the main text and its objects
-	let oHdrFtrPage = oPage.hdrFtrPage;
-	add(oPage.beforeTextObjects, "front", false);
-	add(oPage.inlineObjects, "inline", false);
-	add(oPage.behindDocObjects, "behind", false);
-	if (oHdrFtrPage)
-	{
-		add(oHdrFtrPage.beforeTextObjects, "front", true);
-		add(oHdrFtrPage.inlineObjects, "inline", true);
-		add(oHdrFtrPage.behindDocObjects, "behind", true);
-	}
-
-	return arrResult;
+	return this.DrawingObjects.getPageDrawingObjects(nPageIndex);
 };
 /**
  * Selects the drawing object as an object and scrolls the view to it
@@ -11157,13 +11126,12 @@ CDocument.prototype.SelectDrawingObjectById = function(sId, nPageIndex)
 	if (undefined === nPageIndex || null === nPageIndex)
 		nPageIndex = oDrawing.PageNum;
 
-	this.RemoveSelection();
 	if (oHdrFtr)
 	{
 		oHdrFtr.Set_CurrentElement(false, nPageIndex);
 		oHdrFtr.Set_Page(nPageIndex);
 	}
-	this.Select_DrawingObject(sId);
+	this.Select_DrawingObject(sId, nPageIndex);
 
 	let oGraphic = oDrawing.GraphicObj;
 	if (oGraphic.transform && this.DrawingDocument && this.DrawingDocument.m_oWordControl)

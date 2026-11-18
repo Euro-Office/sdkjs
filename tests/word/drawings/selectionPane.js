@@ -16,6 +16,10 @@ $(function () {
 		let shape = shapeTrack.getShape(true, logicDocument.GetDrawingDocument(), null);
 		shape.setBDeleted(false);
 		shape.createTextBoxContent();
+		// like the test header, the test text box does not find the logic document by itself
+		shape.textBoxContent.LogicDocument  = logicDocument;
+		shape.textBoxContent.DrawingObjects = logicDocument.DrawingObjects;
+		shape.textBoxContent.GetElement(0).LogicDocument = logicDocument;
 
 		let drawing = new ParaDrawing(50, 30, null, logicDocument.GetDrawingDocument(), logicDocument, null);
 		shape.setParent(drawing);
@@ -98,6 +102,58 @@ $(function () {
 		assert.ok(logicDocument.DrawingObjects.getSelectedArray().map(function(o) { return o.parent; }).indexOf(logo) !== -1, "The logo is the selected object");
 
 		logicDocument.GetFinalSectPr().Set_Header_Default(null);
+	});
+	QUnit.test("A header object is selected on the page asked for", function(assert)
+	{
+		AscTest.ClearDocument();
+
+		let firstParagraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(firstParagraph);
+		AscTest.AddTextToParagraph(firstParagraph, "First page");
+		let secondParagraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(secondParagraph);
+		AscTest.AddTextToParagraph(secondParagraph, "Second page");
+		secondParagraph.Set_PageBreakBefore(true);
+
+		let header = AscTest.CreateDefaultHeader(logicDocument.GetFinalSectPr());
+		header.LogicDocument  = logicDocument;
+		header.DrawingObjects = logicDocument.DrawingObjects;
+		let logo = CreateImage("Logo");
+		MakeFloating(logo, false, 50);
+		AddToParagraph(header.GetElement(0), logo);
+		AscTest.Recalculate();
+		assert.strictEqual(logicDocument.GetPagesCount(), 2, "The document has two pages");
+
+		AscTest.MoveCursorToParagraph(firstParagraph, true);
+		assert.strictEqual(logicDocument.CurPage, 0, "The cursor is on the first page");
+		assert.deepEqual(GetPageDrawingObjects(1).map(function(item) { return item["Name"]; }), ["Logo"], "The logo is listed on the second page");
+
+		scrolledTo = null;
+		assert.ok(SelectDrawingObjectById(logo.GetId(), 1), "The header object is selected");
+		assert.strictEqual(scrolledTo, 1, "The view scrolls to the second page");
+		assert.ok(logicDocument.DrawingObjects.getSelectedArray().map(function(o) { return o.parent; }).indexOf(logo) !== -1, "The logo is the selected object");
+		assert.strictEqual(logo.GraphicObj.selectStartPage, 1, "The logo is selected on the second page");
+
+		logicDocument.GetFinalSectPr().Set_Header_Default(null);
+	});
+	QUnit.test("A picture inside a text box is not listed on its own", function(assert)
+	{
+		AscTest.ClearDocument();
+
+		let paragraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(paragraph);
+		AscTest.AddTextToParagraph(paragraph, "Some text");
+
+		let textBox = CreateTextBox("Text box");
+		MakeFloating(textBox, false, 20);
+		let innerPicture = CreateImage("Picture in the text box");
+		AddToParagraph(textBox.GraphicObj.textBoxContent.GetElement(0), innerPicture);
+		AddToParagraph(paragraph, textBox);
+		AscTest.Recalculate();
+
+		assert.ok(innerPicture.isShapeChild(), "The picture belongs to the text box");
+		assert.deepEqual(GetPageDrawingObjects(0).map(function(item) { return item["Name"]; }), ["Text box"],
+			"Only the text box is listed");
 	});
 	QUnit.test("The objects of a page are listed from the front to the back", function(assert)
 	{
