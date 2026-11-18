@@ -7024,7 +7024,8 @@ var CPresentation = CPresentation || function(){};
                 break;
         }
 
-        let nLineW = oStampRender.m_oPen.Size * g_dKoef_mm_to_pt;
+        // an image stamp has no drawn frame, so no line width
+        let nLineW = oStampRender ? oStampRender.m_oPen.Size * g_dKoef_mm_to_pt : 0;
         
         let oProps = {
             rect:           [X1, Y1, X2, Y2],
@@ -7045,8 +7046,9 @@ var CPresentation = CPresentation || function(){};
         
         if (oStampRender) {
             oStamp.SetRenderStructure(oStampRender.m_aStack[0]);
-            oStamp.SetInRect([X1, Y2, X1, Y1, X2, Y1, X2, Y2]);
         }
+        // the image of an image stamp is placed in this rectangle too
+        oStamp.SetInRect([X1, Y2, X1, Y1, X2, Y1, X2, Y2]);
 
         if (sType == AscPDF.STAMP_TYPES.Image) {
             if (oImage) {
