@@ -465,6 +465,77 @@
 		this.pages[index].isPainted = true;
 	};
 
+	/**
+	 * State of the auto-scroll with the middle mouse button, as in browsers: hold the button and move the mouse,
+	 * or click it once and move the mouse. The further the mouse is from the start point, the faster the page
+	 * moves. No DOM here, so it can be tested on its own.
+	 * @param {number} x
+	 * @param {number} y
+	 * @constructor
+	 */
+	function CAutoScroll(x, y)
+	{
+		this.startX = x;
+		this.startY = y;
+		this.curX   = x;
+		this.curY   = y;
+		this.moved  = false; // the mouse has left the start point
+		this.held   = true;  // the middle button that started the auto-scroll is still down
+	}
+	CAutoScroll.MOVE_THRESHOLD = 10; // px the mouse must move before a release stops the auto-scroll
+	CAutoScroll.DEAD_ZONE      = 12; // px around the start point without scrolling
+	CAutoScroll.SPEED_DIVISOR  = 6;  // px of distance per px of scroll in one step
+	CAutoScroll.MAX_SPEED      = 80; // px in one step
+	CAutoScroll.STEP_INTERVAL  = 16; // ms between two steps
+	/**
+	 * @param {number} delta distance from the start point in px
+	 * @returns {number} px to scroll in one step
+	 */
+	CAutoScroll.getSpeed = function(delta)
+	{
+		let dist = Math.abs(delta) - CAutoScroll.DEAD_ZONE;
+		if (dist <= 0)
+			return 0;
+		return (delta < 0 ? -1 : 1) * Math.min(CAutoScroll.MAX_SPEED, dist / CAutoScroll.SPEED_DIVISOR);
+	};
+	CAutoScroll.prototype.onMove = function(x, y)
+	{
+		this.curX = x;
+		this.curY = y;
+		if (Math.abs(x - this.startX) > CAutoScroll.MOVE_THRESHOLD || Math.abs(y - this.startY) > CAutoScroll.MOVE_THRESHOLD)
+			this.moved = true;
+	};
+	/**
+	 * The middle button that started the auto-scroll is released.
+	 * @returns {boolean} true if the auto-scroll stops: the button was held and the mouse moved.
+	 * Only a click keeps it going until the next click.
+	 */
+	CAutoScroll.prototype.onButtonUp = function()
+	{
+		if (!this.held)
+			return false;
+		this.held = false;
+		return this.moved;
+	};
+	/**
+	 * A mouse button is pressed.
+	 * @returns {boolean} true if the auto-scroll stops (any click after the starting one)
+	 */
+	CAutoScroll.prototype.onButtonDown = function()
+	{
+		return !this.held;
+	};
+	/**
+	 * @returns {{x: number, y: number}} px to scroll in this step
+	 */
+	CAutoScroll.prototype.getStep = function()
+	{
+		return {
+			x : CAutoScroll.getSpeed(this.curX - this.startX),
+			y : CAutoScroll.getSpeed(this.curY - this.startY)
+		};
+	};
+
 	function CHtmlPage(id, api)
 	{
 		this.Api = api;
@@ -1876,8 +1947,130 @@
 			return oDrawingUnderMouse;
 		};
 
+		this.autoScroll = null;
+		/**
+		 * The middle button starts the auto-scroll, but not on a link or a form field and not while text is edited,
+		 * so these keep their own behaviour.
+		 */
+		this.canStartAutoScroll = function(e)
+		{
+			if (!e || 1 !== e.button || oThis.autoScroll)
+				return false;
+			if (oThis.touchManager && oThis.touchManager.checkTouchEvent(e))
+				return false;
+			if (!oThis.file || !oThis.file.isValid())
+				return false;
+
+			let oDoc = oThis.getPDFDoc();
+			if (!oDoc)
+				return false;
+
+			if (oDoc.activeForm && oDoc.activeForm.IsInForm && oDoc.activeForm.IsInForm())
+				return false;
+			let oController = oDoc.GetController && oDoc.GetController();
+			if (oController && oController.getTargetDocContent && oController.getTargetDocContent())
+				return false;
+
+			AscCommon.check_MouseMoveEvent(e);
+			if (oThis.getPageLinkByMouse() || oThis.getPageFieldByMouse())
+				return false;
+			let oAnnot = oThis.getPageAnnotByMouse();
+			if (oAnnot && oAnnot.IsLink && oAnnot.IsLink())
+				return false;
+
+			return true;
+		};
+		this.startAutoScroll = function(x, y)
+		{
+			oThis.stopAutoScroll();
+
+			let marker = document.createElement("div");
+			marker.style.cssText = "position:fixed;left:" + (x - 14) + "px;top:" + (y - 14) + "px;width:28px;height:28px;" +
+				"pointer-events:none;z-index:10000;";
+			marker.innerHTML = '<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">' +
+				'<circle cx="14" cy="14" r="13" fill="#ffffff" fill-opacity="0.9" stroke="#444444"/>' +
+				'<circle cx="14" cy="14" r="2" fill="#444444"/>' +
+				'<path d="M14 4l-4 5h8zM14 24l-4-5h8zM4 14l5-4v8zM24 14l-5-4v8z" fill="#444444"/></svg>';
+			document.body.appendChild(marker);
+
+			let state = new CAutoScroll(x, y);
+			let listeners = [];
+			oThis.autoScroll = {state: state, marker: marker, timer: null, listeners: listeners};
+
+			function listen(target, type, handler)
+			{
+				target.addEventListener(type, handler, true);
+				listeners.push([target, type, handler]);
+			}
+			function onMove(ev)
+			{
+				state.onMove(ev.clientX, ev.clientY);
+			}
+			function onUp(ev)
+			{
+				if (1 !== ev.button || !state.held)
+					return;
+				ev.preventDefault();
+				ev.stopPropagation();
+				if (state.onButtonUp())
+					oThis.stopAutoScroll();
+			}
+			function onDown(ev)
+			{
+				if (!state.onButtonDown())
+					return;
+				ev.preventDefault();
+				ev.stopPropagation();
+				oThis.stopAutoScroll();
+			}
+			function onKey(ev)
+			{
+				if (27 === ev.keyCode)
+					oThis.stopAutoScroll();
+			}
+			function stop()
+			{
+				oThis.stopAutoScroll();
+			}
+			listen(document, "pointermove", onMove);
+			listen(document, "mousemove", onMove);
+			listen(document, "pointerup", onUp);
+			listen(document, "mouseup", onUp);
+			listen(document, "pointerdown", onDown);
+			listen(document, "mousedown", onDown);
+			listen(document, "keydown", onKey);
+			listen(document, "wheel", stop);
+			listen(window, "blur", stop);
+
+			oThis.autoScroll.timer = setInterval(function()
+			{
+				let step = state.getStep();
+				if (step.y && oThis.m_oScrollVerApi)
+					oThis.m_oScrollVerApi.scrollBy(0, step.y, false);
+				if (step.x && oThis.isVisibleHorScroll && oThis.m_oScrollHorApi)
+					oThis.m_oScrollHorApi.scrollBy(step.x, 0, false);
+			}, CAutoScroll.STEP_INTERVAL);
+		};
+		this.stopAutoScroll = function()
+		{
+			let autoScroll = oThis.autoScroll;
+			if (!autoScroll)
+				return;
+			oThis.autoScroll = null;
+			clearInterval(autoScroll.timer);
+			autoScroll.listeners.forEach(function(item) {item[0].removeEventListener(item[1], item[2], true);});
+			autoScroll.marker.parentNode && autoScroll.marker.parentNode.removeChild(autoScroll.marker);
+		};
+
 		this.onMouseDown = function(e)
 		{
+			if (oThis.canStartAutoScroll(e))
+			{
+				AscCommon.stopEvent(e);
+				oThis.startAutoScroll(e.clientX, e.clientY);
+				return false;
+			}
+
 			let oDoc = oThis.getPDFDoc();
 			let oDrDoc = oDoc.GetDrawingDocument();
 
@@ -2027,6 +2220,10 @@
 
 		this.onMouseUp = function(e)
 		{
+			// the release of the middle button that started the auto-scroll
+			if (e && 1 === e.button && oThis.autoScroll)
+				return false;
+
 			Asc.editor.checkLastWork();
 
 			if (oThis.touchManager && oThis.touchManager.checkTouchEvent(e))
@@ -5505,5 +5702,6 @@
 
 	window["AscPDF"].CPageInfo = CPageInfo;
 	window["AscPDF"].PropLocker = PropLocker;
+	window["AscPDF"].CAutoScroll = CAutoScroll;
 
 })();
