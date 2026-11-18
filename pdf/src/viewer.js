@@ -1545,8 +1545,10 @@
 			return (90 === angle || 270 === angle) ? page.W : page.H;
 		};
 		// delta > 0 goes down. A wheel gives many events for one turn on a touchpad (with its inertia often for a
-		// second or more), so after a jump to another page wheel events are ignored until they pause for a moment;
-		// each ignored event starts the pause again. Keys always jump.
+		// second or more), so after a jump to another page, and after scrolling reaches the end of a page higher than
+		// the window, wheel events are ignored until they pause for a moment; each ignored event starts the pause
+		// again. So one swipe either scrolls to the end of the page or goes to the next page, never both. Keys are
+		// never held back.
 		this.scrollPageByPage = function(delta, isKey)
 		{
 			let index = this.getPageByPageIndex();
@@ -1559,24 +1561,31 @@
 			let pageBottom = page.Y + this.getPageByPageHeight(index) + this.betweenPages;
 			let viewBottom = this.scrollY + this.height;
 
+			if (!isKey && now - this.pageByPageTime < 250)
+			{
+				this.pageByPageTime = now;
+				return true;
+			}
+
 			let isPageInWindow = pageBottom - pageTop <= this.height;
 			if (delta > 0 && pageBottom > viewBottom + 1 && !isPageInWindow)
 			{
-				this.m_oScrollVerApi.scrollByY(Math.min(delta, pageBottom - viewBottom), false);
+				let rest = pageBottom - viewBottom;
+				this.m_oScrollVerApi.scrollByY(Math.min(delta, rest), false);
+				if (delta >= rest)
+					this.pageByPageTime = now;
 			}
 			else if (delta < 0 && this.scrollY > pageTop + 1 && !isPageInWindow)
 			{
-				this.m_oScrollVerApi.scrollByY(-Math.min(-delta, this.scrollY - pageTop), false);
+				let rest = this.scrollY - pageTop;
+				this.m_oScrollVerApi.scrollByY(-Math.min(-delta, rest), false);
+				if (-delta >= rest)
+					this.pageByPageTime = now;
 			}
 			else if (delta < 0 && this.scrollY > pageTop + 1)
 			{
 				// at the end of the document the last page cannot go to the top of the window, so the page above
 				// counts as the current one: first show it from its top
-				if (!isKey && now - this.pageByPageTime < 250)
-				{
-					this.pageByPageTime = now;
-					return true;
-				}
 				this.pageByPageTime = now;
 				this.m_oScrollVerApi.scrollToY(pageTop);
 			}
@@ -1585,11 +1594,6 @@
 				let target = delta > 0 ? index + 1 : index - 1;
 				if (target < 0 || target >= this.drawingPages.length)
 					return false;
-				if (!isKey && now - this.pageByPageTime < 250)
-				{
-					this.pageByPageTime = now;
-					return true;
-				}
 				this.pageByPageTime = now;
 
 				let targetHeight = this.getPageByPageHeight(target) + 2 * this.betweenPages;

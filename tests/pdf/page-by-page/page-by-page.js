@@ -105,6 +105,38 @@ $(function ()
 		}
 	});
 
+	QUnit.test("A touchpad swipe on pages higher than the window: to the end of the page, then the next page", function (assert)
+	{
+		let viewer = createViewer(1000, 600);
+		let realNow = Date.now;
+		let time = 100000;
+		Date.now = function () { return time; };
+		function swipe(delta)
+		{
+			// 60 events, 16 ms apart, then a pause
+			for (let i = 0; i < 60; i++, time += 16)
+				viewer.scrollPageByPage(delta, false);
+			time += 300;
+		}
+		try
+		{
+			swipe(30);
+			assert.strictEqual(viewer.scrollY, 440, "the first swipe scrolls to the end of the first page and stops there");
+			swipe(30);
+			assert.strictEqual(viewer.scrollY, 1020, "the second swipe goes to the top of the second page");
+			swipe(30);
+			assert.strictEqual(viewer.scrollY, 1460, "the third swipe scrolls to the end of the second page");
+			swipe(-30);
+			assert.strictEqual(viewer.scrollY, 1020, "a swipe up scrolls to the top of the second page and stops there");
+			swipe(-30);
+			assert.strictEqual(viewer.scrollY, 440, "the next one shows the end of the first page");
+		}
+		finally
+		{
+			Date.now = realNow;
+		}
+	});
+
 	QUnit.test("Switching it on lines up the current page", function (assert)
 	{
 		let viewer = createViewer(500, 600);
