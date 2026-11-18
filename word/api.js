@@ -7547,10 +7547,10 @@ background-repeat: no-repeat;\
 	 * @param {boolean} isNext
 	 * @returns {?string} the id of the comment, so the interface can show it
 	 */
-	asc_docs_api.prototype.asc_GoToNextComment = function(isNext)
+	asc_docs_api.prototype.asc_GotoComment = function(isNext)
 	{
 		let oLogicDocument = this.private_GetLogicDocument();
-		return oLogicDocument ? oLogicDocument.GoToNextComment(!!isNext) : null;
+		return oLogicDocument ? oLogicDocument.GotoComment(!!isNext) : null;
 	};
 	asc_docs_api.prototype.asc_showComment = function(Id)
 	{
@@ -15396,7 +15396,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_removeComment']                         = asc_docs_api.prototype.asc_removeComment;
 	asc_docs_api.prototype['asc_changeComment']                         = asc_docs_api.prototype.asc_changeComment;
 	asc_docs_api.prototype['asc_selectComment']                         = asc_docs_api.prototype.asc_selectComment;
-	asc_docs_api.prototype['asc_GoToNextComment']                       = asc_docs_api.prototype.asc_GoToNextComment;
+	asc_docs_api.prototype['asc_GotoComment']                           = asc_docs_api.prototype.asc_GotoComment;
 	asc_docs_api.prototype['asc_showComment']                           = asc_docs_api.prototype.asc_showComment;
 	asc_docs_api.prototype['asc_GetCommentsReportByAuthors']            = asc_docs_api.prototype.asc_GetCommentsReportByAuthors;
 	asc_docs_api.prototype['can_AddQuotedComment']                      = asc_docs_api.prototype.can_AddQuotedComment;

@@ -62,7 +62,7 @@ $(function ()
 
 	function goTo(isNext)
 	{
-		let id = logicDocument.GoToNextComment(isNext);
+		let id = logicDocument.GotoComment(isNext);
 		return id ? getText(id) : null;
 	}
 
@@ -115,6 +115,70 @@ $(function ()
 		AscTest.MoveCursorToParagraph(paragraphs[0], false);
 		assert.strictEqual(goTo(true), "second", "It is visited when resolved comments are shown");
 		logicDocument.Comments.SetUseSolved(isUseSolved);
+	});
+
+	QUnit.test("Comments in a table cell and in a header", function (assert)
+	{
+		clearDocument();
+		let p1 = AscTest.CreateParagraph();
+		let table = AscTest.CreateTable(2, 2);
+		let p2 = AscTest.CreateParagraph();
+		logicDocument.PushToContent(p1);
+		logicDocument.PushToContent(table);
+		logicDocument.PushToContent(p2);
+		AscTest.AddTextToParagraph(p1, "Before the table");
+		AscTest.AddTextToParagraph(p2, "After the table");
+
+		let cellParagraph = table.GetRow(1).GetCell(0).GetContent().GetElement(0);
+		AscTest.AddTextToParagraph(cellParagraph, "In a cell");
+
+		let headerContent = AscTest.CreateDefaultHeader(logicDocument.GetFinalSectPr());
+		// the test editor is not a document editor, so the new header does not know the document yet
+		headerContent.SetLogicDocument(logicDocument);
+		let headerParagraph = headerContent.GetElement(0);
+		headerParagraph.GetLogicDocument();
+		AscTest.AddTextToParagraph(headerParagraph, "In the header");
+
+		// added out of order on purpose again
+		addComment(headerParagraph, 0, 2, "header");
+		addComment(p2, 0, 5, "after");
+		addComment(cellParagraph, 0, 2, "cell");
+		addComment(p1, 0, 6, "before");
+		logicDocument.RemoveSelection();
+		logicDocument.Comments.Set_Current(null);
+
+		AscTest.MoveCursorToParagraph(p1, true);
+		assert.strictEqual(goTo(true), "before", "Next from the start is the first body comment");
+		assert.strictEqual(goTo(true), "cell", "Then the comment in the table cell");
+		assert.strictEqual(goTo(true), "after", "Then the comment after the table");
+		assert.strictEqual(goTo(true), "header", "The header comment comes after the body");
+		assert.strictEqual(goTo(true), "before", "Next from the header wraps to the first body comment");
+		assert.strictEqual(goTo(false), "header", "Previous from the first body comment wraps to the header");
+		assert.strictEqual(goTo(false), "after", "Previous from the header goes back into the body");
+		assert.strictEqual(goTo(false), "cell", "Then back into the table cell");
+
+		AscTest.MoveCursorToParagraph(cellParagraph, false);
+		assert.strictEqual(goTo(true), "after", "From the end of the cell, next is the comment after the table");
+		AscTest.MoveCursorToParagraph(cellParagraph, false);
+		assert.strictEqual(goTo(false), "cell", "From the end of the cell, previous is the cell comment");
+
+		AscTest.MoveCursorToParagraph(headerParagraph, false);
+		assert.strictEqual(goTo(true), "before", "From the end of the header, next wraps to the body");
+		AscTest.MoveCursorToParagraph(p2, false);
+		assert.strictEqual(goTo(true), "header", "From the end of the body, next is the header comment");
+	});
+
+	QUnit.test("Hidden comments are not visited", function (assert)
+	{
+		let paragraphs = setupDocument();
+		AscTest.MoveCursorToParagraph(paragraphs[0], true);
+
+		logicDocument.Comments.Set_Use(false);
+		assert.strictEqual(goTo(true), null, "Next finds nothing while comments are hidden");
+		assert.strictEqual(goTo(false), null, "Previous finds nothing while comments are hidden");
+
+		logicDocument.Comments.Set_Use(true);
+		assert.strictEqual(goTo(true), "first", "Shown again, next finds the first comment");
 	});
 
 	QUnit.test("A document without comments returns nothing", function (assert)
