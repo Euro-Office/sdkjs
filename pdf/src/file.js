@@ -412,6 +412,44 @@ void main() {\n\
 
         return new TextStreamReader(textCommands, textCommands.length);
     };
+    /**
+     * The text lines of a page, read like the search does; loads the text of the page if needed
+     * @param {number} pageIndex
+     * @returns {string[]}
+     */
+    CFile.prototype.getPageLines = function(pageIndex) {
+        let page = this.pages[pageIndex];
+        if (!page)
+            return [];
+        if (null == page.text && undefined !== page.originIndex)
+            page.text = this.getText(page.originIndex);
+
+        let stream = this.getPageTextStream(pageIndex);
+        if (!stream)
+            return [];
+
+        let lines = [];
+        while (stream.pos < stream.size)
+        {
+            stream.Skip(8);
+            if (stream.GetChar())
+                stream.Skip(8);
+            stream.Skip(12);
+
+            let line = "";
+            let nChars = stream.GetLong();
+            for (let i = 0; i < nChars; ++i)
+            {
+                if (i)
+                    stream.Skip(4);
+                let nChar = stream.GetLong();
+                line += (nChar == 0xFFFF ? " " : String.fromCodePoint(nChar));
+                stream.Skip(4);
+            }
+            lines.push(line);
+        }
+        return lines;
+    };
     CFile.prototype.removeSelection = function() {
         this.Selection = {
 			Page1 : 0,
