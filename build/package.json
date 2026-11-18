@@ -31,6 +31,7 @@
     "watch:slide": "cross-env NODE_ENV=development webpack --config webpack.slide.mjs --watch",
     "watch:visio": "cross-env NODE_ENV=development webpack --config webpack.visio.mjs --watch",
     "develop": "node scripts/build-develop.cjs",
+    "check:api-docs": "node scripts/check-api-docs.cjs",
     "test": "node --test test/"
   }
 }
