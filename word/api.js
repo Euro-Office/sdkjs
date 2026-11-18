@@ -3065,12 +3065,17 @@ background-repeat: no-repeat;\
 		}
 	};
 	/**
-	 * Starts counting the statistics of the whole document, sent with asc_onDocInfo and asc_onGetDocInfoEnd
-	 * @param {boolean} [includeHdrFtr=false] - Also count the text of headers and footers
-	 * @param {boolean} [includeComments=false] - Also count the text of comments and their replies; each comment line
-	 *     then also counts as a paragraph
+	 * Starts counting the statistics of the whole document, sent with asc_onDocInfo and asc_onGetDocInfoEnd.
+	 * Example: startGetDocInfo({includeHdrFtr: true, includeComments: true, dashSeparatesWords: true}).
+	 * The older form startGetDocInfo(includeHdrFtr, includeComments) with two booleans still works.
+	 * @param {Object} [options]
+	 * @param {boolean} [options.includeHdrFtr=false] - Also count the text of headers and footers
+	 * @param {boolean} [options.includeComments=false] - Also count the text of comments and their replies; each comment
+	 *     line then also counts as a paragraph
+	 * @param {boolean} [options.dashSeparatesWords=false] - En and em dashes separate words, as in LibreOffice
+	 *     ("Haus–Boot" is two words). By default they do not, as in Word.
 	 */
-	asc_docs_api.prototype.startGetDocInfo              = function(includeHdrFtr, includeComments)
+	asc_docs_api.prototype.startGetDocInfo              = function(options)
 	{
 		/*
 		 Возвращаем объект следующего вида:
@@ -3085,8 +3090,32 @@ background-repeat: no-repeat;\
 		this.sync_GetDocInfoStartCallback();
 
 		if (this.WordControl.m_oLogicDocument)
-			this.WordControl.m_oLogicDocument.Statistics_Start(includeHdrFtr, includeComments);
+			this.WordControl.m_oLogicDocument.Statistics_Start(private_GetDocInfoOptions(arguments));
 	};
+	/**
+	 * Reads the options of startGetDocInfo and asc_GetSelectionDocInfo: an options object, or the older booleans
+	 * (includeHdrFtr, includeComments)
+	 * @param {Arguments} args
+	 * @returns {{includeHdrFtr: boolean, includeComments: boolean, dashSeparatesWords: boolean}}
+	 */
+	function private_GetDocInfoOptions(args)
+	{
+		let options = args[0];
+		if (options && "object" === typeof options)
+		{
+			return {
+				includeHdrFtr      : !!options["includeHdrFtr"],
+				includeComments    : !!options["includeComments"],
+				dashSeparatesWords : !!options["dashSeparatesWords"]
+			};
+		}
+
+		return {
+			includeHdrFtr      : !!args[0],
+			includeComments    : !!args[1],
+			dashSeparatesWords : false
+		};
+	}
 	asc_docs_api.prototype.stopGetDocInfo               = function()
 	{
 		this.sync_GetDocInfoStopCallback();
@@ -3094,13 +3123,18 @@ background-repeat: no-repeat;\
 		if (this.WordControl.m_oLogicDocument)
 			this.WordControl.m_oLogicDocument.Statistics_Stop();
 	};
-	asc_docs_api.prototype.asc_GetSelectionDocInfo      = function()
+	/**
+	 * Counts the statistics of the current selection with the same rules as the document total
+	 * @param {Object} [options] - as in startGetDocInfo; only dashSeparatesWords applies to a selection
+	 * @returns {?CDocInfoProp} null when nothing is selected
+	 */
+	asc_docs_api.prototype.asc_GetSelectionDocInfo      = function(options)
 	{
 		let logicDocument = this.private_GetLogicDocument();
 		if (!logicDocument)
 			return null;
 
-		let stats = logicDocument.GetSelectionStatistics();
+		let stats = logicDocument.GetSelectionStatistics(private_GetDocInfoOptions(arguments));
 		return stats ? new CDocInfoProp(stats) : null;
 	};
 	asc_docs_api.prototype.sync_DocInfoCallback         = function(obj)

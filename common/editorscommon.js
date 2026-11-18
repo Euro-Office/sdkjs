@@ -11908,7 +11908,8 @@
 			|| (0xA490 <= value && value <= 0xA4CF));
 	}
 	/**
-	 * En and em dashes separate words, as in the word count of LibreOffice
+	 * En and em dashes, which separate words in the word count of LibreOffice (its default "additional separators").
+	 * The word count uses this only with its option dashSeparatesWords.
 	 * @param {number} codePoint
 	 * @returns {boolean}
 	 */
@@ -11918,7 +11919,9 @@
 	}
 	/**
 	 * Chinese and Japanese characters, their punctuation and full-width forms are each a word of their own, as in the word
-	 * count of LibreOffice. Korean (Hangul) is separated by spaces like other scripts.
+	 * count of LibreOffice for text in Chinese or Japanese (also full-width Latin letters and digits, and the ideographic
+	 * full stop). Korean (Hangul, also enclosed Hangul) is separated by spaces like other scripts, as LibreOffice counts
+	 * text in Korean.
 	 * @param {number} codePoint
 	 * @returns {boolean}
 	 */
@@ -11928,7 +11931,8 @@
 			|| (0x3001 <= codePoint && codePoint <= 0x303F)     // punctuation, 0x3000 is a space
 			|| (0x3040 <= codePoint && codePoint <= 0x312F)     // Hiragana, Katakana, Bopomofo
 			|| (0x3190 <= codePoint && codePoint <= 0x31FF)     // Kanbun, strokes, Katakana extensions
-			|| (0x3200 <= codePoint && codePoint <= 0x4DBF)     // enclosed and compatibility forms, extension A
+			|| (0x3220 <= codePoint && codePoint <= 0x325F)     // parenthesised and circled ideographs, circled numbers
+			|| (0x3280 <= codePoint && codePoint <= 0x4DBF)     // circled ideographs and Katakana, compatibility, extension A
 			|| (0x4E00 <= codePoint && codePoint <= 0x9FFF)     // unified ideographs
 			|| (0xF900 <= codePoint && codePoint <= 0xFAFF)     // compatibility ideographs
 			|| (0xFE30 <= codePoint && codePoint <= 0xFE4F)     // compatibility forms

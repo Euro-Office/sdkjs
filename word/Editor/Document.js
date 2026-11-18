@@ -195,8 +195,10 @@ function CStatistics(LogicDocument)
     this.Id       = null; // Id таймера для подсчета всего кроме страниц
     this.PagesId  = null; // Id таймера для подсчета страниц
 
-    this.IncludeHdrFtr   = false;
-    this.IncludeComments = false;
+    // options of the count, see SetOptions
+    this.IncludeHdrFtr      = false;
+    this.IncludeComments    = false;
+    this.DashSeparatesWords = false;
 
     // counting a selection: notes are counted only when they are selected themselves
     this.IsSelection = false;
@@ -226,11 +228,35 @@ CStatistics.prototype.Reset = function()
 
 	this.CountDrawingsInRuns = false;
 };
-CStatistics.prototype.Start = function(includeHdrFtr, includeComments)
+/**
+ * @param {{includeHdrFtr: ?boolean, includeComments: ?boolean, dashSeparatesWords: ?boolean}} [options]
+ *     includeHdrFtr - also count the text of headers and footers
+ *     includeComments - also count the text of comments and their replies
+ *     dashSeparatesWords - en and em dashes separate words, as in LibreOffice ("Haus–Boot" is two words);
+ *     off by default, as in Word
+ */
+CStatistics.prototype.SetOptions = function(options)
+{
+	options = options || {};
+	this.IncludeHdrFtr      = !!options.includeHdrFtr;
+	this.IncludeComments    = !!options.includeComments;
+	this.DashSeparatesWords = !!options.dashSeparatesWords;
+};
+/**
+ * @param {number} codePoint
+ * @returns {boolean}
+ */
+CStatistics.prototype.IsWordSeparatorDash = function(codePoint)
+{
+	return this.DashSeparatesWords && AscCommon.isWordSeparatorDash(codePoint);
+};
+/**
+ * @param {Object} [options] see SetOptions
+ */
+CStatistics.prototype.Start = function(options)
 {
 	this.Reset();
-	this.IncludeHdrFtr   = !!includeHdrFtr;
-	this.IncludeComments = !!includeComments;
+	this.SetOptions(options);
 
 	var LogicDocument = this.LogicDocument;
 	this.PagesId = setTimeout(function(){LogicDocument.Statistics_GetPagesInfo();}, 1);
@@ -351,7 +377,7 @@ CStatistics.prototype.AddText = function(text)
 
 		let isSpace = AscCommon.IsSpace(codePoint) || 0x09 === codePoint || 0xA0 === codePoint;
 		this.Add_Symbol(isSpace);
-		if (isSpace || AscCommon.isWordSeparatorDash(codePoint))
+		if (isSpace || this.IsWordSeparatorDash(codePoint))
 		{
 			isWord = false;
 		}
@@ -17611,9 +17637,12 @@ CDocument.prototype.Set_MathProps = function(MathProps)
 //----------------------------------------------------------------------------------------------------------------------
 // Statistics (Функции для работы со статистикой)
 //----------------------------------------------------------------------------------------------------------------------
-CDocument.prototype.Statistics_Start = function(includeHdrFtr, includeComments)
+/**
+ * @param {Object} [options] see CStatistics.SetOptions
+ */
+CDocument.prototype.Statistics_Start = function(options)
 {
-	this.Statistics.Start(includeHdrFtr, includeComments);
+	this.Statistics.Start(options);
 };
 CDocument.prototype.Statistics_GetParagraphsInfo = function()
 {
@@ -17669,9 +17698,10 @@ CDocument.prototype.Statistics_Stop = function()
 /**
  * Counts pages, words, paragraphs and symbols in the current selection with the same rules as the document total.
  * Returns null when nothing is selected.
+ * @param {Object} [options] see CStatistics.SetOptions; only dashSeparatesWords applies to a selection
  * @returns {?{PageCount: number, WordsCount: number, ParagraphCount: number, SymbolsCount: number, SymbolsWSCount: number}}
  */
-CDocument.prototype.GetSelectionStatistics = function()
+CDocument.prototype.GetSelectionStatistics = function(options)
 {
 	if (!this.IsSelectionUse() || this.IsSelectionEmpty())
 		return null;
@@ -17683,6 +17713,7 @@ CDocument.prototype.GetSelectionStatistics = function()
 	// Count the selected runs in place. A GetSelectedContent copy is slow on large selections and queues each
 	// copied paragraph for the track changes check.
 	let stats     = new CStatistics(this);
+	stats.SetOptions(options);
 	stats.IsSelection = true;
 	let paragraph = null;
 	let paraStats = null;

@@ -3036,8 +3036,9 @@ ParaRun.prototype.GetPrevRunElements = function(oRunElements, isUseContentPos, n
 };
 
 /**
- * Counts words and symbols as LibreOffice does: deleted and hidden text is not counted, en and em dashes separate words,
- * every Chinese or Japanese character is a word.
+ * Counts words and symbols as LibreOffice does: deleted and hidden text is not counted, every Chinese or Japanese
+ * character is a word. En and em dashes separate words only with the option dashSeparatesWords (as in LibreOffice);
+ * without it they join words, as in Word.
  * Words inserted or deleted with tracked changes are also counted on their own, per changed part of the text.
  * @param {CParagraphStatistics} ParaStats
  * @param {number} [nStartPos=0] first element to count
@@ -3052,6 +3053,9 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 	if (this.Get_CompiledPr(false).Vanish)
 		return;
 
+	// en and em dashes separate words only with the option (ParaStats.Stats is a CStatistics)
+	var isDashSeparator = ParaStats.Stats.DashSeparatesWords ? AscCommon.isWordSeparatorDash : function(){return false;};
+
 	// a deleted or hidden part inside an inserted word does not split it: the inserted (and the deleted) word only
 	// ends at a counted character that is not inserted (deleted), or at a space
 	var nReviewType = this.GetReviewType();
@@ -3062,7 +3066,7 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 		for (var nPos = Start; nPos < Count; ++nPos)
 		{
 			var oDeleted = this.Content[nPos];
-			if (para_Text === oDeleted.Type && !oDeleted.IsNBSP() && !AscCommon.isWordSeparatorDash(oDeleted.Value))
+			if (para_Text === oDeleted.Type && !oDeleted.IsNBSP() && !isDashSeparator(oDeleted.Value))
 			{
 				var isDeletedCJ = AscCommon.isCJWordChar(oDeleted.Value);
 				if (!ParaStats.DeletedWord || isDeletedCJ)
@@ -3086,7 +3090,7 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 		var bSpace   = false;
 		var bNewWord = false;
 
-		if (para_Text === ItemType && AscCommon.isWordSeparatorDash(Item.Value))
+		if (para_Text === ItemType && isDashSeparator(Item.Value))
 		{
 			// a dash is a symbol, but it separates words
 			bSymbol = true;

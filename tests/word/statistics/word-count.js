@@ -34,10 +34,11 @@ $(function ()
 		return paragraph;
 	}
 
-	function count()
+	function count(options)
 	{
 		let stats = logicDocument.Statistics;
 		stats.Reset();
+		stats.SetOptions(options);
 		logicDocument.Content.forEach(function(element)
 		{
 			element.CollectDocumentStatistics(stats);
@@ -47,14 +48,25 @@ $(function ()
 
 	QUnit.module("Word count as in LibreOffice");
 
-	QUnit.test("En and em dashes separate words", function (assert)
+	const DASHES = {dashSeparatesWords : true};
+
+	QUnit.test("En and em dashes separate words only with the option", function (assert)
 	{
 		AscTest.ClearDocument();
 		createParagraph(createRun("Haus–Boot Rot—Blau gelb – grün Bindestrich-Wort"));
 
 		let stats = count();
-		assert.strictEqual(stats.Words, 7, "Haus, Boot, Rot, Blau, gelb, grün and the hyphenated word");
-		assert.strictEqual(stats.SymbolsWOSpaces, 42, "Dashes count as symbols");
+		assert.strictEqual(stats.Words, 6, "Without the option (as in Word): Haus–Boot, Rot—Blau, gelb, the lone dash, grün, the hyphenated word");
+		assert.strictEqual(stats.SymbolsWOSpaces, 42, "Without the option dashes count as symbols");
+
+		stats = count(DASHES);
+		assert.strictEqual(stats.Words, 7, "With the option (as in LibreOffice): Haus, Boot, Rot, Blau, gelb, grün and the hyphenated word");
+		assert.strictEqual(stats.SymbolsWOSpaces, 42, "With the option dashes count as symbols too");
+
+		AscTest.ClearDocument();
+		createParagraph(createRun("Haus "), createRun("Rot–Blau", reviewtype_Remove));
+		assert.strictEqual(count().DeletedWords, 1, "Without the option a deleted word with a dash is one word");
+		assert.strictEqual(count(DASHES).DeletedWords, 2, "With the option the deleted dash separates Rot and Blau");
 	});
 
 	QUnit.test("Deleted and hidden text is not counted", function (assert)
@@ -114,11 +126,21 @@ $(function ()
 
 		let stats = logicDocument.Statistics;
 		stats.Reset();
+		stats.SetOptions(DASHES);
 		logicDocument.CollectCommentStatistics(stats);
 		assert.strictEqual(stats.Words, 5, "Bitte, prüfen, danke, Erledigt., Gruß");
 		assert.strictEqual(stats.Paragraphs, 3, "Each line counts as a paragraph");
+
+		stats.Reset();
+		stats.SetOptions();
+		logicDocument.CollectCommentStatistics(stats);
+		assert.strictEqual(stats.Words, 4, "Without the dash option prüfen–danke is one word");
 	});
 
+	// The expected numbers were measured with LibreOffice 26 (Writer, WordCount of the document via UNO), with the
+	// Asian text language set to Chinese or Japanese for Chinese and Japanese text and to Korean for Korean text.
+	// LibreOffice counts every character of Chinese and Japanese text as a word, also its punctuation such as the
+	// ideographic full stop and full-width Latin letters and digits. Korean text is separated by spaces.
 	QUnit.test("Every Chinese or Japanese character is a word, Korean is separated by spaces", function (assert)
 	{
 		AscTest.ClearDocument();
@@ -126,7 +148,25 @@ $(function ()
 		createParagraph(createRun("\u4F60\u597D\u4E16\u754C\u3002 Euro\u3067\u30C6\u30B9\u30C8 \uC548\uB155\uD558\uC138\uC694 \uC138\uACC4"));
 
 		let stats = count();
-		assert.strictEqual(stats.Words, 12, "4 Chinese and the full stop as in LibreOffice, Euro, 4 Japanese, 2 Korean words");
+		assert.strictEqual(stats.Words, 12, "4 Chinese and the full stop, Euro, 4 Japanese, 2 Korean words (LibreOffice: 12)");
+	});
+
+	QUnit.test("Full-width Latin letters count per character, enclosed Hangul like Korean", function (assert)
+	{
+		AscTest.ClearDocument();
+		// full-width ABC between Japanese characters
+		createParagraph(createRun("\u65E5\u672C\uFF21\uFF22\uFF23\u8A9E"));
+		assert.strictEqual(count().Words, 6, "Each of the 6 characters is a word (LibreOffice, Japanese: 6)");
+
+		AscTest.ClearDocument();
+		// Korean word, parenthesised Hangul, circled Hangul
+		createParagraph(createRun("\uC548\uB155 \u3200\u3201 \u3260\u3261"));
+		assert.strictEqual(count().Words, 3, "Enclosed Hangul is separated by spaces (LibreOffice, Korean: 3)");
+
+		AscTest.ClearDocument();
+		// parenthesised and circled ideographs
+		createParagraph(createRun("\u3220\u3221 \u3280\u3281"));
+		assert.strictEqual(count().Words, 4, "Enclosed ideographs count per character (LibreOffice: 4)");
 	});
 
 	QUnit.test("Chinese characters inserted and deleted with tracked changes are counted one by one", function (assert)
@@ -143,10 +183,16 @@ $(function ()
 	{
 		let stats = logicDocument.Statistics;
 		stats.Reset();
+		stats.SetOptions(DASHES);
 		stats.AddText("  zwei Wörter — ");
-		assert.strictEqual(stats.Words, 2, "Spaces, no-break spaces and dashes separate words");
+		assert.strictEqual(stats.Words, 2, "Spaces, no-break spaces and, with the option, dashes separate words");
 		assert.strictEqual(stats.SymbolsWhSpaces, 16, "All symbols with spaces");
 		assert.strictEqual(stats.SymbolsWOSpaces, 11, "Symbols without spaces");
+
+		stats.Reset();
+		stats.SetOptions();
+		stats.AddText("Haus–Boot — ");
+		assert.strictEqual(stats.Words, 2, "Without the option Haus–Boot and the lone dash are words");
 	});
 
 	QUnit.test("A selection uses the same rules and counts only the notes it selects itself", function (assert)
@@ -160,9 +206,11 @@ $(function ()
 		createParagraph(createRun("eins–zwei "), createRun("weg ", reviewtype_Remove), run);
 
 		logicDocument.SelectAll();
-		let stats = logicDocument.GetSelectionStatistics();
+		let stats = logicDocument.GetSelectionStatistics(DASHES);
 		assert.strictEqual(stats.WordsCount, 3, "eins, zwei, drei: the dash separates, deleted text and the footnote text are not counted");
-		assert.strictEqual(count().Words, 6, "The document total still includes the footnote");
+		assert.strictEqual(count(DASHES).Words, 6, "The document total still includes the footnote");
+		assert.strictEqual(logicDocument.GetSelectionStatistics().WordsCount, 2, "Without the option: eins–zwei, drei");
+		assert.strictEqual(count().Words, 5, "Without the option the total has one word less");
 	});
 
 	// the full count as the status bar does it: text, then the drawings per page, then headers and footers
@@ -271,5 +319,40 @@ $(function ()
 		assert.strictEqual(countWithLayout(false).Words, 2, "without the option only the body counts");
 		assert.strictEqual(countWithLayout(true).Words, 7, "with the option the header text and its text box count too");
 		AscTest.GetFinalSection().Set_Header_Default(null);
+	});
+
+	QUnit.test("startGetDocInfo takes an options object or the older booleans", function (assert)
+	{
+		let api = Object.create(AscTest.Editor);
+		api.sync_GetDocInfoStartCallback = function(){};
+		api.sync_GetDocInfoStopCallback  = function(){};
+		let docApi = Asc.asc_docs_api.prototype;
+		let stats  = logicDocument.Statistics;
+		function options()
+		{
+			return [stats.IncludeHdrFtr, stats.IncludeComments, stats.DashSeparatesWords];
+		}
+
+		docApi.startGetDocInfo.call(api, {includeHdrFtr : true, includeComments : true, dashSeparatesWords : true});
+		assert.deepEqual(options(), [true, true, true], "Options object");
+		docApi.stopGetDocInfo.call(api);
+
+		docApi.startGetDocInfo.call(api, {dashSeparatesWords : true});
+		assert.deepEqual(options(), [false, false, true], "Missing options are off");
+		docApi.stopGetDocInfo.call(api);
+
+		docApi.startGetDocInfo.call(api, true, true);
+		assert.deepEqual(options(), [true, true, false], "Older booleans for headers/footers and comments");
+		docApi.stopGetDocInfo.call(api);
+
+		docApi.startGetDocInfo.call(api);
+		assert.deepEqual(options(), [false, false, false], "No arguments: everything off");
+		docApi.stopGetDocInfo.call(api);
+
+		AscTest.ClearDocument();
+		createParagraph(createRun("Haus–Boot"));
+		logicDocument.SelectAll();
+		assert.strictEqual(docApi.asc_GetSelectionDocInfo.call(api).get_WordsCount(), 1, "Selection without the option");
+		assert.strictEqual(docApi.asc_GetSelectionDocInfo.call(api, {dashSeparatesWords : true}).get_WordsCount(), 2, "Selection with the option");
 	});
 });
