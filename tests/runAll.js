@@ -54,6 +54,7 @@ const allTests = [
 	'cell/spreadsheet-calculation/PrintJsonParamsTests.html',
 	'cell/js-api/js-api.html',
 
+	'common/coedit/fastSync.html',
 	'common/api/api.html',
 	'common/api/api-cell.html',
 	'common/api/api-slide.html',
