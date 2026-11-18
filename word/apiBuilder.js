@@ -9343,6 +9343,8 @@
 	{
 		let oLogicDocument = this.Document;
 		
+		// always the default rules, whatever the last count in the interface used
+		oLogicDocument.Statistics.SetOptions();
 		oLogicDocument.Statistics.StartPos = 0;
         oLogicDocument.Statistics.CurPage  = 0;
 
