@@ -201,4 +201,26 @@ $(function ()
 		ruler.SetPrProperties();
 		assert.deepEqual(inds(paras)[1], [25, 0, 0], "ruler values set");
 	});
+
+	QUnit.test("Live preview while dragging: the steps do not add up, one undo step at the end", function (assert)
+	{
+		let paras = setup();
+		AscTest.SelectDocumentRange(0, 2);
+		let ruler = createRuler();
+		ruler.m_oIndentAtDragStart = {left : 10, right : 0, first : 5};
+		ruler.m_dIndentRight     = 0;
+		ruler.m_dIndentLeftFirst = 5;
+		// two preview steps while the mouse moves (temporary history points), then the drop
+		ruler.m_dIndentLeft = 12;
+		ruler.SetPrProperties(true);
+		ruler.m_dIndentLeft = 13;
+		ruler.SetPrProperties(true);
+		assert.deepEqual(inds(paras), [[13, -8, 0], [23, -8, 0], [33, -3, 0]], "the preview shows +3 from the start, not +2 +3");
+		ruler.m_dIndentLeft = 14;
+		ruler.SetPrProperties(false);
+		assert.deepEqual(inds(paras), [[14, -9, 0], [24, -9, 0], [34, -4, 0]], "the drop gives +4 from the start");
+
+		logicDocument.Document_Undo();
+		assert.deepEqual(inds(paras), [[10, -5, 0], [20, -5, 0], [30, 0, 0]], "one undo restores all");
+	});
 });
