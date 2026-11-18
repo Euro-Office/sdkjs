@@ -27724,17 +27724,26 @@ CDocument.prototype.GetSpellCheckManager = function()
  * Selects the next misspelled word after the cursor and continues from the start of the document at the end.
  * The main text and its text boxes are checked first, then the footnotes, the endnotes, and the headers and footers.
  * Only words that the spellchecker has already marked are found.
- * @returns {boolean} false if there is no misspelled word
+ * @returns {?{Paragraph: AscWord.Paragraph, Element: AscWord.CParagraphSpellCheckerElement}} null if there is no
+ * misspelled word
  */
 CDocument.prototype.SelectNextMisspelledWord = function()
 {
-	let paragraphs = this.private_GetSpellCheckParagraphs();
-	let count      = paragraphs.length;
-	if (!count)
-		return false;
+	// The paragraphs are collected in groups (each top-level element of the main text, then the notes, then the
+	// headers and footers), and only as far as the search goes, so a click does not walk the whole document
+	let groupsCount = this.Content.length + 2;
+	let groups      = [];
+	let self        = this;
+	function getGroup(groupIndex)
+	{
+		if (!groups[groupIndex])
+			groups[groupIndex] = self.private_GetSpellCheckParagraphs(groupIndex);
+		return groups[groupIndex];
+	}
 
 	let curParagraph = this.GetCurrentParagraph(false, false);
-	let curIndex     = paragraphs.indexOf(curParagraph);
+	let curGroup     = curParagraph ? this.private_GetSpellCheckGroup(curParagraph, getGroup) : -1;
+	let curIndex     = -1 !== curGroup ? getGroup(curGroup).indexOf(curParagraph) : -1;
 	let curPos       = null;
 	let isSelection  = false;
 	if (-1 !== curIndex)
@@ -27753,43 +27762,51 @@ CDocument.prototype.SelectNextMisspelledWord = function()
 	}
 	else
 	{
+		curGroup = 0;
 		curIndex = 0;
 	}
 
-	// The paragraph with the cursor is visited twice: words after the cursor first, words before it after wrapping
-	for (let i = 0; i <= count; ++i)
+	// The group with the cursor is visited twice: from the cursor first, up to the cursor after wrapping
+	for (let step = 0; step <= groupsCount; ++step)
 	{
-		let paragraph = paragraphs[(curIndex + i) % count];
-		let elements  = paragraph.SpellChecker.Elements;
-		for (let elementIndex = 0, elementsCount = elements.length; elementIndex < elementsCount; ++elementIndex)
+		let paragraphs = getGroup((curGroup + step) % groupsCount);
+		let first      = 0 === step ? curIndex : 0;
+		let last       = groupsCount === step ? Math.min(curIndex, paragraphs.length - 1) : paragraphs.length - 1;
+		for (let paragraphIndex = first; paragraphIndex <= last; ++paragraphIndex)
 		{
-			let element = elements[elementIndex];
-			if (!element.IsWrong())
-				continue;
-
-			if (curPos && 0 === i)
+			let paragraph = paragraphs[paragraphIndex];
+			let isCurrent = curPos && paragraph === curParagraph;
+			let elements  = paragraph.SpellChecker.Elements;
+			for (let elementIndex = 0, elementsCount = elements.length; elementIndex < elementsCount; ++elementIndex)
 			{
-				// A selected word is skipped, a word with the cursor inside is found
-				if (isSelection ? element.GetStartPos().Compare(curPos) < 0 : element.GetEndPos().Compare(curPos) <= 0)
+				let element = elements[elementIndex];
+				if (!element.IsWrong())
 					continue;
-			}
-			else if (curPos && count === i && element.GetStartPos().Compare(curPos) >= 0)
-			{
-				break;
-			}
 
-			this.RemoveSelection();
-			paragraph.Selection.Use   = true;
-			paragraph.Selection.Start = false;
-			paragraph.Set_SelectionContentPos(element.GetStartPos(), element.GetEndPos());
-			paragraph.Set_ParaContentPos(element.GetStartPos(), false, -1, -1);
-			paragraph.Document_SetThisElementCurrent(true);
-			this.private_ScrollToCenter(paragraph, element.GetStartPos());
-			return true;
+				if (isCurrent && 0 === step)
+				{
+					// A selected word is skipped, a word with the cursor inside is found
+					if (isSelection ? element.GetStartPos().Compare(curPos) < 0 : element.GetEndPos().Compare(curPos) <= 0)
+						continue;
+				}
+				else if (isCurrent && groupsCount === step && element.GetStartPos().Compare(curPos) >= 0)
+				{
+					break;
+				}
+
+				this.RemoveSelection();
+				paragraph.Selection.Use   = true;
+				paragraph.Selection.Start = false;
+				paragraph.Set_SelectionContentPos(element.GetStartPos(), element.GetEndPos());
+				paragraph.Set_ParaContentPos(element.GetStartPos(), false, -1, -1);
+				paragraph.Document_SetThisElementCurrent(true);
+				this.private_ScrollToCenter(paragraph, element.GetStartPos());
+				return {Paragraph : paragraph, Element : element};
+			}
 		}
 	}
 
-	return false;
+	return null;
 };
 /**
  * Scrolls the view so that the given position of the paragraph is in the middle of the screen
@@ -27799,7 +27816,7 @@ CDocument.prototype.SelectNextMisspelledWord = function()
 CDocument.prototype.private_ScrollToCenter = function(paragraph, contentPos)
 {
 	let wordControl = this.DrawingDocument ? this.DrawingDocument.m_oWordControl : null;
-	if (!wordControl || !wordControl.ScrollToCenterPosition)
+	if (!wordControl || !wordControl.ScrollToAbsolutePosition)
 		return;
 
 	let state = paragraph.SaveSelectionState();
@@ -27810,7 +27827,7 @@ CDocument.prototype.private_ScrollToCenter = function(paragraph, contentPos)
 	if (!posInfo)
 		return;
 
-	wordControl.ScrollToCenterPosition(posInfo.X, posInfo.Y + posInfo.Height / 2, posInfo.PageNum);
+	wordControl.ScrollToAbsolutePosition(posInfo.X, posInfo.Y + posInfo.Height / 2, posInfo.PageNum, false, true);
 
 	// keep the view where it is when the cursor is updated
 	this.Api.asc_LockScrollToTarget(true);
@@ -27818,51 +27835,81 @@ CDocument.prototype.private_ScrollToCenter = function(paragraph, contentPos)
 	this.Api.asc_LockScrollToTarget(false);
 };
 /**
+ * The group of private_GetSpellCheckParagraphs that contains the paragraph
+ * @param {AscWord.Paragraph} paragraph
+ * @param {function(number): AscWord.Paragraph[]} getGroup
+ * @returns {number} -1 if the paragraph is not in the document
+ */
+CDocument.prototype.private_GetSpellCheckGroup = function(paragraph, getGroup)
+{
+	let count  = this.Content.length;
+	let docPos = paragraph.GetDocumentPositionFromObject();
+	if (docPos.length && this === docPos[0].Class && docPos[0].Position < count && -1 !== getGroup(docPos[0].Position).indexOf(paragraph))
+		return docPos[0].Position;
+
+	// Notes, headers and footers, and text boxes, whose position does not lead to the main text
+	for (let groupIndex = count + 2 - 1; groupIndex >= 0; --groupIndex)
+	{
+		if (-1 !== getGroup(groupIndex).indexOf(paragraph))
+			return groupIndex;
+	}
+	return -1;
+};
+/**
  * The paragraphs in the order the spellcheck visits them: the main text with its text boxes, the footnotes and
  * the endnotes in the order of their references, then the headers and footers.
  * The cached lists of GetAllParagraphs and GetFootnotesList are not used, they can be out of date here.
+ * @param {number} [group] - Only one group: the index of a top-level element of the main text, or the number of
+ * these elements for the notes, or one more for the headers and footers
  * @returns {AscWord.Paragraph[]}
  */
-CDocument.prototype.private_GetSpellCheckParagraphs = function()
+CDocument.prototype.private_GetSpellCheckParagraphs = function(group)
 {
 	let paragraphs = [];
-	for (let i = 0, count = this.Content.length; i < count; ++i)
+	let count      = this.Content.length;
+	let isAll      = undefined === group;
+	for (let i = isAll ? 0 : group, last = isAll ? count - 1 : Math.min(group, count - 1); i <= last; ++i)
 	{
 		this.Content[i].GetAllParagraphs({All : true}, paragraphs);
 	}
 
-	let notes = CDocumentContentBase.prototype.GetFootnotesList.call(this, null, null, false)
-		.concat(CDocumentContentBase.prototype.GetFootnotesList.call(this, null, null, true));
-	notes.forEach(function(note)
+	if (isAll || count === group)
 	{
-		note.GetAllParagraphs({All : true}, paragraphs);
-	});
+		let notes = CDocumentContentBase.prototype.GetFootnotesList.call(this, null, null, false)
+			.concat(CDocumentContentBase.prototype.GetFootnotesList.call(this, null, null, true));
+		notes.forEach(function(note)
+		{
+			note.GetAllParagraphs({All : true}, paragraphs);
+		});
+	}
 
-	// Sections that share a header or footer return it more than once
-	let hdrFtrs = new Set(this.SectionsInfo.GetAllHdrFtrs());
-	hdrFtrs.forEach(function(hdrFtr)
+	if (isAll || count + 1 === group)
 	{
-		hdrFtr.GetContent().GetAllParagraphs({All : true}, paragraphs);
-	});
+		// Sections that share a header or footer return it more than once
+		let hdrFtrs = new Set(this.SectionsInfo.GetAllHdrFtrs());
+		hdrFtrs.forEach(function(hdrFtr)
+		{
+			hdrFtr.GetContent().GetAllParagraphs({All : true}, paragraphs);
+		});
+	}
 	return paragraphs;
 };
 /**
- * The progress of the background spellcheck, for showing it to the user.
- * @param {boolean} [withLanguages=false] - Also list the text languages that have no dictionary, which takes longer
+ * The progress of the background spellcheck, for showing it to the user. The progress itself is cheap, it is also
+ * sent with the asc_onSpellCheckProgress event while the check runs.
+ * @param {boolean} [withLanguages=false] - Also list the text languages that have no dictionary, this walks the
+ * whole document
  * @returns {{Checked: number, Total: number, IsComplete: boolean, IsStopped: boolean, MissingLanguages: number[]}}
  */
 CDocument.prototype.GetSpellCheckState = function(withLanguages)
 {
-	let spelling   = this.Spelling;
-	let paragraphs = this.private_GetSpellCheckParagraphs();
-	let total      = paragraphs.length;
-	let pending    = Math.min(spelling.GetPendingParagraphsCount(), total);
+	let progress = this.Spelling.GetProgress();
 
 	let missingLanguages = [];
 	if (withLanguages)
 	{
 		let checkedLanguages = {};
-		paragraphs.forEach(function(paragraph)
+		this.private_GetSpellCheckParagraphs().forEach(function(paragraph)
 		{
 			paragraph.CheckRunContent(function(run)
 			{
@@ -27881,43 +27928,71 @@ CDocument.prototype.GetSpellCheckState = function(withLanguages)
 	}
 
 	return {
-		Checked          : total - pending,
-		Total            : total,
-		IsComplete       : 0 === pending,
-		IsStopped        : !spelling.IsOn() || !spelling.Use,
+		Checked          : progress.Checked,
+		Total            : progress.Total,
+		IsComplete       : progress.IsComplete,
+		IsStopped        : progress.IsStopped,
 		MissingLanguages : missingLanguages
 	};
 };
 /**
  * Replaces every occurrence of a misspelled word in the main text, text boxes, notes, headers and footers.
+ * Occurrences that cannot be edited are skipped: inside a content control whose contents are locked, or in a
+ * paragraph that another user is editing. Everything is replaced in one action, so one Undo reverts it.
  * @param {string} word - The misspelled word
  * @param {string} newWord - The replacement
+ * @returns {{Replaced: number, Skipped: number}}
  */
 CDocument.prototype.ReplaceAllMisspelledWords = function(word, newWord)
 {
-	let toReplace = [];
+	let logicDocument = this;
+	let toReplace     = [];
+	let paragraphs    = [];
+	let skipped       = 0;
 	this.private_GetSpellCheckParagraphs().forEach(function(paragraph)
 	{
+		let isLocked = paragraph.Lock.Is_Locked();
+		let isAdded  = false;
 		paragraph.SpellChecker.Elements.forEach(function(element)
 		{
-			if (element.IsWrong() && word === element.GetWord())
-				toReplace.push({paragraph : paragraph, element : element});
+			if (!element.IsWrong() || word !== element.GetWord())
+				return;
+
+			if (isLocked || !logicDocument.private_CanEditMisspelledWord(element))
+			{
+				++skipped;
+				return;
+			}
+
+			toReplace.push({paragraph : paragraph, element : element});
+			if (!isAdded)
+			{
+				paragraphs.push(paragraph);
+				isAdded = true;
+			}
 		});
 	});
 
+	let result = {Replaced : 0, Skipped : skipped};
 	if (!toReplace.length)
-		return;
+		return result;
 
-	let paragraphs = toReplace.map(function(item)
+	// Only the paragraphs themselves are checked here: the content controls are checked per word above, the
+	// selection that Paragraph.Document_Is_SelectionLocked looks at is not where the words are
+	if (!this.StartSelectionLockCheck())
 	{
-		return item.paragraph;
+		result.Skipped += toReplace.length;
+		return result;
+	}
+	paragraphs.forEach(function(paragraph)
+	{
+		paragraph.Lock.Check(paragraph.GetId());
 	});
-	if (this.IsSelectionLocked(AscCommon.changestype_None, {
-		Type      : AscCommon.changestype_2_ElementsArray_and_Type,
-		Elements  : paragraphs,
-		CheckType : AscCommon.changestype_Paragraph_Content
-	}))
-		return;
+	if (this.EndSelectionLockCheck())
+	{
+		result.Skipped += toReplace.length;
+		return result;
+	}
 
 	this.StartAction(AscDFH.historydescription_Document_ReplaceMisspelledWord);
 	// From the end, so that a replacement does not move the words before it in the same paragraph
@@ -27929,6 +28004,28 @@ CDocument.prototype.ReplaceAllMisspelledWords = function(word, newWord)
 	this.UpdateSelection();
 	this.UpdateInterface();
 	this.FinalizeAction();
+
+	result.Replaced = toReplace.length;
+	return result;
+};
+/**
+ * A misspelled word can be replaced if no content control around it locks its contents
+ * @param {AscWord.CParagraphSpellCheckerElement} element
+ * @returns {boolean}
+ */
+CDocument.prototype.private_CanEditMisspelledWord = function(element)
+{
+	let runs = [element.GetStartRun(), element.GetEndRun()];
+	for (let runIndex = 0; runIndex < runs.length; ++runIndex)
+	{
+		let contentControls = runs[runIndex].GetParentContentControls();
+		for (let i = 0, count = contentControls.length; i < count; ++i)
+		{
+			if (!contentControls[i].CanBeEdited())
+				return false;
+		}
+	}
+	return true;
 };
 //----------------------------------------------------------------------------------------------------------------------
 // Search
