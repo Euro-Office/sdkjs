@@ -8,6 +8,7 @@
 $(function ()
 {
 	let logicDocument = AscTest.CreateLogicDocument();
+	let compatibilityMode = logicDocument.GetCompatibilityMode();
 
 	function setup(ind)
 	{
@@ -25,24 +26,133 @@ $(function ()
 		return table;
 	}
 
+	function fmt(n)
+	{
+		return n.toFixed(2);
+	}
+
+	function sticksOut(assert, table)
+	{
+		let b = table.GetPageBounds(0);
+		assert.true(b.Left < table.X - 3 || b.Right > table.XLimit + 3, "sticks out before (" + fmt(b.Left) + "-" + fmt(b.Right) + ", margins " + fmt(table.X) + "-" + fmt(table.XLimit) + ")");
+	}
+
+	// Like Word, before compatibility mode 15 the cell margins (and borders) stand out of the text margins on both
+	// sides, so that the text in the cells lines up with the text outside; from mode 15 the table edges are on the
+	// margins.
+	function checkFits(assert, table, label)
+	{
+		let b     = table.GetPageBounds(0);
+		let left  = table.X - Math.abs(table.GetTableOffsetCorrection());
+		let right = table.XLimit + Math.abs(table.GetRightTableOffsetCorrection());
+		let info  = " (" + fmt(b.Left) + "-" + fmt(b.Right) + ", expected " + fmt(left) + "-" + fmt(right) + ", margins " + fmt(table.X) + "-" + fmt(table.XLimit) + ", grid " + table.TableGridCalc.map(fmt).join("/") + ")";
+		assert.true(Math.abs(b.Left - left) < 0.1, label + ": starts at the left margin" + info);
+		assert.true(Math.abs(b.Right - right) < 0.1, label + ": ends at the right margin" + info);
+	}
+
+	function sameColumns(assert, table)
+	{
+		let grid = table.TableGridCalc;
+		assert.true(Math.abs(grid[0] - grid[1]) < 0.5 && Math.abs(grid[1] - grid[2]) < 0.5, "columns keep their proportions (" + grid.map(fmt).join("/") + ")");
+	}
+
+	function fit(assert)
+	{
+		assert.true(logicDocument.CanFitTableToMargins(), "can be fitted");
+		assert.true(logicDocument.FitTableToMargins(), "fitted");
+		AscTest.Recalculate();
+	}
+
 	QUnit.module("Fit table to margins");
 
 	QUnit.test("A table that sticks out on both sides is put between the margins", function (assert)
 	{
 		let table = setup(-15);
-		let before = table.GetPageBounds(0);
-		assert.true(before.Left < 20 - 1 && before.Right > 190 + 1, "sticks out before (" + before.Left.toFixed(2) + "-" + before.Right.toFixed(2) + ", calc " + table.TableGridCalc.map(function (w) { return w.toFixed(1); }).join("/") + ")");
+		sticksOut(assert, table);
+		fit(assert);
+		checkFits(assert, table, "fitted");
+		sameColumns(assert, table);
 
-		assert.true(logicDocument.CanFitTableToMargins(), "can be fitted");
-		assert.true(logicDocument.FitTableToMargins(), "fitted");
+		let tablePr = table.Get_CompiledPr(false).TablePr;
+		assert.strictEqual(tablePr.TableW.Type, tblwidth_Pct, "preferred width in percent");
+		assert.strictEqual(tablePr.TableW.W, 100, "of 100%");
+		assert.strictEqual(table.Get_TableInd(), 0, "indent 0");
+	});
 
-		let after = table.GetPageBounds(0);
-		assert.true(Math.abs(after.Left - table.X) < 1, "starts at the left margin (" + after.Left.toFixed(2) + ")");
-		assert.true(after.Right <= table.XLimit + 1, "ends at the right margin (" + after.Right.toFixed(2) + ")");
-		assert.true(after.Right - after.Left > 165, "uses the width between the margins (" + (after.Right - after.Left).toFixed(2) + ", X " + table.X.toFixed(2) + ", XLimit " + table.XLimit.toFixed(2) + ", grid " + table.TableGrid.map(function (w) { return w.toFixed(1); }).join("/") + ")");
+	QUnit.test("Fixed layout with fixed cell widths", function (assert)
+	{
+		let table = setup(-15);
+		table.SetTableLayout(tbllayout_Fixed);
+		for (let r = 0; r < table.GetRowsCount(); ++r)
+		{
+			for (let c = 0; c < 3; ++c)
+				table.GetRow(r).GetCell(c).SetW(new CTableMeasurement(tblwidth_Mm, 80));
+		}
+		AscTest.Recalculate();
+		sticksOut(assert, table);
+		fit(assert);
+		checkFits(assert, table, "fitted");
+		sameColumns(assert, table);
+	});
 
-		let grid = table.TableGrid;
-		assert.true(Math.abs(grid[0] - grid[1]) < 0.5 && Math.abs(grid[1] - grid[2]) < 0.5, "columns keep their proportions");
+	QUnit.test("A table with a percent width", function (assert)
+	{
+		let table = setup();
+		table.Set_TableW(tblwidth_Pct, 140);
+		for (let r = 0; r < table.GetRowsCount(); ++r)
+		{
+			for (let c = 0; c < 3; ++c)
+				table.GetRow(r).GetCell(c).SetW(new CTableMeasurement(tblwidth_Pct, 33.3));
+		}
+		AscTest.Recalculate();
+		sticksOut(assert, table);
+		fit(assert);
+		checkFits(assert, table, "fitted");
+		sameColumns(assert, table);
+	});
+
+	QUnit.test("A centred table", function (assert)
+	{
+		let table = setup();
+		table.Set_TableAlign(AscCommon.align_Center);
+		table.SetTableLayout(tbllayout_Fixed);
+		AscTest.Recalculate();
+		let b = table.GetPageBounds(0);
+		assert.true(b.Left < table.X - 3 && b.Right > table.XLimit + 3, "sticks out on both sides before (" + fmt(b.Left) + "-" + fmt(b.Right) + ")");
+		fit(assert);
+		checkFits(assert, table, "fitted");
+		sameColumns(assert, table);
+	});
+
+	QUnit.test("The table keeps fitting when the margins or the orientation change", function (assert)
+	{
+		let table = setup(-15);
+		fit(assert);
+		let sectPr = AscTest.GetFinalSection();
+
+		sectPr.SetPageMargins(40, 20, 40, 20);
+		AscTest.Recalculate();
+		checkFits(assert, table, "wider margins");
+
+		sectPr.SetPageMargins(10, 20, 10, 20);
+		AscTest.Recalculate();
+		checkFits(assert, table, "narrower margins");
+
+		sectPr.SetPageSize(297, 210);
+		AscTest.Recalculate();
+		checkFits(assert, table, "landscape");
+	});
+
+	QUnit.test("In compatibility mode 15 the table edges are on the margins", function (assert)
+	{
+		AscTest.SetCompatibilityMode(AscCommon.document_compatibility_mode_Word15);
+		let table = setup(-15);
+		sticksOut(assert, table);
+		fit(assert);
+		let b = table.GetPageBounds(0);
+		assert.true(Math.abs(b.Left - table.X) < 0.1 && Math.abs(b.Right - table.XLimit) < 0.1, "between the margins (" + fmt(b.Left) + "-" + fmt(b.Right) + ")");
+		sameColumns(assert, table);
+		AscTest.SetCompatibilityMode(compatibilityMode);
 	});
 
 	QUnit.test("Undo brings the old size back", function (assert)

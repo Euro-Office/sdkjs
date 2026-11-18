@@ -96,6 +96,53 @@ $(function ()
 		assert.strictEqual(AscTest.GetParagraphText(cellParagraph(t[1], 1, 0)), "R3", "text of row 3 kept");
 	});
 
+	QUnit.test("The split is one undo step with its own description", function (assert)
+	{
+		let table = setup();
+		AscTest.MoveCursorToParagraph(cellParagraph(table, 1, 0));
+		logicDocument.SplitTable();
+
+		let history = logicDocument.GetHistory();
+		assert.strictEqual(history.Points[history.Index].Description, AscDFH.historydescription_Document_SplitTable, "history point is SplitTable");
+		let paragraph = logicDocument.GetCurrentParagraph();
+		assert.strictEqual(paragraph.GetParent(), logicDocument, "the cursor is in the main text");
+		assert.true(logicDocument.GetElement(paragraph.GetIndex() + 1).IsTable(), "in the paragraph between the tables");
+	});
+
+	function setupMerged()
+	{
+		// column 2 merged vertically over all three rows
+		let table = setup();
+		AscTest.MergeTableCells(table, 1, 0, 1, 2);
+		AscTest.Recalculate();
+		return table;
+	}
+
+	function checkMergeAfterSplit(assert, t)
+	{
+		assert.strictEqual(t.length, 2, "two tables");
+		assert.strictEqual(t[0].GetRow(0).GetCell(1).GetVMerge(), vmerge_Restart, "first table: merged cell starts in row 1");
+		assert.strictEqual(t[1].GetRow(0).GetCell(1).GetVMerge(), vmerge_Restart, "second table: the merge starts again in its first row");
+		assert.strictEqual(t[1].GetRow(1).GetCell(1).GetVMerge(), vmerge_Continue, "second table: row 3 is still merged with row 2");
+	}
+
+	QUnit.test("A cell merged across the split row is merged again in the second table", function (assert)
+	{
+		let table = setupMerged();
+		assert.strictEqual(table.GetRow(1).GetCell(1).GetVMerge(), vmerge_Continue, "merged before");
+		AscTest.MoveCursorToParagraph(cellParagraph(table, 1, 0));
+		logicDocument.SplitTable();
+		checkMergeAfterSplit(assert, tables());
+	});
+
+	QUnit.test("The same for a section break in a table", function (assert)
+	{
+		let table = setupMerged();
+		AscTest.MoveCursorToParagraph(cellParagraph(table, 1, 0));
+		logicDocument.AddSectionBreak(Asc.c_oAscSectionBreakType.Continuous);
+		checkMergeAfterSplit(assert, tables());
+	});
+
 	QUnit.test("A nested table is not split", function (assert)
 	{
 		let table = setup();

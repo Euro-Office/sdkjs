@@ -12005,20 +12005,38 @@ CDocument.prototype.CanSplitTable = function()
 	return (1 === tables.length && tables[0].GetParent() === this && -1 !== tables[0].GetIndex());
 };
 /**
- * Splits the table at the cursor above the current row, with an empty paragraph between the two parts.
- * The same as Ctrl+Shift+Enter in a table; a selection is collapsed to its start first.
+ * Splits the table at the cursor above the current row, with an empty paragraph between the two parts
+ * (the same result as Ctrl+Shift+Enter in a table). A selection is collapsed to its start first.
  * In the first row nothing is split, an empty paragraph is added above the table.
+ * The cursor goes to the new paragraph.
  * @returns {boolean}
  */
 CDocument.prototype.SplitTable = function()
 {
-	if (!this.CanSplitTable() || this.IsSelectionLocked(AscCommon.changestype_Document_Content_Add, null, false, false))
+	if (!this.CanSplitTable() || this.IsSelectionLocked(AscCommon.changestype_Table_Properties, null, false, false))
 		return false;
 
-	this.StartAction(AscDFH.historydescription_Document_AddPageBreak);
+	this.StartAction(AscDFH.historydescription_Document_SplitTable);
 	if (this.IsSelectionUse())
 		this.MoveCursorLeft(false, false);
-	this.AddToParagraph(new AscWord.CRunBreak(AscWord.break_Column));
+
+	let table    = this.GetCurrentTablesStack()[0];
+	let tablePos = table.GetIndex();
+	let newPara  = new AscWord.Paragraph();
+	let newTable = table.Split();
+	if (newTable)
+	{
+		this.AddToContent(tablePos + 1, newPara);
+		this.AddToContent(tablePos + 2, newTable);
+		this.CurPos.ContentPos = tablePos + 1;
+	}
+	else
+	{
+		this.AddToContent(tablePos, newPara);
+		this.CurPos.ContentPos = tablePos;
+	}
+	newPara.MoveCursorToStartPos(false);
+
 	this.Recalculate();
 	this.UpdateSelection();
 	this.UpdateInterface();
@@ -12035,8 +12053,8 @@ CDocument.prototype.CanFitTableToMargins = function()
 	return this.CanSplitTable() && this.GetCurrentTablesStack()[0].IsInline();
 };
 /**
- * Fits the table at the cursor between the margins: its left edge goes to the left margin and its width to the width
- * between the margins, the columns keep their proportions. For tables from Word files that stick out of the page.
+ * Fits the table at the cursor between the margins, like Word's AutoFit Window: preferred width 100%, indent 0,
+ * autofit layout. The columns keep their proportions. For tables from Word files that stick out of the page.
  * @returns {boolean}
  */
 CDocument.prototype.FitTableToMargins = function()

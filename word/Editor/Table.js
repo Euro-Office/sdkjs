@@ -9267,6 +9267,10 @@ CTable.prototype.Split = function()
 	NewTable.Set_TableStyle2(this.TableStyle);
 	NewTable.Set_TableLook(this.TableLook.Copy());
 
+	// If the split row is in the middle of a vertically merged cell, the new table would start with a continued
+	// merge: start the merge again in its first row.
+	NewTable.CorrectVMerge();
+
 	// Сбросим селект и текущую позицию в таблицах
 	this.MoveCursorToStartPos(false);
 	NewTable.MoveCursorToStartPos(false);
@@ -18443,27 +18447,16 @@ CTable.prototype.Resize = function(nWidth, nHeight)
 	}
 };
 /**
- * Puts the table between the margins of the place it stands in (page or column): a left-aligned table starts at the
- * left margin, and the whole table gets the width between the margins, with the columns in the same proportions.
- * The table must have been recalculated.
+ * Fits the table between the margins like Word's AutoFit Window: the preferred table width becomes 100% of the width
+ * between the margins, the indent 0 and the layout autofit. The columns are scaled by the recalculation, so the table
+ * keeps fitting when the margins or the orientation change.
  * @returns {boolean}
  */
 CTable.prototype.FitToMargins = function()
 {
-	if (this.Pages.length <= 0)
-		return false;
-
-	let nWidth = this.XLimit - this.X;
-	if (nWidth < 1)
-		return false;
-
-	// the width first: Resize works on the grid as it is now; a changed indent would make the grid be squeezed again
-	let oFirst = this.GetPageBounds(0);
-	let oLast  = this.GetPageBounds(this.Pages.length - 1);
-	this.Resize(nWidth, oLast.Bottom - oLast.Top);
-
-	if (AscCommon.align_Left === this.Get_CompiledPr(false).TablePr.Jc && Math.abs(oFirst.Left - this.X) > 0.01)
-		this.Set_TableInd(this.Get_TableInd() + this.X - oFirst.Left);
+	this.Set_TableW(tblwidth_Pct, 100);
+	this.Set_TableInd(0);
+	this.SetTableLayout(tbllayout_AutoFit);
 	return true;
 };
 /**
