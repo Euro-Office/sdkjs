@@ -1478,6 +1478,12 @@ function CHorRuler()
         if (!this.m_bIsMouseDown || this.SimpleChanges.IsSimple || !logicDocument || !logicDocument.IsDocumentEditor || !logicDocument.IsDocumentEditor())
             return;
 
+        // In fast co-editing every change is sent to the other users within 40 ms and the history is cleared,
+        // so a temporary preview step could not be taken back. The value is applied on mouse up instead.
+        let coEditing = AscCommon.CollaborativeEditing;
+        if (coEditing && coEditing.Is_Fast() && !coEditing.Is_SingleUser())
+            return;
+
         let type = this.DragType;
         let isIndent = (AscWord.RULER_DRAG_TYPE.leftFirstInd === type || AscWord.RULER_DRAG_TYPE.leftInd === type
             || AscWord.RULER_DRAG_TYPE.firstInd === type || AscWord.RULER_DRAG_TYPE.rightInd === type);
