@@ -174,14 +174,15 @@ const {
 
 	async function runTest(test)
 	{
-		const page = await browser.newPage();
+		const context = await browser.createBrowserContext();
 		try
 		{
+			const page = await context.newPage();
 			return await runQunitWithPage(page, {targetUrl : "file://" + path.join(__dirname, test), timeout : 60000});
 		}
 		finally
 		{
-			await page.close().catch(function () {});
+			await context.close().catch(function () {});
 		}
 	}
 	
