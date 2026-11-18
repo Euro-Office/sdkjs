@@ -4125,8 +4125,9 @@
 		var ws;
 		if (!page) {
 			// Печать пустой страницы
+			// with no pages at all, show the header and footer as printSheets prints them
 			ws = this.getWorksheet();
-			ws.drawForPrint(printPreviewContext, null);
+			ws.drawForPrint(printPreviewContext, null, 0, null, 0 === printPreviewState.getPagesLength());
 		} else {
 			ws = this.getWorksheet(page.indexWorksheet);
 			ws.drawForPrint(printPreviewContext, page, index, printPreviewState.pages && printPreviewState.pages.arrPages);
