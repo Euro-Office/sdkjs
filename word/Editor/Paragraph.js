@@ -10834,9 +10834,15 @@ Paragraph.prototype.Get_CompiledPr = function()
 				Prev_After = 0;
 
 			// w:doNotUseHTMLParagraphAutoSpacing: space after of the previous paragraph and space before
-			// of this one add up instead of collapsing to the larger of the two
+			// of this one add up instead of collapsing to the larger of the two. If either side uses automatic
+			// spacing, keep the larger of the two: Word uses 5 pt for automatic spacing under this setting, the
+			// editor 14 pt, so adding up would give 28 pt where Word gives 10 pt
 			let oLogicDocument = this.GetLogicDocument();
-			if (oLogicDocument && oLogicDocument.IsDocumentEditor() && oLogicDocument.GetDocumentSettings().DoNotUseHTMLParagraphAutoSpacing)
+			if (oLogicDocument
+				&& oLogicDocument.IsDocumentEditor()
+				&& oLogicDocument.GetDocumentSettings().DoNotUseHTMLParagraphAutoSpacing
+				&& true !== Prev_AfterAuto
+				&& true !== Cur_BeforeAuto)
 				Pr.ParaPr.Spacing.Before = Cur_Before;
 			else
 				Pr.ParaPr.Spacing.Before = Math.max(Prev_After, Cur_Before) - Prev_After;

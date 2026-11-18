@@ -30,17 +30,34 @@ $(function ()
 		}
 	}
 
+	// Automatic spacing (w:afterAutospacing / w:beforeAutospacing) is 14 pt in the editor.
+	const AUTO = "auto";
+	const autoSpacing = 14 * g_dKoef_pt_to_mm;
+
 	function getBottom(after, before)
 	{
 		let p1 = logicDocument.GetElement(0);
 		let p2 = logicDocument.GetElement(1);
-		p1.SetParagraphSpacing({Before : 0, After : after, LineRule : linerule_Auto, Line : 1});
-		p2.SetParagraphSpacing({Before : before, After : 0, LineRule : linerule_Auto, Line : 1});
+		p1.SetParagraphSpacing({
+			Before           : 0,
+			After            : AUTO === after ? 0 : after,
+			AfterAutoSpacing : AUTO === after,
+			LineRule         : linerule_Auto,
+			Line             : 1
+		});
+		p2.SetParagraphSpacing({
+			Before            : AUTO === before ? 0 : before,
+			BeforeAutoSpacing : AUTO === before,
+			After             : 0,
+			LineRule          : linerule_Auto,
+			Line              : 1
+		});
 		AscTest.Recalculate();
 		return p2.GetPageBounds(0).Bottom;
 	}
 
 	// The vertical space between the two paragraphs: how much lower the second one ends than without any spacing.
+	// Pass AUTO for automatic spacing.
 	function getGap(after, before)
 	{
 		return getBottom(after, before) - getBottom(0, 0);
@@ -71,5 +88,25 @@ $(function ()
 		assert.close(getGap(20, 30), 50, 0.001, "space after 20, space before 30");
 		assert.close(getGap(30, 20), 50, 0.001, "space after 30, space before 20");
 		assert.close(getGap(0, 15), 15, 0.001, "no space after, space before 15");
+	});
+
+	QUnit.test("Without the setting automatic spacing keeps the larger spacing", function(assert)
+	{
+		logicDocument.GetDocumentSettings().DoNotUseHTMLParagraphAutoSpacing = false;
+		assert.close(getGap(AUTO, AUTO), autoSpacing, 0.001, "automatic space after, automatic space before");
+		assert.close(getGap(AUTO, 20), 20, 0.001, "automatic space after, space before 20");
+		assert.close(getGap(AUTO, 2), autoSpacing, 0.001, "automatic space after, space before 2");
+		assert.close(getGap(20, AUTO), 20, 0.001, "space after 20, automatic space before");
+		assert.close(getGap(2, AUTO), autoSpacing, 0.001, "space after 2, automatic space before");
+	});
+
+	QUnit.test("With the setting automatic spacing on either side keeps the larger spacing", function(assert)
+	{
+		logicDocument.GetDocumentSettings().DoNotUseHTMLParagraphAutoSpacing = true;
+		assert.close(getGap(AUTO, AUTO), autoSpacing, 0.001, "automatic space after, automatic space before");
+		assert.close(getGap(AUTO, 20), 20, 0.001, "automatic space after, space before 20");
+		assert.close(getGap(AUTO, 2), autoSpacing, 0.001, "automatic space after, space before 2");
+		assert.close(getGap(20, AUTO), 20, 0.001, "space after 20, automatic space before");
+		assert.close(getGap(2, AUTO), autoSpacing, 0.001, "space after 2, automatic space before");
 	});
 });
