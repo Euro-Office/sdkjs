@@ -137,6 +137,131 @@ $(function ()
 		}
 	});
 
+	QUnit.test("A page turned by 90 or 270 degrees is as high as it is wide (as in the page layout)", function (assert)
+	{
+		let viewer = createViewer(500, 600);
+		let pages = [{Rotate : 0}, {Rotate : 90}, {Rotate : 180}];
+		viewer.file = {isValid : function () { return true; }, pages : pages};
+		assert.strictEqual(viewer.getPageByPageHeight(0), 500, "0 degrees: the height");
+		assert.strictEqual(viewer.getPageByPageHeight(1), 400, "90 degrees: the width");
+		assert.strictEqual(viewer.getPageByPageHeight(2), 500, "180 degrees: the height");
+		pages[2].Rotate = 270;
+		assert.strictEqual(viewer.getPageByPageHeight(2), 400, "270 degrees: the width");
+	});
+
+	QUnit.test("The page at the top of the window, in a document with 5000 pages", function (assert)
+	{
+		let viewer = createViewer(500, 600);
+		viewer.drawingPages = [];
+		let top = 20;
+		for (let i = 0; i < 5000; i++)
+		{
+			// different heights, so that a wrong guess cannot hit the right page by chance
+			let height = 300 + (i * 37) % 700;
+			viewer.drawingPages.push({X : 0, Y : top, W : 400, H : height});
+			top += height + 20;
+		}
+
+		// the way it was found before: look at every page from the first one
+		function linearIndex()
+		{
+			for (let i = 0; i < viewer.drawingPages.length; i++)
+			{
+				let page = viewer.drawingPages[i];
+				if (page.Y + page.H > viewer.scrollY)
+					return i;
+			}
+			return viewer.drawingPages.length - 1;
+		}
+
+		let positions = [0, 1, 19, 20, 21, top + 1000];
+		[1, 2, 777, 2500, 4998, 4999].forEach(function (n)
+		{
+			let page = viewer.drawingPages[n];
+			// the page top, its last pixel, its bottom, the gap below it
+			positions.push(page.Y, page.Y + page.H - 1, page.Y + page.H, page.Y + page.H + 10);
+		});
+		for (let y = 0; y < top; y += 9973)
+			positions.push(y);
+
+		let isSame = true;
+		positions.forEach(function (y)
+		{
+			viewer.scrollY = y;
+			let index = viewer.getPageByPageIndex();
+			if (index !== linearIndex())
+			{
+				isSame = false;
+				assert.strictEqual(index, linearIndex(), "scroll position " + y);
+			}
+		});
+		assert.ok(isSame, "the same page as before at all " + positions.length + " scroll positions");
+
+		viewer.scrollY = viewer.drawingPages[4999].Y - 25;
+		assert.strictEqual(viewer.getPageByPageIndex(), 4998, "in the gap above the last page: the page before it");
+		viewer.scrollY = top + 1000;
+		assert.strictEqual(viewer.getPageByPageIndex(), 4999, "below all pages: the last page");
+		viewer.drawingPages = [];
+		assert.strictEqual(viewer.getPageByPageIndex(), -1, "no pages: -1");
+	});
+
+	QUnit.test("The mouse wheel: page by page only for a plain vertical wheel outside a form field", function (assert)
+	{
+		let viewer = createViewer(500, 600);
+		viewer.file = {isValid : function () { return true; }, pages : [{}, {}, {}]};
+		viewer.isVisibleHorScroll = true;
+		viewer.isPageByPage = true;
+		viewer.onMouseMove = function () {};
+
+		let calls;
+		viewer.scrollPageByPage = function (delta, isKey) { calls.push("page " + delta + " " + isKey); return true; };
+		viewer.m_oScrollVerApi.scrollBy = function (x, y) { calls.push("vertical " + y); };
+		viewer.m_oScrollHorApi = {scrollBy : function (x) { calls.push("horizontal " + x); }};
+		let field = null;
+		viewer.getPageFieldByMouse = function () { return field; };
+
+		function wheel(e)
+		{
+			calls = [];
+			e.preventDefault = function () {};
+			e.stopPropagation = function () {};
+			viewer.onMouseWhell(e);
+			return calls.join(", ");
+		}
+
+		assert.strictEqual(wheel({wheelDelta : -120, wheelDeltaY : -120, wheelDeltaX : 0}), "page 45 false",
+			"a wheel step down goes page by page");
+		assert.strictEqual(wheel({wheelDelta : -120, wheelDeltaY : -120, wheelDeltaX : 0, ctrlKey : true}), "",
+			"ctrl + wheel is left alone (it zooms), as before");
+		assert.strictEqual(wheel({wheelDelta : -120, wheelDeltaY : 0, wheelDeltaX : -120}), "horizontal 45",
+			"a horizontal wheel scrolls sideways, as before");
+
+		let fieldScroll = [];
+		field = {
+			GetType : function () { return AscPDF.FIELD_TYPES.text; },
+			GetPage : function () { return 0; },
+			GetScrollInfo : function ()
+			{
+				return {
+					docElem : {style : {display : "block"}},
+					scroll : {
+						settings : {vscrollStep : 10, hscrollStep : 10},
+						scrollByY : function (d) { fieldScroll.push(d); },
+						scrollByX : function () {}
+					}
+				};
+			}
+		};
+		assert.strictEqual(wheel({wheelDelta : -120, wheelDeltaY : -120, wheelDeltaX : 0, deltaY : 100}), "",
+			"over a text field with a scroll bar the page does not move");
+		assert.deepEqual(fieldScroll, [10], "the field scrolls instead, as before");
+
+		field = null;
+		viewer.isPageByPage = false;
+		assert.strictEqual(wheel({wheelDelta : -120, wheelDeltaY : -120, wheelDeltaX : 0}), "vertical 45",
+			"switched off: the wheel scrolls as before");
+	});
+
 	QUnit.test("Switching it on lines up the current page", function (assert)
 	{
 		let viewer = createViewer(500, 600);

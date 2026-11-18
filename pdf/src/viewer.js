@@ -1527,22 +1527,31 @@
 					this.navigateToPage(index);
 			}
 		};
-		// the page at the top of the window
+		// the page at the top of the window: the first page whose bottom is below the top of the window (the last
+		// page if there is none). The pages are laid out one below the other, so their bottoms only grow and a
+		// binary search finds it without looking at every page (a PDF can have thousands of pages).
 		this.getPageByPageIndex = function()
 		{
-			for (let i = 0, count = this.drawingPages.length; i < count; i++)
+			let lo = 0;
+			let hi = this.drawingPages.length - 1;
+			if (hi < 0)
+				return -1;
+
+			while (lo < hi)
 			{
-				if (this.drawingPages[i].Y + this.getPageByPageHeight(i) > this.scrollY)
-					return i;
+				let mid = (lo + hi) >> 1;
+				if (this.drawingPages[mid].Y + this.getPageByPageHeight(mid) > this.scrollY)
+					hi = mid;
+				else
+					lo = mid + 1;
 			}
-			return this.drawingPages.length - 1;
+			return lo;
 		};
 		this.getPageByPageHeight = function(index)
 		{
 			// the same as the page layout: a page turned by 90 or 270 degrees is as high as it is wide
 			let page = this.drawingPages[index];
-			let angle = this.getPageRotate(index);
-			return (90 === angle || 270 === angle) ? page.W : page.H;
+			return this.isLandscapePage(index) ? page.W : page.H;
 		};
 		// delta > 0 goes down. A wheel gives many events for one turn on a touchpad (with its inertia often for a
 		// second or more), so after a jump to another page, and after scrolling reaches the end of a page higher than
