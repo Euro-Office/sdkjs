@@ -1893,7 +1893,17 @@ function (window, undefined) {
 			pMatNewX = undefined;
 		}
 
-		var bConstant = undefined !== argClone[3] ? argClone[3].tocBool().toBool() : true;
+		var bConstant = true;
+		if (undefined !== argClone[3]) {
+			bConstant = argClone[3].tocBool();
+			if (cElementType.error === bConstant.type) {
+				return bConstant;
+			}
+			if (cElementType.bool !== bConstant.type) {
+				return new cError(cErrorType.wrong_value_type);
+			}
+			bConstant = bConstant.toBool();
+		}
 
 		return {pMatY: pMatY, pMatX: pMatX, pMatNewX: pMatNewX, bConstant: bConstant};
 	}
