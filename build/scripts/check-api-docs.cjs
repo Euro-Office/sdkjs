@@ -40,6 +40,7 @@ const API_FILES = [
 	'word/plugin-events.js',
 	'cell/plugin-events.js',
 	'slide/plugin-events.js',
+	'pdf/plugin-events.js',
 ];
 
 const PUBLIC_CLASS  = /^(Api\w*|Plugin)$/;
