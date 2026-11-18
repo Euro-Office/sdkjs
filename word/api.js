@@ -10182,6 +10182,11 @@ background-repeat: no-repeat;\
 
 		return oResult;
 	};
+	/**
+	 * All tracked changes in the order "Next change" goes through them (a move is one entry).
+	 * The event "asc_onRevisionChangesUpdated" tells when this list may have changed.
+	 * @returns {CRevisionsChange[]}
+	 */
 	asc_docs_api.prototype.asc_GetRevisionChangesInOrder = function()
 	{
 		let logicDocument = this.private_GetLogicDocument();
@@ -10192,11 +10197,21 @@ background-repeat: no-repeat;\
 		let logicDocument = this.private_GetLogicDocument();
 		return !!(logicDocument && logicDocument.SelectRevisionChange(oChange));
 	};
+	/**
+	 * Accepts all tracked changes of one author as one undo step. Nothing is changed if a paragraph involved is locked.
+	 * @param {string} sUserName
+	 * @returns {number} how many changes were accepted (a move counts as one), -1 if locked
+	 */
 	asc_docs_api.prototype.asc_AcceptRevisionChangesOfUser = function(sUserName)
 	{
 		let logicDocument = this.private_GetLogicDocument();
 		return logicDocument ? logicDocument.ProcessRevisionChangesOfUser(sUserName, true) : 0;
 	};
+	/**
+	 * Rejects all tracked changes of one author as one undo step. Nothing is changed if a paragraph involved is locked.
+	 * @param {string} sUserName
+	 * @returns {number} how many changes were rejected (a move counts as one), -1 if locked
+	 */
 	asc_docs_api.prototype.asc_RejectRevisionChangesOfUser = function(sUserName)
 	{
 		let logicDocument = this.private_GetLogicDocument();

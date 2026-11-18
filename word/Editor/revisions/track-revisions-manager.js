@@ -45,6 +45,35 @@
 		
 		logicDocument.GetTrackRevisionsManager().CheckElement(element);
 	}
+	/**
+	 * Are the changes of an element the same for a list of changes (type, author, date and text)?
+	 * Positions are not compared: typing elsewhere in the paragraph moves them but changes nothing in the list.
+	 * @param {CRevisionsChange[]} [oldChanges]
+	 * @param {CRevisionsChange[]} [newChanges]
+	 * @returns {boolean}
+	 */
+	function isSameChangesForList(oldChanges, newChanges)
+	{
+		oldChanges = oldChanges || [];
+		newChanges = newChanges || [];
+		if (oldChanges.length !== newChanges.length)
+			return false;
+
+		for (let index = 0, count = oldChanges.length; index < count; ++index)
+		{
+			let oldChange = oldChanges[index];
+			let newChange = newChanges[index];
+			let oldValue  = oldChange.GetValue();
+			let newValue  = newChange.GetValue();
+			if (oldChange.GetType() !== newChange.GetType()
+				|| oldChange.GetUserName() !== newChange.GetUserName()
+				|| oldChange.GetDateTime() !== newChange.GetDateTime()
+				|| (("string" === typeof oldValue || "string" === typeof newValue) && oldValue !== newValue))
+				return false;
+		}
+
+		return true;
+	}
 	function haveElementToCheck()
 	{
 		for (let id in elementToCheck)
@@ -101,6 +130,8 @@
 		this.ProcessMove = null;
 
 		this.SkipPreDeleteMoveMarks = false;
+
+		this.ChangesUpdated = false; // the list of changes is different since the last asc_onRevisionChangesUpdated
 	}
 
 	/**
@@ -886,14 +917,38 @@
 		delete this.CheckMap[Id];
 
 		if (!oElement.IsUseInDocument())
+		{
+			if (this.Changes[Id] && this.Changes[Id].length)
+				this.ChangesUpdated = true;
+
 			return false;
+		}
 
 		let isHaveChanges = !!this.Changes[Id];
+		let oldChanges    = this.Changes[Id];
 
 		this.private_RemoveChangeObject(Id);
 		oElement.CheckRevisionsChanges(this);
 
+		if (!isSameChangesForList(oldChanges, this.Changes[Id]))
+			this.ChangesUpdated = true;
+
 		return !(!isHaveChanges && !this.Changes[Id]);
+	};
+	/**
+	 * Sends asc_onRevisionChangesUpdated once all elements are checked and changes were added, removed or changed
+	 * since the last time. Called from the document timer, not in the middle of an action.
+	 */
+	CTrackRevisionsManager.prototype.CheckChangesUpdated = function()
+	{
+		if (!this.ChangesUpdated || !this.IsAllChecked() || this.LogicDocument.IsActionStarted())
+			return;
+
+		this.ChangesUpdated = false;
+
+		let api = this.LogicDocument.GetApi();
+		if (api)
+			api.sendEvent("asc_onRevisionChangesUpdated");
 	};
 	/**
 	 * При чтении файла обновляем Id перетаскиваний в рецензировании
