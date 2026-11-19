@@ -304,7 +304,10 @@
         XmlMap: 30,
         RdRichValue: 31,
         RdRichValueStructure: 32,
-        RdRichValueTypes: 33
+        RdRichValueTypes: 33,
+        // Euro-Office extension: kept far above the ids above so that a record added later in the
+        // same sequence cannot take it
+        SourceFileType: 100
     };
     /** @enum */
     var c_oSerWorkbookPrTypes =
@@ -3873,6 +3876,9 @@
                 //TODO при чтении на клиенте - здесь строка, не пишем пока
 				if (this.wb.connections && Array.isArray(oThis.wb.connections)) {
 					this.bs.WriteItem(c_oSerWorkbookTypes.Connections, function() {oThis.memory.WriteBuffer(oThis.wb.connections, 0, oThis.wb.connections.length)});
+				}
+				if (null != this.wb.sourceFileType) {
+					this.bs.WriteItem(c_oSerWorkbookTypes.SourceFileType, function () {oThis.memory.WriteLong(oThis.wb.sourceFileType);});
 				}
 			}
 			if (this.wb.workbookProtection) {
@@ -9710,6 +9716,10 @@
 					res = c_oSerConstants.ReadUnknown;
 				}
 			}
+            else if (c_oSerWorkbookTypes.SourceFileType === type && 4 === length)
+            {
+                this.oWorkbook.sourceFileType = this.stream.GetULongLE();
+            }
             else if (c_oSerWorkbookTypes.TimelineCaches === type)
             {
                 this.oWorkbook.timelineCaches = [];
