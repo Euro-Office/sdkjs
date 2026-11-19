@@ -17888,6 +17888,7 @@ CDocument.prototype.Get_MailMergedDocument = function(_nStartIndex, _nEndIndex)
 CDocument.prototype.ContinueTrackRevisions = function()
 {
 	this.TrackRevisionsManager.ContinueTrackRevisions();
+	this.TrackRevisionsManager.CheckChangesUpdated();
 };
 CDocument.prototype.SetTrackRevisions = function(bTrack)
 {
@@ -18228,6 +18229,174 @@ CDocument.prototype.private_SelectRevisionChange = function(oChange, isSkipCompl
 
 		this.CheckComplexFieldsInSelection();
 	}
+};
+/**
+ * All tracked changes in the order "Next change" goes through them: the main text first (with tables and text boxes
+ * in place), then footnotes, endnotes, headers and footers. For a list of changes like the comment list.
+ * A moved text is one entry (as "Next change" shows it), so accepting or rejecting it handles the whole move.
+ * Internal move marks are left out.
+ * @returns {CRevisionsChange[]}
+ */
+CDocument.prototype.GetRevisionChangesInOrder = function()
+{
+	let manager    = this.TrackRevisionsManager;
+	let allChanges = manager.Get_AllChanges();
+
+	// The same walk as GetNextChange (GetRevisionsChangeElement), but it collects every element with changes
+	// instead of stopping at the first one
+	let elements = [];
+	let visited  = {};
+	let collector = {
+		IsFound           : function() { return false; },
+		IsCurrentFound    : function() { return true; },
+		SetCurrentFound   : function() {},
+		GetCurrentElement : function() { return null; },
+		GetDirection      : function() { return 1; },
+		SetFoundedElement : function(element)
+		{
+			let id = element.GetId();
+			if (!visited[id] && allChanges[id] && allChanges[id].length)
+			{
+				visited[id] = true;
+				elements.push(element);
+			}
+		}
+	};
+	if (this.Content.length > 0)
+		this.private_GetRevisionsChangeElementInDocument(collector, 0);
+	this.private_GetRevisionsChangeElementInFootnotes(collector, null);
+	this.private_GetRevisionsChangeElementInHdrFtr(collector, null);
+
+	// Elements the walk does not reach (should not happen) are not lost, they come last
+	for (let elementId in allChanges)
+	{
+		let changes = allChanges[elementId];
+		if (visited[elementId] || !changes || !changes.length)
+			continue;
+
+		let element = changes[0].GetElement();
+		if (element && element.IsUseInDocument())
+			elements.push(element);
+	}
+
+	let result     = [];
+	let inMove     = new Set(); // simple changes that are part of a move already listed
+	let listedMove = {};
+	elements.forEach(function(element)
+	{
+		allChanges[element.GetId()].forEach(function(change)
+		{
+			let type = change.GetType();
+			if (inMove.has(change) || c_oAscRevisionsChangeType.MoveMark === type || c_oAscRevisionsChangeType.MoveMarkRemove === type)
+				return;
+
+			if (change.IsMove())
+			{
+				let moveChange = manager.CollectMoveChange(change);
+				if (moveChange !== change && moveChange.IsComplexChange())
+				{
+					moveChange.GetSimpleChanges().forEach(function(simpleChange) { inMove.add(simpleChange); });
+
+					let moveId = moveChange.GetMoveId();
+					if (listedMove[moveId])
+						return;
+
+					listedMove[moveId] = true;
+					change = moveChange;
+				}
+			}
+
+			result.push(change);
+		});
+	});
+	return result;
+};
+/**
+ * Selects one tracked change and makes it the current one (as "Next change" does), so the document scrolls to it
+ * @param {CRevisionsChange} change
+ * @returns {boolean}
+ */
+CDocument.prototype.SelectRevisionChange = function(change)
+{
+	if (!change || !change.IsValid())
+		return false;
+
+	this.RemoveSelection();
+	this.private_SelectRevisionChange(change);
+	this.TrackRevisionsManager.SetCurrentChange(change);
+	this.UpdateSelection(false);
+	this.UpdateInterface(true);
+	this.HideCurrentComment();
+	return true;
+};
+/**
+ * Accepts or rejects all tracked changes of one author in one action (one undo step), like accept or reject all.
+ * The lock is checked once for all paragraphs involved: if one of them is locked, nothing is changed.
+ * @param {string} userName
+ * @param {boolean} isAccept
+ * @returns {number} how many changes were processed (a move counts as one), -1 if locked (nothing was changed)
+ */
+CDocument.prototype.ProcessRevisionChangesOfUser = function(userName, isAccept)
+{
+	let manager = this.TrackRevisionsManager;
+	let changes = this.GetRevisionChangesInOrder().filter(function(change) { return change.GetUserName() === userName; });
+	if (!changes.length)
+		return 0;
+
+	let relatedParas = {};
+	changes.forEach(function(change)
+	{
+		manager.GetChangeRelatedParagraphs(change, isAccept).forEach(function(para) { relatedParas[para.GetId()] = para; });
+	});
+
+	if (this.IsSelectionLocked(AscCommon.changestype_None, {
+		Type      : changestype_2_ElementsArray_and_Type,
+		Elements  : Object.values(relatedParas),
+		CheckType : AscCommon.changestype_Paragraph_Properties
+	}))
+		return -1;
+
+	this.StartAction(isAccept ? AscDFH.historydescription_Document_AcceptAllRevisionChanges : AscDFH.historydescription_Document_RejectAllRevisionChanges);
+
+	let isTrackRevision = this.GetLocalTrackRevisions();
+	if (false !== isTrackRevision)
+		this.SetLocalTrackRevisions(false);
+
+	// From the end of the document backwards, so the positions of the changes still to do don't shift
+	for (let index = changes.length - 1; index >= 0; --index)
+	{
+		let change = changes[index];
+		if (change.IsComplexChange())
+		{
+			if (change.IsMove())
+				this.private_ProcessMoveReview(change, isAccept);
+		}
+		else
+		{
+			this.private_SelectRevisionChange(change, true);
+			if (isAccept)
+				this.AcceptRevisionChanges(change.GetType(), false);
+			else
+				this.RejectRevisionChanges(change.GetType(), false);
+		}
+	}
+
+	if (false !== isTrackRevision)
+		this.SetLocalTrackRevisions(isTrackRevision);
+
+	if (true === this.History.Is_LastPointEmpty())
+	{
+		this.FinalizeAction();
+		return 0;
+	}
+
+	this.RemoveSelection();
+	this.private_CorrectDocumentPosition();
+	this.Recalculate();
+	this.UpdateSelection();
+	this.UpdateInterface();
+	this.FinalizeAction();
+	return changes.length;
 };
 CDocument.prototype.AcceptRevisionChange = function(oChange)
 {
