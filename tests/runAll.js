@@ -54,6 +54,28 @@ const allTests = [
 	'cell/spreadsheet-calculation/PrintJsonParamsTests.html',
 	'cell/spreadsheet-calculation/OpenRecalcTests.html',
 	'cell/js-api/js-api.html',
+	'cell/spreadsheet-calculation/CellSettingsTest.html',
+	'cell/spreadsheet-calculation/ProtectTests.html',
+	'cell/spreadsheet-calculation/SerialTests.html',
+	'cell/spreadsheet-calculation/ChartsDrawTest.html',
+	'cell/spreadsheet-calculation/DependencyGraph.html',
+	'cell/spreadsheet-calculation/PivotTests2.html',
+	'cell/spreadsheet-calculation/PrintTests.html',
+	'cell/spreadsheet-calculation/SheetViewTests.html',
+	'cell/spreadsheet-calculation/RunTests.html',
+	'cell/spreadsheet-calculation/RunCellFormatTests.html',
+	'cell/spreadsheet-calculation/testsForFWB.html',
+	'cell/spreadsheet-calculation/open-oox-in-browser.html',
+	'cell/spreadsheet-calculation/stax-reader.html',
+
+	'common/charts/chartEx-serialize.html',
+	'common/color-mods/color-mods.html',
+	'pdf/forms/actions.html',
+	'slide/copypaste/copy-paste-tests.html',
+	'slide/js-api/js-api.html',
+	'visio/api/api-test.html',
+	'visio/serialize/sax-serialize.html',
+	'word/image-smartart-placeholder/smartartImagePlaceholders.html',
 
 	'common/api/api.html',
 	'common/api/api-cell.html',
@@ -130,7 +152,41 @@ const skippedTests = {
 	// before either suite can be un-skipped.
 	'cell/spreadsheet-calculation/formula-tests/dateTimeTests.html' : 'EDATE() off-by-one for date serial numbers < 60 -- pre-existing bug, unrelated to this migration',
 	'cell/spreadsheet-calculation/SheetStructureTests.html'         : 'Autofill date/time-format sequences off-by-one for small serial date values -- same pre-existing date-serial bug family as dateTimeTests.html',
+	// Never ran in CI before; first run showed these failures.
+	'cell/spreadsheet-calculation/ChartsDrawTest.html'     : '5 of 816 assertions die with "api.GetActiveSheet is not a function" (Builder API not loaded on the page)',
+	'cell/spreadsheet-calculation/DependencyGraph.html'    : '134 of 135 pass, then an uncaught TypeError from font init (Base64.decode of missing common/AllFonts.js data)',
+	'cell/spreadsheet-calculation/PivotTests2.html'        : 'font init throws without common/AllFonts.js, QUnit.start() is never reached (times out)',
+	'cell/spreadsheet-calculation/PrintTests.html'         : 'waits for fAfterLoad, which needs document fonts to finish loading; never fires, so QUnit never starts (times out)',
+	'cell/spreadsheet-calculation/SheetViewTests.html'     : 'waits for fAfterLoad, which needs document fonts to finish loading; never fires, so QUnit never starts (times out)',
+	'cell/spreadsheet-calculation/RunTests.html'           : 'written for QUnit 1 (global test/module/ok), node-qunit-puppeteer only reads QUnit 2; 1 of 204 assertions also fails',
+	'cell/spreadsheet-calculation/RunCellFormatTests.html' : 'written for QUnit 1 (global test/module/ok), node-qunit-puppeteer only reads QUnit 2; 5275 of 32277 assertions also fail',
+	'cell/spreadsheet-calculation/testsForFWB.html'        : 'written for QUnit 1 (global test/module/ok), node-qunit-puppeteer only reads QUnit 2; 10 of 210 assertions also fail',
+	'cell/spreadsheet-calculation/open-oox-in-browser.html': 'written for QUnit 1 (global test/module/ok), node-qunit-puppeteer only reads QUnit 2; its only test fails in CTableId.Add',
+	'cell/spreadsheet-calculation/stax-reader.html'        : 'written for QUnit 1 (global test/module/ok), node-qunit-puppeteer only reads QUnit 2; 1 of 13 assertions also fails',
+	'common/charts/chartEx-serialize.html'                 : 'loads the cell, slide and word scripts.js on one page: "Identifier has already been declared" SyntaxErrors, never finishes',
+	'common/color-mods/color-mods.html'                    : '257 of 10023 assertions fail (satOff, satMod, lumOff colour results differ)',
+	'pdf/forms/actions.html'                               : 'font init throws in AscFonts.initEmbeddedFonts, then "AscTest.CreatePdfDocument is not a function"',
+	'slide/js-api/js-api.html'                             : 'all tests die with "Cannot read properties of undefined (reading \'GetPresentation\')" (Builder API not loaded)',
+	'visio/api/api-test.html'                              : 'font init throws without common/AllFonts.js before QUnit loads (times out)',
+	'visio/serialize/sax-serialize.html'                   : 'font init throws without common/AllFonts.js, QUnit.start() is never reached (times out)',
+	'word/image-smartart-placeholder/smartartImagePlaceholders.html' : 'loads SmartArt data by XHR, which Chromium blocks on file://, so QUnit never starts (times out)',
 };
+
+// Pages under tests/ that are not QUnit suites: kept out of the run on purpose.
+const notSuites = {
+	'cell/spreadsheet-calculation/benchmark-range-iterator.html' : 'benchmark, not a pass/fail suite',
+	'visio/draw-main/draw-main.html'                             : 'manual viewer harness, no QUnit tests',
+	'visio/drawFile/draw-file.html'                              : 'manual viewer harness, no QUnit tests',
+	'common/api/api-word-compiled.html'  : 'needs the built bundle, run by the build-test job in check-build.yml',
+	'common/api/api-cell-compiled.html'  : 'needs the built bundle, run by the build-test job in check-build.yml',
+	'common/api/api-slide-compiled.html' : 'needs the built bundle, run by the build-test job in check-build.yml',
+	'common/api/api-visio-compiled.html' : 'needs the built bundle, run by the build-test job in check-build.yml',
+};
+
+module.exports = {allTests, skippedTests, notSuites};
+
+if (require.main !== module)
+	return;
 
 const testsToRun = allTests.filter(function (test)
 {
