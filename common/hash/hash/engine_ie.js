@@ -268,6 +268,15 @@
         return result;
     };
 
+    var byteToHexLower = new Array(256);
+    var byteToHexUpper = new Array(256);
+    for (var i = 0; i < 256; i++)
+    {
+        var hex = (i < 16 ? "0" : "") + i.toString(16);
+        byteToHexLower[i] = hex;
+        byteToHexUpper[i] = hex.toUpperCase();
+    }
+
     /**
      * Encode Uint8Array to hex string
      * @memberof AscCommon.Hex
@@ -278,12 +287,7 @@
      */
     window.AscCommon.Hex.encode = window.AscCommon.Hex["encode"] = function(input, isUpperCase)
     {
-        var byteToHex = new Array(256);
-        for (var i = 0; i < 16; i++)
-            byteToHex[i] = "0" + (isUpperCase ? i.toString(16).toUpperCase() : i.toString(16));
-        for (var i = 16; i < 256; i++)
-            byteToHex[i] = isUpperCase ? i.toString(16).toUpperCase() : i.toString(16);
-
+        var byteToHex = isUpperCase ? byteToHexUpper : byteToHexLower;
         var result = "";
         for (var i = 0, len = input.length; i < len; i++)
             result += byteToHex[input[i]];
