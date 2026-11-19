@@ -102,6 +102,7 @@ const allTests = [
 	'word/math-autocorrection/math-autocorrection.html',
 	'word/math-ml/math-ml.html',
 	'word/change-case/change-case.html',
+	'word/spellcheck/spellcheck.html',
 	'word/js-api/js-api.html',
 	'word/js-api/js-api-forms.html',
 	'word/copypaste/copy-paste-tests.html',
