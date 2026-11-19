@@ -6672,15 +6672,9 @@
 	};
 
 	WorkbookView.prototype.checkScrollRtl = function(val) {
-		let controller = this.controller;
-		let hsbApi = controller && controller.hsbApi;
-		let ctx = hsbApi && hsbApi.context;
-		if (ctx) {
-			if (val) {
-				ctx.setTransform(-1,0,0,1,hsbApi.canvasW,0);
-			} else {
-				ctx.setTransform(1,0,0,1,0,0);
-			}
+		let hsbApi = this.controller && this.controller.hsbApi;
+		if (hsbApi) {
+			hsbApi.setRightToLeft(val);
 		}
 	};
 

@@ -1536,15 +1536,6 @@ function CEditorPage(api)
 		{
 			this.m_oScrollHor_ = new AscCommon.ScrollObject("id_horizontal_scroll", settings);
 
-			this.m_oScrollHor_.onLockMouse  = function(evt)
-			{
-				AscCommon.check_MouseDownEvent(evt, true);
-				global_mouseEvent.LockMouse();
-			};
-			this.m_oScrollHor_.offLockMouse = function(evt)
-			{
-				AscCommon.check_MouseUpEvent(evt);
-			};
 			this.m_oScrollHor_.bind("scrollhorizontal", function(evt)
 			{
 				oThis.horizontalScroll(this, evt.scrollD, evt.maxScrollX);
@@ -1568,15 +1559,6 @@ function CEditorPage(api)
 		{
 			this.m_oScrollVer_ = new AscCommon.ScrollObject("id_vertical_scroll", settings);
 
-			this.m_oScrollVer_.onLockMouse  = function(evt)
-			{
-				AscCommon.check_MouseDownEvent(evt, true);
-				global_mouseEvent.LockMouse();
-			};
-			this.m_oScrollVer_.offLockMouse = function(evt)
-			{
-				AscCommon.check_MouseUpEvent(evt);
-			};
 			this.m_oScrollVer_.bind("scrollvertical", function(evt)
 			{
 				oThis.verticalScroll(this, evt.scrollD, evt.maxScrollY);

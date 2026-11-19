@@ -879,12 +879,10 @@
             let oScrollSettings = Asc.editor.WordControl.CreateScrollSettings();
             oScrollSettings.isHorizontalScroll  = isLandscape;
 		    oScrollSettings.isVerticalScroll    = !isLandscape;
-            oScrollSettings.contentW            = isLandscape ? Math.abs(nMaxShift) : 0;
-		    oScrollSettings.contentH            = isLandscape ? 0 : Math.abs(nMaxShift);
-            oScrollSettings.screenH             = 0;
-            oScrollSettings.screenW             = 0;
-            oScrollSettings.scrollerMinHeight   = 5;
-            oScrollSettings.scrollerMinWidth    = 5;
+            oScrollSettings.contentW            = isLandscape ? nContentH : 0;
+		    oScrollSettings.contentH            = isLandscape ? 0 : nContentH;
+            oScrollSettings.screenW             = isLandscape ? dFrmH : 0;
+            oScrollSettings.screenH             = isLandscape ? 0 : dFrmH;
             
             let nScrollCoeff = this._curShiftView.y / nMaxShift;
             
@@ -907,6 +905,7 @@
             }
 
             let oThis = this;
+            oScroll.unbind("scrollhorizontal scrollvertical mouseup");
             if (isLandscape) {
                 oScroll.bind("scrollhorizontal", function (evt) {
                     if (false == bInvertScroll) {

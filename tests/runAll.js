@@ -55,6 +55,7 @@ const allTests = [
 	'cell/spreadsheet-calculation/OpenRecalcTests.html',
 	'cell/js-api/js-api.html',
 
+	'common/scroll/scroll.html',
 	'common/api/api.html',
 	'common/api/api-cell.html',
 	'common/api/api-slide.html',

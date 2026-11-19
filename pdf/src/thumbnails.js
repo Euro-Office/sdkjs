@@ -515,13 +515,6 @@
         {
             this.m_oScrollVerApi = new AscCommon.ScrollObject("id_vertical_scroll_th", settings);
 
-            this.m_oScrollVerApi.onLockMouse  = function(evt) {
-                AscCommon.check_MouseDownEvent(evt, true);
-                AscCommon.global_mouseEvent.LockMouse();
-            };
-            this.m_oScrollVerApi.offLockMouse = function(evt) {
-                AscCommon.check_MouseUpEvent(evt);
-            };
             var _t = this;
             this.m_oScrollVerApi.bind("scrollvertical", function(evt) {
                 _t.scrollVertical(evt.scrollD, evt.maxScrollY);

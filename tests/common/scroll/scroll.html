@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 Euro-Office contributors
+  SPDX-License-Identifier: AGPL-3.0-only
+-->
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+
+    <title>Test native scrollbars</title>
+
+    <link type="text/css" href="../../node_modules/qunit/qunit/qunit.css" rel="stylesheet" media="screen" />
+    <script type="text/javascript" src="../../node_modules/qunit/qunit/qunit.js"></script>
+
+    <script type="text/javascript">
+        // what the canvas scrollbar on main needed, so this page also runs against it
+        window.AscCommon = {
+            AscBrowser : {retinaPixelRatio : 1, zoom : 1},
+            addMouseEvent : function () {},
+            capturePointer : function () {}
+        };
+        window.Asc = {};
+    </script>
+    <script type="text/javascript" src="../../../common/scroll.js"></script>
+
+    <script type="text/javascript" src="scroll.js"></script>
+</head>
+<body>
+<h1 id="qunit-header">Test native scrollbars</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture"></div>
+</body>
+</html>
