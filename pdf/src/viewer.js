@@ -4346,13 +4346,6 @@
 		{
 			this.m_oScrollHorApi = new AscCommon.ScrollObject("id_horizontal_scroll", settings);
 			
-			this.m_oScrollHorApi.onLockMouse  = function(evt) {
-				AscCommon.check_MouseDownEvent(evt, true);
-				AscCommon.global_mouseEvent.LockMouse();
-			};
-			this.m_oScrollHorApi.offLockMouse = function(evt) {
-				AscCommon.check_MouseUpEvent(evt);
-			};
 			this.m_oScrollHorApi.bind("scrollhorizontal", function(evt) {
 				oThis.scrollHorizontal(evt.scrollD, evt.maxScrollX);
 			});
@@ -4368,13 +4361,6 @@
 		{
 			this.m_oScrollVerApi = new AscCommon.ScrollObject("id_vertical_scroll", settings);
 			
-			this.m_oScrollVerApi.onLockMouse  = function(evt) {
-				AscCommon.check_MouseDownEvent(evt, true);
-				AscCommon.global_mouseEvent.LockMouse();
-			};
-			this.m_oScrollVerApi.offLockMouse = function(evt) {
-				AscCommon.check_MouseUpEvent(evt);
-			};
 			this.m_oScrollVerApi.bind("scrollvertical", function(evt) {
 				oThis.scrollVertical(evt.scrollD, evt.maxScrollY);
 			});

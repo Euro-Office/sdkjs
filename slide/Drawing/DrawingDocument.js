@@ -6303,10 +6303,6 @@ function CThumbnailsManager(editorPage)
 			if (wordControl.m_oScrollThumb_ && wordControl.m_oScrollThumb_.isHorizontalScroll === isHorizontalOrientation) {
 				wordControl.m_oScrollThumb_.Repos(settings);
 			} else {
-				const holder = wordControl.m_oThumbnails_scroll.HtmlElement;
-				const canvas = holder.getElementsByTagName('canvas')[0];
-				canvas && holder.removeChild(canvas);
-
 				wordControl.m_oScrollThumb_ = new AscCommon.ScrollObject('id_vertical_scroll_thmbnl', settings);
 				wordControl.m_oScrollThumbApi = wordControl.m_oScrollThumb_;
 
@@ -7005,16 +7001,6 @@ function CNotesDrawer(page)
 		else
 		{
 			this.HtmlPage.m_oScrollNotes_ = new AscCommon.ScrollObject("id_vertical_scroll_notes", settings);
-
-			this.HtmlPage.m_oScrollNotes_.onLockMouse = function (evt)
-			{
-				AscCommon.check_MouseDownEvent(evt, true);
-				global_mouseEvent.LockMouse();
-			};
-			this.HtmlPage.m_oScrollNotes_.offLockMouse = function (evt)
-			{
-				AscCommon.check_MouseUpEvent(evt);
-			};
 
 			this.HtmlPage.m_oScrollNotes_.bind("scrollvertical", function (evt)
 			{
@@ -7751,16 +7737,6 @@ function CAnimPaneListDrawer(page, htmlElement, parentDrawer)
 		else
 		{
 			oThis.HtmlPage.m_oScrollAnim_ = new AscCommon.ScrollObject("id_anim_list_scroll", settings);
-
-			oThis.HtmlPage.m_oScrollAnim_.onLockMouse = function (evt)
-			{
-				AscCommon.check_MouseDownEvent(evt, true);
-				global_mouseEvent.LockMouse();
-			};
-			oThis.HtmlPage.m_oScrollAnim_.offLockMouse = function (evt)
-			{
-				AscCommon.check_MouseUpEvent(evt);
-			};
 
 			oThis.HtmlPage.m_oScrollAnim_.bind("scrollvertical", function (evt)
 			{

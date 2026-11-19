@@ -98,9 +98,6 @@
 			this.mouseDownLastCord = null;
 			//-----------------------
 
-			this.vsbApiLockMouse = false;
-			this.hsbApiLockMouse = false;
-
 			// when you click on the collapse/expand button for a group of rows
 			this.isRowGroup = false;
 
@@ -420,7 +417,6 @@
 				settings.wheelScrollLines = opt.wheelScrollLinesV;
 				settings.isVerticalScroll = true;
 				settings.isHorizontalScroll = false;
-				this.vsbApi.canvasH = null;
 				this.reinitScrollY(settings, ws.workbook.getSmoothScrolling() ? ws.getFirstVisibleRowSmoothScroll(true) : ws.getFirstVisibleRow(true), ws.getVerticalScrollRange(), ws.getVerticalScrollMax());
 				this.vsbApi.settings = settings;
 			}
@@ -430,7 +426,6 @@
 				settings.hscrollStep = opt.hscrollStep;
 				settings.isVerticalScroll = false;
 				settings.isHorizontalScroll = true;
-				this.hsbApi.canvasW = null;
 				this.reinitScrollX(settings, ws.workbook.getSmoothScrolling() ? ws.getFirstVisibleColSmoothScroll(true) : ws.getFirstVisibleCol(true), ws.getHorizontalScrollRange(), ws.getHorizontalScrollMax());
 				this.hsbApi.settings = settings;
 			}
@@ -473,12 +468,6 @@
 						self.handlers.trigger('initRowsCount');
 					}
 				});
-				this.vsbApi.onLockMouse = function (evt) {
-					self.vsbApiLockMouse = true;
-				};
-				this.vsbApi.offLockMouse = function () {
-					self.vsbApiLockMouse = false;
-				};
 			}
 
 			// horizontal scroll bar
@@ -505,12 +494,6 @@
 						self.handlers.trigger('initColsCount');
 					}
 				});
-				this.hsbApi.onLockMouse = function () {
-					self.hsbApiLockMouse = true;
-				};
-				this.hsbApi.offLockMouse = function () {
-					self.hsbApiLockMouse = false;
-				};
 			}
 
 			if (!this.view.Api.isMobileVersion) {
@@ -1520,11 +1503,6 @@
 			if (this.isMoveResizeRange && !this.hasCursor) {
 				this._moveResizeRangeHandle2(event);
 			}
-			if (this.hsbApiLockMouse)
-				this.hsbApi.mouseDown ? this.hsbApi.evt_mousemove.call(this.hsbApi, event) : false;
-			else if (this.vsbApiLockMouse)
-				this.vsbApi.mouseDown ? this.vsbApi.evt_mousemove.call(this.vsbApi, event) : false;
-
 			// Pinned Areas Setup Mode
 			if (this.frozenAnchorMode) {
 				this._moveFrozenAnchorHandle(event, this.frozenAnchorMode);
@@ -1551,10 +1529,6 @@
 
 			var button = AscCommon.getMouseButton(event);
 			var coord = this._getCoordinates(event);
-			if (this.hsbApiLockMouse)
-				this.hsbApi.mouseDown ? this.hsbApi.evt_mouseup.call(this.hsbApi, event) : false;
-			else if (this.vsbApiLockMouse)
-				this.vsbApi.mouseDown ? this.vsbApi.evt_mouseup.call(this.vsbApi, event) : false;
 
 			this.isMousePressed = false;
 			// Shapes
