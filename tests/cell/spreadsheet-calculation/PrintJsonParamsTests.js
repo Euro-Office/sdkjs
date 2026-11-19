@@ -5,8 +5,9 @@
 
 "use strict";
 
-// asc_nativePrint with json params (x2t conversions to PDF): the page options it hands to printing.
-// Page layout is stubbed out, so these tests need no fonts.
+// asc_nativePrint with json params (x2t conversions to PDF): the page options it hands to printing, and the
+// pages it lays out. Text measuring (and page layout where only the page options count) is stubbed out, so
+// these tests need no fonts.
 $(function () {
 
 	Asc.spreadsheet_api.prototype._init = function () {
@@ -126,5 +127,86 @@ $(function () {
 
 		printed = printedPageSetup({"spreadsheetLayout": {"fitToWidth": 0, "fitToHeight": 0, "scale": 100}, "adjustOptions": {"printType": 1}});
 		assert.strictEqual(printed.asc_getFitToWidth(), 0, "scale in the json params: not fitted");
+	});
+
+	QUnit.module("Print pages of a sheet with automatic row heights");
+
+	QUnit.test("Rows with an automatic height are measured before the pages are laid out", function (assert) {
+		let ws = api.wbModel.getWorksheet(0);
+		let wsView = api.wb.getWorksheet(0);
+		let pageSetup = ws.PagePrintOptions.pageSetup;
+		let oldFitToPage = !!(ws.sheetPr && ws.sheetPr.FitToPage), oldScale = pageSetup.scale;
+		// 1100 rows of wrapped text, more than one 1000-row measuring step. This view cannot measure text, so
+		// measuring is replaced: a row is 20 px high until its text is measured and 60 px after, the way a row
+		// with wrapped text and an automatic height grows once its text is measured. Columns are 64 px wide, and
+		// the zoom is 1 (this view has no drawing context to ask).
+		let rowCount = 1100, unmeasuredHeight = 20, measuredHeight = 60;
+		let measured = [], readBeforeMeasured = 0;
+		let heightOf = function (row) {
+			return row < rowCount && measured[row] ? measuredHeight : unmeasuredHeight;
+		};
+		let stubs = {
+			_prepareCellTextMetricsCache: function (range) {
+				for (let r = range.r1; r <= Math.min(range.r2, rowCount - 1); ++r) {
+					measured[r] = true;
+				}
+			},
+			_getRowHeight: heightOf,
+			_getHeightForPrint: function (row) {
+				if (row < rowCount && !measured[row]) {
+					++readBeforeMeasured;
+				}
+				return heightOf(row);
+			},
+			_getColumnWidth: function () {
+				return 64;
+			},
+			_getWidthForPrint: function () {
+				return 64;
+			},
+			getZoom: function () {
+				return 1;
+			}
+		};
+		try {
+			ws.setFitToPage(false);
+			pageSetup.scale = 100;
+			let text = "a text that is longer than the column and wraps to several lines";
+			for (let r = 0; r < rowCount; ++r) {
+				ws.getRange3(r, 0, r, 0).setValue(text + " " + r);
+			}
+			ws.getRange3(0, 0, rowCount - 1, 0).setWrap(true);
+			for (let name in stubs) {
+				wsView[name] = stubs[name];
+			}
+
+			let arrPages = [];
+			wsView.calcPagesPrint(ws.PagePrintOptions, false, 0, arrPages);
+
+			assert.strictEqual(readBeforeMeasured, 0, "no row height is read before the row is measured");
+			assert.ok(arrPages.length > 1, "the rows need several pages");
+			assert.strictEqual(arrPages.length && arrPages[0].pageRange.r1, 0, "the first page starts with the first row");
+			assert.strictEqual(arrPages.length && arrPages[arrPages.length - 1].pageRange.r2, rowCount - 1,
+				"the last page ends with the last row");
+			// Drawing the pages measures every row, so each page must have room for the measured heights.
+			let overfull = [];
+			arrPages.forEach(function (page, i) {
+				let height = 0;
+				for (let r = page.pageRange.r1; r <= page.pageRange.r2; ++r) {
+					height += (r < rowCount ? measuredHeight : unmeasuredHeight) * page.scale;
+				}
+				if (height > page.pageClipRectHeight) {
+					overfull.push(i);
+				}
+			});
+			assert.deepEqual(overfull, [], "the measured rows of every page fit on the page");
+		} finally {
+			for (let name in stubs) {
+				delete wsView[name];
+			}
+			ws.getRange3(0, 0, rowCount - 1, 0).cleanAll();
+			ws.setFitToPage(oldFitToPage);
+			pageSetup.scale = oldScale;
+		}
 	});
 });

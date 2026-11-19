@@ -3930,7 +3930,10 @@ function isAllowPasteLink(pastedWb) {
 					tempPrintScale = checkCustomScaleProps();
 				}
 
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint);
+				// Measure the rows while laying out the pages: a row with an automatic height (wrapped text) gets its
+				// height only when its text is measured, and the data range above is found without measuring.
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null,
+					!doNotRecalc);
 			}
 		}
 
