@@ -342,7 +342,9 @@ function (window, undefined) {
 				case _cCellFunctionLocal["prefix"]: {
 					// ' = left; " = right; ^ = centered; \ =
 					cell = ws.getCell3(bbox.r1, bbox.c1);
-					let align = cell.getAlign();
+					// Read the alignment without conditional formats and table styles: compiling conditional formats may
+					// call CELL("prefix") on this cell again. LibreOffice also reads only the cell's own alignment here.
+					let align = cell.getXfs(false).align || AscCommonExcel.g_oDefaultFormat.AlignAbs;
 					let alignHorizontal = align.getAlignHorizontal();
 					if (cell.isNullTextString()) {
 						res = new cString('');
