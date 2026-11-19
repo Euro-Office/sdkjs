@@ -2046,6 +2046,26 @@ Paragraph.prototype.private_RecalculateLineAlign       = function(CurLine, CurPa
 						}
 						break;
 					}
+					case AscCommon.align_Distributed:
+					{
+						// Distributed alignment: spread excess space evenly across all
+						// character gaps (letters + spaces), including the last line.
+						// Unlike justify, the last line and paragraph-end lines are
+						// also distributed (except single-character lines).
+						if (bRtlAlign)
+							X = Range.X - rtlShift;
+						else
+							X = Range.X;
+
+						var nTotalGaps = (PRSC.Letters > 1 ? PRSC.Letters - 1 : 0) + PRSC.Spaces;
+						if (nTotalGaps > 0 && RangeWidth - Range.W > 0.001)
+						{
+							var nExtraPerGap = (RangeWidth - Range.W) / nTotalGaps;
+							JustifyWord  = PRSC.Letters > 1 ? nExtraPerGap : 0;
+							JustifySpace = PRSC.Spaces > 0 ? nExtraPerGap : 0;
+						}
+						break;
+					}
 					case AscCommon.align_Justify:
 					{
 						if (PRSC.ParaEnd || (PRSC.LineBreak && isDoNotExpandShiftReturn))
@@ -2054,7 +2074,7 @@ Paragraph.prototype.private_RecalculateLineAlign       = function(CurLine, CurPa
 								X = Range.X + RangeWidth - Range.W - rtlShift;
 							else
 								X = Range.X;
-							
+
 							JustifyWord  = 0;
 							JustifySpace = 0;
 						}
@@ -2098,7 +2118,7 @@ Paragraph.prototype.private_RecalculateLineAlign       = function(CurLine, CurPa
 						else
 						{
 							// TODO: Переделать проверку последнего отрезка в последней строке (нужно выставлять флаг когда пришел PRS.End в отрезке)
-							
+
 							// Последний промежуток последней строки не надо растягивать по ширине.
 							if (PRSC.Spaces > 0 && (!(Line.Info & paralineinfo_End) || CurRange !== Line.Ranges.length - 1))
 							{
@@ -2106,7 +2126,7 @@ Paragraph.prototype.private_RecalculateLineAlign       = function(CurLine, CurPa
 									X = Range.X - rtlShift;
 								else
 									X = Range.X;
-								
+
 								JustifySpace = (RangeWidth - Range.W) / PRSC.Spaces;
 							}
 							else
@@ -2115,7 +2135,7 @@ Paragraph.prototype.private_RecalculateLineAlign       = function(CurLine, CurPa
 									X = Range.X + RangeWidth - Range.W - rtlShift;
 								else
 									X = Range.X;
-								
+
 								JustifySpace = 0;
 							}
 						}
