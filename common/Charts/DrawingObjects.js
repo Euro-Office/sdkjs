@@ -1290,21 +1290,11 @@ CSparklineView.prototype.setMinMaxValAx = function(minVal, maxVal, oSparklineGro
 
     var rAF = (function() {
         return window.requestAnimationFrame ||
-            window.webkitRequestAnimationFrame ||
-            window.mozRequestAnimationFrame ||
-            window.oRequestAnimationFrame ||
-            window.msRequestAnimationFrame ||
             function(callback) { return setTimeout(callback, 1000/ 60); };
     })();
 
     var cAF = (function () {
         return window.cancelAnimationFrame ||
-            window.cancelRequestAnimationFrame ||
-            window.webkitCancelAnimationFrame ||
-            window.webkitCancelRequestAnimationFrame ||
-            window.mozCancelRequestAnimationFrame ||
-            window.oCancelRequestAnimationFrame ||
-            window.msCancelRequestAnimationFrame ||
             clearTimeout;
     })();
 

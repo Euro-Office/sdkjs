@@ -56,7 +56,6 @@
             return this.GetLong() / 10000;
         };
     }
-    var supportImageDataConstructor = (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge) ? false : true;
 
     function CFile()
     {
@@ -262,15 +261,7 @@
         var ctx = canvas.getContext("2d");
         var mappedBuffer = this.getUint8ClampedArray(pixels, 4 * width * height);
         var imageData = null;
-        if (supportImageDataConstructor)
-        {
-            imageData = new ImageData(mappedBuffer, width, height);
-        }
-        else
-        {
-            imageData = ctx.createImageData(width, height);
-            imageData.data.set(mappedBuffer, 0);                    
-        }
+        imageData = new ImageData(mappedBuffer, width, height);
         if (ctx)
             ctx.putImageData(imageData, 0, 0);
         return canvas;

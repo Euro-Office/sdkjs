@@ -369,12 +369,6 @@
                 _elem2.style.bottom = "0px";
                 _elem2.style.width = "100%";
                 _elem2.style.height = "100%";
-
-                if (AscCommon.AscBrowser.isIE)
-				{
-					document.body.style["msTouchAction"] = "none";
-					document.body.style["touchAction"] = "none";
-				}
 			}
 
 			var _editorSdk = document.getElementById("editor_sdk");
@@ -602,9 +596,6 @@
 				var _width = _p.firstChild.offsetWidth;
 				_width = Math.min(_width + 20, this.debugTexBoxMaxW);
 
-				if (AscCommon.AscBrowser.isIE)
-					_width += 10;
-
 				var area = document.createElement('textarea');
 				area.style.zIndex = "-1";
 				area.id = "area2_id";
@@ -794,18 +785,7 @@
 						// китайская точка
 						AscCommon.stopEvent(e);
 
-						if (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge)
-						{
-							// ie тепряет фокус
-							setTimeout(function(){
-								window['AscCommon'].g_inputContext.clear();
-								focusHtmlElement(window['AscCommon'].g_inputContext.HtmlArea);
-							}, 0);
-						}
-						else
-						{
-							this.clear();
-						}
+						this.clear();
 
 						return false;
 					}
@@ -869,25 +849,6 @@
 					return this.ctrlKeyVal;
 				}
 			});
-
-			if (AscCommon.AscBrowser.isIE)
-			{
-				oEvent.preventDefault = function ()
-				{
-					try
-					{
-						Object.defineProperty(this, "defaultPrevented", {
-							get: function ()
-							{
-								return true;
-							}
-						});
-					}
-					catch(err)
-					{
-					}
-				};
-			}
 
 			var k = e.keyCode;
 			if (oEvent.initKeyboardEvent)

@@ -401,21 +401,6 @@
 	/**
 	 * @extends {CHTMLCursorItemBase}
 	 */
-	function CHTMLCursorCur()
-	{
-		CHTMLCursorItemBase.apply(this, arguments);
-	}
-	CHTMLCursorCur.prototype = Object.create(CHTMLCursorItemBase.prototype);
-	CHTMLCursorCur.prototype.getValue = function(globalCursors)
-	{
-		if (AscCommon.AscBrowser.isCustomScalingAbove2())
-			return "url(" + this.baseUrl + this.name + "_2x.cur), " + this.default;
-		return "url(" + this.baseUrl + this.name + ".cur), " + this.default;
-	}
-
-	/**
-	 * @extends {CHTMLCursorItemBase}
-	 */
 	function CHTMLCursorSvgExternal()
 	{
 		CHTMLCursorItemBase.apply(this, arguments);
@@ -504,18 +489,7 @@
 
 		this.register = function(type, target, default_css_value)
 		{
-			if (AscBrowser.isIE || AscBrowser.isIeEdge)
-			{
-				this.cursors[type] = new CHTMLCursorCur(type, target, default_css_value);
-			}
-			else if (window.opera)
-			{
-				this.cursors[type] = new CHTMLCursorItemBase(type, target, default_css_value);
-			}
-			else
-			{
-				this.cursors[type] = new CHTMLCursorModern(type, target, default_css_value);
-			}
+			this.cursors[type] = new CHTMLCursorModern(type, target, default_css_value);
 		};
 
 		this.loadAllSvg = function()
@@ -697,22 +671,6 @@
 		var stream;
 		if (typeof ArrayBuffer !== 'undefined') {
 			stream = new Uint8Array(httpRequest.response);
-		} else if (AscCommon.AscBrowser.isIE) {
-			var _response = new VBArray(httpRequest["responseBody"]).toArray();
-
-			var srcLen = _response.length;
-			var pointer = g_memory.Alloc(srcLen);
-			var tempStream = new AscCommon.FT_Stream2(pointer.data, srcLen);
-			tempStream.obj = pointer.obj;
-
-			stream = tempStream.data;
-			var index = 0;
-
-			while (index < srcLen)
-			{
-				stream[index] = _response[index];
-				index++;
-			}
 		}
 		return stream;
 	}
@@ -2364,7 +2322,7 @@
 					{
                         // test html
                         var htmlValue = e.dataTransfer.getData("text/html");
-                        if (htmlValue && !AscCommon.AscBrowser.isIE)
+                        if (htmlValue)
                         {
                             // text html!
                             var index = htmlValue.indexOf("StartHTML");
@@ -2434,14 +2392,7 @@
 		//'js-download' https://github.com/kennethjiang/js-file-download
 		var blobData = (typeof opt_bom !== 'undefined') ? [opt_bom, data] : [data];
 		var blob = new Blob(blobData, {type: mime || 'application/octet-stream'});
-		if (typeof window.navigator.msSaveBlob !== 'undefined') {
-			// IE workaround for "HTML7007: One or more blob URLs were
-			// revoked by closing the blob for which they were created.
-			// These URLs will no longer resolve as the data backing
-			// the URL has been freed."
-			window.navigator.msSaveBlob(blob, filename);
-		}
-		else {
+		{
 			var blobURL = (window.URL || window.webkitURL).createObjectURL(blob);
 			var tempLink = document.createElement('a');
 			tempLink.style.display = 'none';
@@ -3064,16 +3015,7 @@
 		if(!url.startsWith("file:")) {
 			return false;
 		}
-		if (true || AscBrowser.isIE) {
-			return url.strongMatch(fileRe);
-		}
-		try {
-			//https://stackoverflow.com/a/43467144
-			new URL(url);
-		} catch (err) {
-			return false;
-		}
-		return true;
+		return url.strongMatch(fileRe);
 	}
 	function getUrlType(url)
 	{
@@ -4473,23 +4415,6 @@
 					if (httpRequest.overrideMimeType && dataType)
 					{
 						httpRequest.overrideMimeType(dataType);
-					}
-				}
-				else if (window.ActiveXObject)
-				{ // IE
-					try
-					{
-						httpRequest = new ActiveXObject("Msxml2.XMLHTTP");
-					}
-					catch (e)
-					{
-						try
-						{
-							httpRequest = new ActiveXObject("Microsoft.XMLHTTP");
-						}
-						catch (e)
-						{
-						}
 					}
 				}
 
@@ -14690,29 +14615,7 @@
 			return;
 		}
 
-		
-		var rect;
-		if (!AscBrowser.isIE)
-			rect = AscCommon.UI.getBoundingClientRect(element);
-		else {
-			function getCanvasBoundingClientRect(canvas) {
-				const offsetLeft	= canvas.offsetLeft;
-				const offsetTop		= canvas.offsetTop;
-				const offsetWidth	= canvas.offsetWidth;
-				const offsetHeight	= canvas.offsetHeight;
-			
-				return {
-					top:	offsetTop,
-					right:	offsetLeft + offsetWidth,
-					bottom:	offsetTop + offsetHeight,
-					left:	offsetLeft,
-					width:	offsetWidth,
-					height:	offsetHeight,
-				};
-			}
-
-			rect = getCanvasBoundingClientRect(element);
-		}
+		var rect = AscCommon.UI.getBoundingClientRect(element);
 
 		var isCorrectRect = (rect.width === 0 && rect.height === 0) ? false : true;
 		if (is_wait_correction || !isCorrectRect)

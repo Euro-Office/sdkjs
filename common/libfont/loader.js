@@ -38,7 +38,7 @@
 
 	window['AscFonts'].allocate = function(size)
 	{
-		if (typeof(Uint8Array) != 'undefined' && !window.opera)
+		if (typeof(Uint8Array) != 'undefined')
 			return new Uint8Array(size);
 
 		var arr = new Array(size);
@@ -195,8 +195,6 @@
 	{
 		var isUseMap = false;
 		if (AscCommon.AscBrowser.isAndroidNativeApp)
-			isUseMap = true;
-		else if (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isArm)
 			isUseMap = true;
 		return isUseMap;
 	};

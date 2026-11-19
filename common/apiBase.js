@@ -354,7 +354,7 @@
 			lineNumber = undefined !== lineNumber ? lineNumber : "";
 			column = undefined !== column ? column : "";
 			var msg = 'Error: ' + errorMsg + '\n Script: ' + (url || "") + '\n Line: ' + lineNumber + ':' + column +
-				'\n userAgent: ' + (navigator.userAgent || navigator.vendor || window.opera) + '\n platform: ' +
+				'\n userAgent: ' + (navigator.userAgent || navigator.vendor) + '\n platform: ' +
 				navigator.platform + '\n isLoadFullApi: ' + t.isLoadFullApi + '\n isDocumentLoadComplete: ' +
 				t.isDocumentLoadComplete + (editorInfo ? '\n ' + editorInfo : "") +
 				(memoryInfo ? '\n performance.memory: ' + memoryInfo : "") +

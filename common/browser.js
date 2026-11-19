@@ -32,7 +32,7 @@
 function (window, undefined) {
 var AscBrowser = {
     userAgent : "",
-    isIE : false,
+    isIE : false, // read by vendor/iscroll.js
 	isWindows : false,
     isMacOs : false,
     isSafariMacOs : false,
@@ -42,7 +42,6 @@ var AscBrowser = {
     isGecko : false,
     isChrome : false,
     isOpera : false,
-    isOperaOld : false,
     isWebkit : false,
     isSafari : false,
     isArm : false,
@@ -65,23 +64,13 @@ var AscBrowser = {
 // user agent lower case
 AscBrowser.userAgent = navigator.userAgent.toLowerCase();
 
-// ie detect
-AscBrowser.isIE =  (AscBrowser.userAgent.indexOf("msie") > -1 ||
-                    AscBrowser.userAgent.indexOf("trident") > -1 ||
-                    AscBrowser.userAgent.indexOf("edge") > -1);
-
-AscBrowser.isIeEdge = (AscBrowser.userAgent.indexOf("edge/") > -1);
-
 AscBrowser.isWindows = (AscBrowser.userAgent.indexOf("windows") > -1);
-
-AscBrowser.isIE9 =  (AscBrowser.userAgent.indexOf("msie9") > -1 || AscBrowser.userAgent.indexOf("msie 9") > -1);
-AscBrowser.isIE10 =  (AscBrowser.userAgent.indexOf("msie10") > -1 || AscBrowser.userAgent.indexOf("msie 10") > -1);
 
 // macOs detect
 AscBrowser.isMacOs = (AscBrowser.userAgent.indexOf('mac') > -1);
 
 // chrome detect
-AscBrowser.isChrome = !AscBrowser.isIE && (AscBrowser.userAgent.indexOf("chrome") > -1);
+AscBrowser.isChrome = (AscBrowser.userAgent.indexOf("chrome") > -1);
 if (AscBrowser.isChrome)
 {
     var checkVersion = AscBrowser.userAgent.match(/chrom(e|ium)\/([0-9]+)\./);
@@ -90,7 +79,7 @@ if (AscBrowser.isChrome)
 }
 
 // safari detect
-AscBrowser.isSafari = !AscBrowser.isIE && !AscBrowser.isChrome && (AscBrowser.userAgent.indexOf("safari") > -1);
+AscBrowser.isSafari = !AscBrowser.isChrome && (AscBrowser.userAgent.indexOf("safari") > -1);
 
 // macOs safari detect
 AscBrowser.isSafariMacOs = (AscBrowser.isSafari && AscBrowser.isMacOs);
@@ -146,22 +135,21 @@ if (navigator.maxTouchPoints) AscBrowser.maxTouchPoints = navigator.maxTouchPoin
 AscBrowser.isAndroid = (AscBrowser.userAgent.indexOf("android") > -1);
 
 // mobile detect
-AscBrowser.isMobile = /android|avantgo|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od|ad)|iris|kindle|lge |maemo|midp|mmp|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent || navigator.vendor || window.opera);
+AscBrowser.isMobile = /android|avantgo|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od|ad)|iris|kindle|lge |maemo|midp|mmp|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent || navigator.vendor);
 
 // gecko detect
 AscBrowser.isGecko = (AscBrowser.userAgent.indexOf("gecko/") > -1);
 
 // opera detect
-AscBrowser.isOpera = (!!window.opera || AscBrowser.userAgent.indexOf("opr/") > -1);
-AscBrowser.isOperaOld = (!!window.opera);
+AscBrowser.isOpera = (AscBrowser.userAgent.indexOf("opr/") > -1);
 
 // webkit detect
-AscBrowser.isWebkit = !AscBrowser.isIE && (AscBrowser.userAgent.indexOf("webkit") > -1);
+AscBrowser.isWebkit = (AscBrowser.userAgent.indexOf("webkit") > -1);
 
 // arm detect
 AscBrowser.isArm = (AscBrowser.userAgent.indexOf("arm") > -1);
 
-AscBrowser.isMozilla = !AscBrowser.isIE && (AscBrowser.userAgent.indexOf("firefox") > -1);
+AscBrowser.isMozilla = (AscBrowser.userAgent.indexOf("firefox") > -1);
 
 AscBrowser.isLinuxOS = (AscBrowser.userAgent.indexOf(" linux ") > -1);
 

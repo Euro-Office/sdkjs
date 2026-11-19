@@ -43,21 +43,11 @@ CCacheSlideImage.prototype.Clear = function()
 
 var __nextFrame = (function() {
     return window.requestAnimationFrame ||
-        window.webkitRequestAnimationFrame ||
-        window.mozRequestAnimationFrame ||
-        window.oRequestAnimationFrame ||
-        window.msRequestAnimationFrame ||
         function(callback) { return setTimeout(callback, 25); };
 })();
 
 var __cancelFrame = (function () {
         return window.cancelAnimationFrame ||
-            window.cancelRequestAnimationFrame ||
-            window.webkitCancelAnimationFrame ||
-            window.webkitCancelRequestAnimationFrame ||
-            window.mozCancelRequestAnimationFrame ||
-            window.oCancelRequestAnimationFrame ||
-            window.msCancelRequestAnimationFrame ||
             clearTimeout;
 })();
 

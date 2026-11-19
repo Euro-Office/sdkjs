@@ -39,12 +39,10 @@
 
 		var userAgent = navigator.userAgent.toLowerCase();
 		var isAndroid = (userAgent.indexOf("android") > -1);
-		var isIE = (userAgent.indexOf("msie") > -1 || userAgent.indexOf("trident") > -1 || userAgent.indexOf("edge") > -1);
-		var isChrome = !isIE && (userAgent.indexOf("chrome") > -1);
-		var isOperaOld = (!!window.opera);
-		var isMobile = /android|avantgo|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od|ad)|iris|kindle|lge |maemo|midp|mmp|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent || navigator.vendor || window.opera);
+		var isChrome = (userAgent.indexOf("chrome") > -1);
+		var isMobile = /android|avantgo|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od|ad)|iris|kindle|lge |maemo|midp|mmp|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\/|plucker|pocket|psp|symbian|treo|up\.(browser|link)|vodafone|wap|windows (ce|phone)|xda|xiino/i.test(navigator.userAgent || navigator.vendor);
 
-		if (isAndroid || !isChrome || isOperaOld || isMobile || !document || !document.firstElementChild || !document.body)
+		if (isAndroid || !isChrome || isMobile || !document || !document.firstElementChild || !document.body)
 			return false;
 
 		return true;

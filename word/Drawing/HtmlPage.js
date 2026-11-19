@@ -166,9 +166,6 @@ function CEditorPage(api)
 	// враппер для текстового элемента
 	this.TextBoxBackground = null;
 
-	//
-	this.m_bIsIE = (AscBrowser.isIE || window.opera) ? true : false;
-
 	this.m_bDocumentPlaceChangedEnabled = false;
 	this.m_nTabsType = tab_Left;
 
@@ -1185,7 +1182,7 @@ function CEditorPage(api)
 
 		this.TransformDivUseAnimation(this.ReaderModeDivWrapper, 0);
 
-		var hasPointer = AscCommon.AscBrowser.isIE ? ((!('ontouchstart' in window)) &&  (!!(window.PointerEvent || window.MSPointerEvent))) : false;
+		var hasPointer = false;
 		if (AscCommon.AscBrowser.isAppleDevices && AscCommon.AscBrowser.iosVersion >= 13)
 			hasPointer = true;
 
@@ -1791,13 +1788,10 @@ function CEditorPage(api)
 		if (false === oThis.m_oApi.bInit_word_control || (AscCommon.isTouch && undefined === isTouch) || oThis.m_oApi.isLongAction())
 			return;
 
-		if (!oThis.m_bIsIE)
-		{
-			if (e.preventDefault)
-				e.preventDefault();
-			else
-				e.returnValue = false;
-		}
+		if (e.preventDefault)
+			e.preventDefault();
+		else
+			e.returnValue = false;
 
 		if (AscCommon.g_inputContext && AscCommon.g_inputContext.externalChangeFocus())
 			return;
@@ -2754,12 +2748,6 @@ function CEditorPage(api)
 		if (false === oWordControl.m_oApi.bInit_word_control || oWordControl.IsFocus === false || oWordControl.m_bIsMouseLock === true)
 			return;
 
-		if (window.opera && !oWordControl.IsKeyDownButNoPress)
-		{
-			oWordControl.StartUpdateOverlay();
-			oWordControl.onKeyDown(e);
-			oWordControl.EndUpdateOverlay();
-		}
 		oWordControl.IsKeyDownButNoPress = false;
 
 		if (false === oWordControl.bIsUseKeyPress)

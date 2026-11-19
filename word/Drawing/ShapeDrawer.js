@@ -1767,9 +1767,8 @@ CShapeDrawer.prototype =
 		graphics.clip();
 
 		const isTile = AscCommon.isRealObject(this.UniFill.fill.tile);
-		const isTileSupported = !(AscCommon.AscBrowser.isIE && imageName && imageName.lastIndexOf('.svg') == imageName.length - 4);
 
-		if (isTile && isTileSupported) {
+		if (isTile) {
 			this.drawBlipFillTile(imageData);
 		} else if (this.UniFill.IsTransitionTextures) {
 			this.drawTransitionTextures(this.UniFill.canvas1, this.UniFill.alpha1, this.UniFill.canvas2, this.UniFill.alpha2);

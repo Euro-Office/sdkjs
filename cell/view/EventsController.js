@@ -1767,8 +1767,8 @@
 					return;
 				}
 			}
-			// For IE preventDefault is not necessary
-			if (!(AscBrowser.isIE || AscBrowser.isOpera)) {
+			// For Opera preventDefault is not necessary
+			if (!AscBrowser.isOpera) {
 				if (event.preventDefault) {
 					event.preventDefault();
 				} else {

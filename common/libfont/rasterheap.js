@@ -56,7 +56,7 @@
 
 		var _size = this.Count;
 		var arr = null;
-		if (typeof(Int8Array) != 'undefined' && !window.opera)
+		if (typeof(Int8Array) != 'undefined')
 			arr = new Int8Array(_size);
 		else
 			arr = new Array(_size);

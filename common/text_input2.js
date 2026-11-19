@@ -759,25 +759,6 @@
 			}
 		});
 
-		if (AscCommon.AscBrowser.isIE)
-		{
-			oEvent.preventDefault = function ()
-			{
-				try
-				{
-					Object.defineProperty(this, "defaultPrevented", {
-						get: function ()
-						{
-							return true;
-						}
-					});
-				}
-				catch(err)
-				{
-				}
-			};
-		}
-
 		var k = e.keyCode;
 		if (oEvent.initKeyboardEvent)
 		{
@@ -1225,12 +1206,6 @@
 			_elem2.style.bottom = "0px";
 			_elem2.style.width = "100%";
 			_elem2.style.height = "100%";
-
-			if (AscCommon.AscBrowser.isIE)
-			{
-				document.body.style["msTouchAction"] = "none";
-				document.body.style["touchAction"] = "none";
-			}
 		}
 
 		var _editorSdk = document.getElementById("editor_sdk");
