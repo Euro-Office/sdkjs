@@ -25,21 +25,9 @@
 
 (function(window, undefined){
 
-	var useWasm = false;
-	var webAsmObj = window["WebAssembly"];
-	if (typeof webAsmObj === "object")
-	{
-		if (typeof webAsmObj["Memory"] === "function")
-		{
-			if ((typeof webAsmObj["instantiateStreaming"] === "function") || (typeof webAsmObj["instantiate"] === "function"))
-				useWasm = true;
-		}
-	}
-
 	var enginePath = "../../../../sdkjs/common/zlib/engine/";
 
-	var scriptSrc = useWasm ? "zlib.js" : "zlib_ie.js";
-	scriptSrc = enginePath + scriptSrc;
+	var scriptSrc = enginePath + "zlib.js";
 
 	window["AscCommon"].zlib_load = function(onSuccess, onError)
 	{
