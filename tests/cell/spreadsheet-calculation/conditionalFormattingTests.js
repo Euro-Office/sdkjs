@@ -483,6 +483,50 @@ $(function () {
 		clearData(0, 0, 5, 5);
 	});
 
+	QUnit.test('Conditional formatting: rule formula with CELL("prefix"), CELL("format"), CELL("color"), CELL("parentheses")', function (assert) {
+		// One column per CELL type. Each rule reads the cell it formats: row 1 matches the rule, row 2 does not.
+		ws.getRange4(0, 0).fillData([["a", "1", "1", "1"], ["b", "1", "1", "1"]]);
+		ws.getRange2("A1").setAlignHorizontal(AscCommon.align_Center);
+		ws.getRange2("B1").setNumFormat("0.00");
+		ws.getRange2("C1").setNumFormat("0;[Red]-0");
+		ws.getRange2("D1").setNumFormat("(0)");
+
+		let fillColor = getRgbColor("C6EFCE");
+		let formulas = ['=CELL("prefix",A1)="^"', '=CELL("format",B1)<>"G"', '=CELL("color",C1)=1', '=CELL("parentheses",D1)=1'];
+		let locations = ["$A$1:$A$2", "$B$1:$B$2", "$C$1:$C$2", "$D$1:$D$2"];
+		for (let i = 0; i < formulas.length; ++i) {
+			let rule = new AscCommonExcel.CConditionalFormattingRule();
+			rule.asc_setType(Asc.c_oAscCFType.expression);
+			let xfs = new Asc.asc_CellXfs();
+			xfs.asc_setFillColor(fillColor);
+			rule.asc_setDxf(xfs);
+			rule.asc_setValue1(formulas[i]);
+			rule.asc_setLocation(locations[i]);
+			api.asc_setCF([rule]);
+		}
+		ws.setDirtyConditionalFormatting(new AscCommonExcel.MultiplyRange([new Asc.Range(0, 0, 3, 1)]));
+
+		["prefix", "format", "color", "parentheses"].forEach(function (type, col) {
+			let error = null;
+			let compiledStyle1, compiledStyle2;
+			try {
+				compiledStyle1 = ws.getCompiledStyle(0, col);
+				compiledStyle2 = ws.getCompiledStyle(1, col);
+			} catch (e) {
+				error = e;
+			}
+			assert.strictEqual(error && error.toString(), null, type + ": compiling the style does not recurse");
+
+			let rgbColor1 = compiledStyle1 && compiledStyle1.fill && compiledStyle1.fill.bg();
+			let rgbColor2 = compiledStyle2 && compiledStyle2.fill && compiledStyle2.fill.bg();
+			assert.strictEqual(compareAscColorAndRgbColor(fillColor, rgbColor1), true, type + ": row 1 is highlighted");
+			assert.strictEqual(compareAscColorAndRgbColor(fillColor, rgbColor2), false, type + ": row 2 is not highlighted");
+		});
+
+		// Clean up data after tests
+		clearData(0, 0, 3, 1);
+	});
+
 	QUnit.test('Conditional formatting: asc_setContainsText with formula and text', function (assert) {
 		// Preparing test data
 		let testData = [
