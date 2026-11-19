@@ -7043,7 +7043,7 @@ PasteProcessor.prototype =
 						if (cssText)
 							newElement.getAttribute('style', cssText);
 
-						$(newElement).append(hyperlinks[i].children);
+						newElement.append(...hyperlinks[i].children);
 
 						hyperlinks[i].parentNode.replaceChild(newElement, hyperlinks[i]);
 					}
