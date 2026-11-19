@@ -11176,6 +11176,23 @@ $(function () {
 		assert.ok(oParser.parse());
 		assert.strictEqual(oParser.calculate().getValue(), "#VALUE!");
 
+		// ignore_empty or match_mode as text is #VALUE!, as in Excel, not a thrown TypeError.
+		oParser = new parserFormula("TEXTSPLIT(C3,\"del1\",,\"test\")", "A1", ws);
+		assert.ok(oParser.parse());
+		assert.strictEqual(oParser.calculate().getValue(), "#VALUE!");
+
+		oParser = new parserFormula("TEXTSPLIT(C3,\"del1\",,TRUE,\"test\")", "A1", ws);
+		assert.ok(oParser.parse());
+		assert.strictEqual(oParser.calculate().getValue(), "#VALUE!");
+
+		// The same for match_mode and match_end of TEXTBEFORE and TEXTAFTER.
+		["TEXTBEFORE(\"a-b\",\"-\",1,\"x\")", "TEXTAFTER(\"a-b\",\"-\",1,\"x\")",
+			"TEXTBEFORE(\"a-b\",\"-\",1,0,\"x\")"].forEach(function (formula) {
+			oParser = new parserFormula(formula, "A1", ws);
+			assert.ok(oParser.parse());
+			assert.strictEqual(oParser.calculate().getValue(), "#VALUE!", formula);
+		});
+
 		oParser = new parserFormula("TEXTSPLIT(C3:D4,\"del1\")", "A1", ws);
 		assert.ok(oParser.parse());
 		assert.strictEqual(oParser.calculate().getElementRowCol(0, 0).getValue(), "test1");
