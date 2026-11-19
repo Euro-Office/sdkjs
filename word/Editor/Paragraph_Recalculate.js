@@ -879,7 +879,11 @@ Paragraph.prototype.private_RecalculatePageBreak       = function(CurLine, CurPa
             {
 				let prevSectPr = Prev.Get_SectionPr();
 				let curSectPr  = logicDocument.GetSections().GetNextSectPr(prevSectPr);
-                if (c_oAscSectionBreakType.Continuous !== curSectPr.Get_Type() || true !== curSectPr.Compare_PageSize(prevSectPr))
+				// A continuous section also starts on a new page when the page where the previous section ends has
+				// footnotes (see CDocument.Recalculate_PageColumn)
+                if (c_oAscSectionBreakType.Continuous !== curSectPr.Get_Type()
+                    || true !== curSectPr.Compare_PageSize(prevSectPr)
+                    || !logicDocument.Footnotes.IsEmptyPage(Prev.GetAbsolutePage(Prev.GetPagesCount() - 1)))
                     bNeedPageBreak = false;
             }
 
