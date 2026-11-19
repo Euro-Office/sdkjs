@@ -136,7 +136,7 @@ function CThemeLoader()
             var xhr = new XMLHttpRequest();
             xhr.open('GET', theme_src, true);
 
-            if (typeof ArrayBuffer !== 'undefined' && !window.opera)
+            if (typeof ArrayBuffer !== 'undefined')
                 xhr.responseType = 'arraybuffer';
 
             if (xhr.overrideMimeType)
@@ -148,22 +148,9 @@ function CThemeLoader()
             {
                 if (this.readyState == 4 && (this.status == 200 || location.href.indexOf("file:") == 0))
                 {
-                    if (typeof ArrayBuffer !== 'undefined' && !window.opera && this.response)
+                    if (typeof ArrayBuffer !== 'undefined' && this.response)
                     {
                         oThis._callback_theme_load(new Uint8Array(this.response));
-                    }
-                    else if (AscCommon.AscBrowser.isIE)
-                    {
-                        var _response = new VBArray(this["responseBody"]).toArray();
-                        var srcLen = _response.length;
-                        var _responseNative = new Uint8Array(srcLen);
-
-                        for (var i = 0; i < srcLen; i++)
-                        {
-                            _responseNative[i] = _response[i];
-                        }
-
-                        oThis._callback_theme_load(_responseNative);
                     }
                     else
                     {

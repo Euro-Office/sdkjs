@@ -75,7 +75,7 @@
         xhr.fontFile = this;
         xhr.open('GET', basePath + this.Id, true);
 
-        if (typeof ArrayBuffer !== 'undefined' && !window.opera)
+        if (typeof ArrayBuffer !== 'undefined')
             xhr.responseType = 'arraybuffer';
 
         if (xhr.overrideMimeType)
@@ -89,29 +89,9 @@
                 return this.onerror();
 
             this.fontFile.Status = 0;
-            if (typeof ArrayBuffer !== 'undefined' && !window.opera && this.response)
+            if (typeof ArrayBuffer !== 'undefined' && this.response)
             {
                 this.fontFile.LoadFontFromData(new Uint8Array(this.response));
-            }
-            else if (AscCommon.AscBrowser.isIE)
-            {
-                let _response = new VBArray(this["responseBody"]).toArray();
-
-                let srcLen = _response.length;
-                let stream = new AscFonts.FontStream(AscFonts.allocate(srcLen), srcLen);
-
-                let dstPx = stream.data;
-                let index = 0;
-
-                while (index < srcLen)
-                {
-                    dstPx[index] = _response[index];
-                    index++;
-                }
-
-                let stream_index = g_fonts_streams.length;
-                g_fonts_streams[stream_index] = stream;
-                this.fontFile.SetStreamIndex(stream_index);
             }
             else
             {

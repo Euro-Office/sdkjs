@@ -33,13 +33,6 @@
 //todo
 //BinaryCommonWriter
 
-	function inherit(proto) {
-		function F() {}
-		F.prototype = proto;
-		return new F;
-	}
-	if (!Object.create || !Object['create']) Object['create'] = Object.create = inherit;
-
 var c_oSerConstants = {
     ErrorFormat: -2,
     ErrorUnknown: -1,

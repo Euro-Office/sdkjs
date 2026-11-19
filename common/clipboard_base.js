@@ -66,11 +66,11 @@
 
 		this.Api = null;
 
-		this.IsNeedDivOnCopy  = AscBrowser.isIE;
-		this.IsNeedDivOnPaste = AscBrowser.isIE/* || AscBrowser.isMozilla*/;
+		this.IsNeedDivOnCopy  = false;
+		this.IsNeedDivOnPaste = false;
 
-		this.IsCopyCutOnlyInEditable = AscBrowser.isIE || AscBrowser.isMozilla;
-		this.IsPasteOnlyInEditable   = AscBrowser.isIE || AscBrowser.isMozilla || AscBrowser.isSafari;
+		this.IsCopyCutOnlyInEditable = AscBrowser.isMozilla;
+		this.IsPasteOnlyInEditable   = AscBrowser.isMozilla || AscBrowser.isSafari;
 
 		this.CommonDivClassName = "sdk-element";
 
@@ -425,22 +425,6 @@
 			return false;
 		},
 
-		_private_onbeforecopy_select : function()
-		{
-			if (AscBrowser.isIE)
-			{
-				this._console_log("onbeforecopy_select");
-
-				this.CommonDiv = this.CommonDiv_Check();
-				this.CommonDiv_Start();
-				this.CommonDiv.innerHTML = "<span> </span>";
-
-				this.CommonDiv.focus();
-				this.StartFocus();
-				this.CommonDiv_Select();
-			}
-		},
-
 		_private_onbeforecopy : function(e, isAttackEmulate)
 		{
 			this._console_log("onbeforecopy");
@@ -476,13 +460,9 @@
 				if (!_clipboard || !_clipboard.getData)
 					return null;
 
-				var _type = type;
-				if (AscBrowser.isIE && (type == 'text' || type == 'text/plain'))
-					_type = "Text";
-
 				try
 				{
-					return _clipboard.getData(_type);
+					return _clipboard.getData(type);
 				}
 				catch (e)
 				{
@@ -496,13 +476,9 @@
 				if (!_clipboard || !_clipboard.setData)
 					return null;
 
-				var _type = type;
-				if (AscBrowser.isIE && (type == 'text' || type == 'text/plain'))
-					_type = "Text";
-
 				try
 				{
-					_clipboard.setData(_type, _data);
+					_clipboard.setData(type, _data);
 				}
 				catch (e)
 				{
@@ -531,7 +507,6 @@
 				}
 			};
 
-			if (!AscBrowser.isIE)
 			{
 				document.oncopy           = function(e)
 				{
@@ -578,35 +553,6 @@
 					return g_clipboardBase._private_onbeforepaste(e);
 				};
 			}
-			else
-			{
-				document.addEventListener("copy", function(e)
-				{
-					g_clipboardBase._nativeFieldCopy(e);
-					return g_clipboardBase._private_oncopy(e);
-				});
-				document.addEventListener("cut", function(e)
-				{
-					g_clipboardBase._nativeFieldCopy(e);
-					return g_clipboardBase._private_oncut(e);
-				});
-				document.addEventListener("paste", function(e)
-				{
-					return g_clipboardBase._dispatchPaste(e);
-				});
-				document.addEventListener("beforepaste", function(e)
-				{
-					return g_clipboardBase._private_onbeforepaste(e);
-				});
-				document.addEventListener("beforecopy", function(e)
-				{
-					return g_clipboardBase._private_onbeforecopy(e);
-				});
-				document.addEventListener("beforecut", function(e)
-				{
-					return g_clipboardBase._private_onbeforecopy(e);
-				});
-			}
 
 			if (this.IsCopyCutOnlyInEditable || this.IsPasteOnlyInEditable)
 			{
@@ -637,8 +583,6 @@
 
 						if (bIsBeforeCopyCutEmulate)
 						{
-							//g_clipboardBase._private_onbeforecopy_select();
-
 							g_clipboardBase._console_log("emulate_beforecopycut");
 							var isEmulate = false;
 							try
@@ -807,15 +751,6 @@
 
 				selection.removeAllRanges();
 				selection.addRange(rangeToSelect);
-			}
-			else
-			{
-				if (document.body.createTextRange) // Internet Explorer
-				{
-					var rangeToSelect = document.body.createTextRange();
-					rangeToSelect.moveToElementText(ElemToSelect);
-					rangeToSelect.select();
-				}
 			}
 		},
 

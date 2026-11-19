@@ -1141,7 +1141,7 @@
 				ifr.id             = runObject.frameId;
 				let _add           = plugin.baseUrl === "" ? this.path : plugin.baseUrl;
 				ifr.src            = _add + plugin.variations[runObject.currentVariation].url + urlParams;
-				ifr.style.position = (AscCommon.AscBrowser.isIE || AscCommon.AscBrowser.isMozilla) ? 'fixed' : "absolute";
+				ifr.style.position = AscCommon.AscBrowser.isMozilla ? 'fixed' : "absolute";
 				ifr.style.top      = '-100px';
 				ifr.style.left     = '0px';
 				ifr.style.width    = '10000px';
@@ -1180,24 +1180,6 @@
 			if (this.api.aiPluginSettings && eventMap["onAIPluginSettings"])
 			{
 				runObject.startData.setAttribute("aiPluginSettings", this.api.aiPluginSettings);
-			}
-
-			if (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge)
-			{
-				let ie_frame_id = runObject.frameId;
-				let ie_frame_message = {
-					data : JSON.stringify({"type" : "initialize", "guid" : guid})
-				};
-
-				document.getElementById(runObject.frameId).addEventListener("load", function(){
-					setTimeout(function(){
-
-						var channel = new MessageChannel();
-						channel["port1"]["onmessage"] = onMessage;
-
-						onMessage(ie_frame_message, channel);
-					}, 500);
-				});
 			}
 		},
 
@@ -1872,10 +1854,6 @@
 	if (window.addEventListener)
 	{
 		window.addEventListener("message", onMessage, false);
-	}
-	else if (window.attachEvent)
-	{
-		window.attachEvent("onmessage", onMessage);
 	}
 
 	window["Asc"]                      = window["Asc"] ? window["Asc"] : {};

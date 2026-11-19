@@ -62,8 +62,6 @@
 		isUsePointerEvents = false;
 	else if (AscBrowser.isSafari && (AscBrowser.safariVersion < 15000000))
 		isUsePointerEvents = false;
-	else if (AscBrowser.isIE)
-		isUsePointerEvents = false;
 
 	AscCommon.getPtrEvtName = function (sType)
 	{
@@ -748,13 +746,6 @@
 			}
 		});
 
-		if (AscCommon.AscBrowser.isIE)
-		{
-			oEvent.preventDefault = function () {
-				Object.defineProperty(this, "defaultPrevented", {get: function () {return true;}});
-			};
-		}
-
 		if (oEvent.initKeyboardEvent)
 		{
 			oEvent.initKeyboardEvent("keydown", true, true, window, false, false, false, false, _code, _code);
@@ -776,17 +767,8 @@
 		this.interval = interval || 40;
 		this.id = null;
 
-		this.requestAnimationFrame = window.requestAnimationFrame ||
-			window.webkitRequestAnimationFrame ||
-			window.mozRequestAnimationFrame ||
-			window.oRequestAnimationFrame ||
-			window.msRequestAnimationFrame || null;
-		this.cancelAnimationFrame = window.cancelRequestAnimationFrame ||
-			window.webkitCancelAnimationFrame ||
-			window.webkitCancelRequestAnimationFrame ||
-			window.mozCancelRequestAnimationFrame ||
-			window.oCancelRequestAnimationFrame ||
-			window.msCancelRequestAnimationFrame || null;
+		this.requestAnimationFrame = window.requestAnimationFrame || null;
+		this.cancelAnimationFrame = window.cancelAnimationFrame || null;
 
 		this.isUseRequestAnimationFrame = AscCommon.AscBrowser.isChrome || AscCommon.AscBrowser.isSafari;
 		if (this.isUseRequestAnimationFrame && !this.requestAnimationFrame)

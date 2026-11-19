@@ -751,21 +751,11 @@
         if (!oApInfoTmp)
             return null;
 
-        let supportImageDataConstructor = (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge) ? false : true;
-
         let ctx             = canvas.getContext("2d");
         let mappedBuffer    = oFile.getUint8ClampedArray(oApInfoTmp["retValue"], 4 * nWidth * nHeight);
         let imageData       = null;
 
-        if (supportImageDataConstructor)
-        {
-            imageData = new ImageData(mappedBuffer, nWidth, nHeight);
-        }
-        else
-        {
-            imageData = ctx.createImageData(nWidth, nHeight);
-            imageData.data.set(mappedBuffer, 0);                    
-        }
+        imageData = new ImageData(mappedBuffer, nWidth, nHeight);
         if (ctx)
             ctx.putImageData(imageData, 0, 0);
         
@@ -2118,23 +2108,11 @@
 
     window["AscPDF"].startMultiplyMode = function(ctx)
     {
-        if (!AscCommon.AscBrowser.isIE)
-            ctx.globalCompositeOperation = "multiply";
-        else
-        {
-            ctx._multiplyGlobalAlpha = ctx.globalAlpha;
-            ctx.globalAlpha = 0.3 * ctx._multiplyGlobalAlpha;
-        }
+        ctx.globalCompositeOperation = "multiply";
     };
     window["AscPDF"].endMultiplyMode = function(ctx)
     {
-        if (!AscCommon.AscBrowser.isIE)
-            ctx.globalCompositeOperation = "source-over";
-        else
-        {
-            ctx.globalAlpha = ctx._multiplyGlobalAlpha;
-            delete ctx._multiplyGlobalAlpha;
-        }
+        ctx.globalCompositeOperation = "source-over";
     };
 
 })();

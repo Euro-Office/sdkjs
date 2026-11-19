@@ -537,16 +537,10 @@
 			// Chrome/Edge: 32767px x 32767px
 			// Firefox: 32767px x 32767px
 			// Safari: 4096px x 4096px (most restrictive)
-			// IE9+: 8192px x 8192px
-			// IE8: 4096px x 4096px
 
 			let maxCanvasHeight, maxCanvasWidth, maxCanvasArea;
 
-			if (AscCommon.AscBrowser.isIE) {
-				maxCanvasHeight = 8192;
-				maxCanvasWidth = 8192;
-				maxCanvasArea = 8192 * 8192;
-			} else if (AscCommon.AscBrowser.isSafariMacOs) {
+			if (AscCommon.AscBrowser.isSafariMacOs) {
 				// Safari (not Chrome)
 				maxCanvasHeight = 4096;
 				maxCanvasWidth = 4096;

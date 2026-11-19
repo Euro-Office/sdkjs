@@ -2381,21 +2381,11 @@
         if (!oApInfoTmp)
             return null;
 
-        let supportImageDataConstructor = (AscCommon.AscBrowser.isIE && !AscCommon.AscBrowser.isIeEdge) ? false : true;
-
         let ctx             = canvas.getContext("2d");
         let mappedBuffer    = oFile.getUint8ClampedArray(oApInfoTmp["retValue"], 4 * nWidth * nHeight);
         let imageData       = null;
 
-        if (supportImageDataConstructor)
-        {
-            imageData = new ImageData(mappedBuffer, nWidth, nHeight);
-        }
-        else
-        {
-            imageData = ctx.createImageData(nWidth, nHeight);
-            imageData.data.set(mappedBuffer, 0);                    
-        }
+        imageData = new ImageData(mappedBuffer, nWidth, nHeight);
         if (ctx)
             ctx.putImageData(imageData, 0, 0);
         

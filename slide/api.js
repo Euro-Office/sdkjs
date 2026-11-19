@@ -371,10 +371,6 @@
 			{
 				window.addEventListener("resize", _windowOnResize, false);
 			}
-			else if (window.attachEvent)
-			{
-				window.attachEvent("onresize", _windowOnResize);
-			}
 			else
 			{
 				window["onresize"] = _windowOnResize;
@@ -7613,10 +7609,7 @@ background-repeat: no-repeat;\
 			}
 		};
 
-		if ( this.reporterWindow.attachEvent )
-			this.reporterWindow.attachEvent('onmessage', this.DemonstrationReporterMessages);
-		else
-			this.reporterWindow.addEventListener('message', this.DemonstrationReporterMessages, false);
+		this.reporterWindow.addEventListener('message', this.DemonstrationReporterMessages, false);
 	};
 
 	asc_docs_api.prototype.DemonstrationReporterEnd = function()
@@ -7634,10 +7627,7 @@ background-repeat: no-repeat;\
 			if (!this.reporterWindow)
 				return;
 
-			if (this.reporterWindow.attachEvent)
-				this.reporterWindow.detachEvent('onmessage', this.DemonstrationReporterMessages);
-			else
-				this.reporterWindow.removeEventListener('message', this.DemonstrationReporterMessages, false);
+			this.reporterWindow.removeEventListener('message', this.DemonstrationReporterMessages, false);
 
 			this.reporterWindow.close();
 			this.reporterWindow = null;
@@ -8440,10 +8430,7 @@ background-repeat: no-repeat;\
 			{
 				window.editor.EndDemonstration();
 			};
-			if (window.attachEvent)
-				window.attachEvent('onbeforeunload', _onbeforeunload);
-			else
-				window.addEventListener('beforeunload', _onbeforeunload, false);
+			window.addEventListener('beforeunload', _onbeforeunload, false);
 		}
 
         if (this.openFileCryptBinary)
