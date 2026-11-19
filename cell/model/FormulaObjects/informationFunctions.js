@@ -369,9 +369,10 @@ function (window, undefined) {
 						if (cell) {
 							// Protection is a property of the cell's own format. Do not compile the style here:
 							// that evaluates conditional formats, which may call CELL("protect") on this cell again.
+							// A format without a protection entry (locked null) is locked, as in the protection code.
 							let xfs = cell.xfs;
 							if (xfs) {
-								isLocked = xfs.getLocked();
+								isLocked = xfs.getLocked() !== false;
 							}
 						}
 					});
