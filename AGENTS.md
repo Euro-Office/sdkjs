@@ -90,15 +90,15 @@ QUnit suites run headless via `node-qunit-puppeteer`, **from the repo root**:
 
 ```bash
 # one-time setup (from repo root)
-npm install node-qunit-puppeteer
+npm ci --prefix tests   # pinned QUnit, jQuery, node-qunit-puppeteer
 npm ci --prefix build
 SDK_ADDONS=../../sdkjs-forms npm run --prefix build develop
 
 # run the whole suite (exits non-zero on failure)
-node tests/runAll.js
+npm test --prefix tests
 
 # run a single suite
-node node_modules/node-qunit-puppeteer/cli.js tests/word/api/api.html 30000 "--no-sandbox"
+node tests/node_modules/node-qunit-puppeteer/cli.js tests/word/api/api.html 30000 "--no-sandbox"
 ```
 
 **Keep local runs light** (several agents often build and test on one machine at once):
@@ -112,9 +112,15 @@ node node_modules/node-qunit-puppeteer/cli.js tests/word/api/api.html 30000 "--n
   don't raise that locally.
 
 CI (`.github/workflows/check-build.yml`, `ubuntu-latest` runners, not self-hosted) runs the
-whole suite via the aggregate runner (`node tests/runAll.js`) in its `unit-tests` job. Suites
+whole suite via the aggregate runner (`npm test --prefix tests`) in its `unit-tests` job. Suites
 that can't pass yet are listed with reasons in `skippedTests` at the top of `tests/runAll.js`,
 not silently dropped.
+
+Test dependencies are pinned in `tests/package.json` + `tests/npm-shrinkwrap.json`, kept out of
+`build/` so production `npm ci` there does not download Chromium. Test pages load QUnit and
+jQuery from `tests/node_modules` and XRegExp from `vendor/`, never from a CDN
+(`build/test/test-pages-offline.test.cjs` enforces this). New pages: copy those relative
+`<script>`/`<link>` paths from a sibling page.
 
 **CI branch scope:** `check-build.yml` triggers on push and pull_request for `main`, `fork`,
 `develop`, `release/**`, and `hotfix/**` — PRs targeting `main` are CI-guarded by this workflow.

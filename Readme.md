@@ -34,20 +34,21 @@ repository checked out as a sibling of this one (`../sdkjs-forms`).
 
 ```bash
 # from the sdkjs/ directory, one-time setup
-npm install node-qunit-puppeteer
+npm ci --prefix tests   # pinned QUnit, jQuery, node-qunit-puppeteer
 npm ci --prefix build
 SDK_ADDONS=../../sdkjs-forms npm run --prefix build develop
 
 # run the whole suite (exits non-zero on failure)
-node tests/runAll.js
+npm test --prefix tests
 
 # run a single suite: <test.html> <timeout-ms> "<puppeteer-args>"
-node node_modules/node-qunit-puppeteer/cli.js tests/word/document-calculation/paragraph.html 30000 "--no-sandbox"
+node tests/node_modules/node-qunit-puppeteer/cli.js tests/word/document-calculation/paragraph.html 30000 "--no-sandbox"
 ```
 
 Concurrency defaults to 4 Chromium instances; override with `TESTS_CONCURRENCY`.
 Suites that cannot pass in the standard build yet are listed (with reasons) in
-`skippedTests` at the top of `tests/runAll.js`. CI runs these same steps via the
+`skippedTests` at the top of `tests/runAll.js`. Test dependencies are pinned in
+`tests/package.json`; the pages load them from `tests/node_modules`, never from a CDN. CI runs these same steps via the
 `unit-tests` job in `.github/workflows/check-build.yml`.
 
 ## 📜 License
