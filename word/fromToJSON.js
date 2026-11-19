@@ -595,7 +595,7 @@
 			return undefined;
 
 		return {
-			"color": this.SerColor(oExtrusionClr.color)
+			"color": this.SerColor(oExtrusionClr)
 		}
 	};
 	WriterToJSON.prototype.SerContourClr = function(oContourClr)
@@ -604,7 +604,7 @@
 			return undefined;
 
 		return {
-			"color": this.SerColor(oContourClr.color)
+			"color": this.SerColor(oContourClr)
 		}
 	};
 	WriterToJSON.prototype.SerBevel = function(oBevel)
@@ -12655,21 +12655,15 @@
 
 		return oSp3D;
 	};
+	// Sp3d holds both colours as CUniColor, as the binary reader makes them
+	// (common/Drawings/Format/Data.js, Sp3d.prototype.readChild).
 	ReaderFromJSON.prototype.ExtrusionClrFromJSON = function(oParsedExtrusionClr)
 	{
-		var oExtrusionClr = new AscFormat.ExtrusionClr();
-
-		oParsedExtrusionClr["color"] && oExtrusionClr.setColor(this.ColorFromJSON(oParsedExtrusionClr["color"]));
-
-		return oExtrusionClr;
+		return oParsedExtrusionClr["color"] ? this.ColorFromJSON(oParsedExtrusionClr["color"]) : null;
 	};
 	ReaderFromJSON.prototype.ContourClrFromJSON = function(oParsedContourClr)
 	{
-		var oContourClr = new AscFormat.ContourClr();
-
-		oParsedContourClr["color"] && oContourClr.setColor(this.ColorFromJSON(oParsedContourClr["color"]));
-
-		return oContourClr;
+		return oParsedContourClr["color"] ? this.ColorFromJSON(oParsedContourClr["color"]) : null;
 	};
 	ReaderFromJSON.prototype.BevelFromJSON = function(oParsedBevel)
 	{
