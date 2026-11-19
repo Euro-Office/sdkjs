@@ -11056,7 +11056,12 @@ CDocument.prototype.Get_TextBackGroundColor = function()
 {
 	return undefined;
 };
-CDocument.prototype.Select_DrawingObject = function(Id)
+/**
+ * Selects the drawing object as an object
+ * @param {string} Id - id of a ParaDrawing
+ * @param {number} [nPageIndex] - the page to select it on, needed for objects in a header or footer (the current page by default)
+ */
+CDocument.prototype.Select_DrawingObject = function(Id, nPageIndex)
 {
 	let drawingObject = AscCommon.g_oTableId.GetById(Id);
 	if (!drawingObject || !drawingObject.IsUseInDocument())
@@ -11090,10 +11095,49 @@ CDocument.prototype.Select_DrawingObject = function(Id)
 		oDocContent.Selection.Start = true;
 	}
 
-	this.DrawingObjects.selectById(Id, this.CurPage);
+	this.DrawingObjects.selectById(Id, AscFormat.isRealNumber(nPageIndex) ? nPageIndex : this.CurPage);
 
 	this.Document_UpdateInterfaceState();
 	this.Document_UpdateSelectionState();
+};
+/**
+ * Returns the drawing objects shown on the given page, from the front to the back
+ * @param {number} nPageIndex
+ * @returns {{Drawing: AscCommonWord.ParaDrawing, Layer: string, HdrFtr: boolean}[]}
+ */
+CDocument.prototype.GetPageDrawingObjects = function(nPageIndex)
+{
+	return this.DrawingObjects.getPageDrawingObjects(nPageIndex);
+};
+/**
+ * Selects the drawing object as an object and scrolls the view to it
+ * @param {string} sId - id of a ParaDrawing
+ * @param {number} [nPageIndex] - the page to show, needed for objects in a header or footer
+ * @returns {boolean}
+ */
+CDocument.prototype.SelectDrawingObjectById = function(sId, nPageIndex)
+{
+	let oDrawing = AscCommon.g_oTableId.GetById(sId);
+	if (!(oDrawing instanceof AscCommonWord.ParaDrawing) || !oDrawing.IsUseInDocument() || !oDrawing.GraphicObj)
+		return false;
+
+	let oDocContent = oDrawing.GetDocumentContent();
+	let oHdrFtr     = oDocContent ? oDocContent.IsHdrFtr(true) : null;
+	if (undefined === nPageIndex || null === nPageIndex)
+		nPageIndex = oDrawing.PageNum;
+
+	if (oHdrFtr)
+	{
+		oHdrFtr.Set_CurrentElement(false, nPageIndex);
+		oHdrFtr.Set_Page(nPageIndex);
+	}
+	this.Select_DrawingObject(sId, nPageIndex);
+
+	let oGraphic = oDrawing.GraphicObj;
+	if (oGraphic.transform && this.DrawingDocument && this.DrawingDocument.m_oWordControl)
+		this.DrawingDocument.m_oWordControl.ScrollToPosition(oGraphic.transform.tx, oGraphic.transform.ty, nPageIndex, oGraphic.extY);
+
+	return true;
 };
 /**
  * Получем ближайшую возможную позицию курсора.
