@@ -3950,7 +3950,7 @@
 		  if (0 === printPagesData.arrPages.length) {
 			  // Печать пустой страницы
 			  ws = t.getWorksheet();
-			  ws.drawForPrint(pdfPrinter, null);
+			  ws.drawForPrint(pdfPrinter, null, 0, null, true);
 		  } else {
 			  var indexWorksheet = -1;
 			  var indexWorksheetTmp = -1;
@@ -4136,8 +4136,9 @@
 		var ws;
 		if (!page) {
 			// Печать пустой страницы
+			// with no pages at all, show the header and footer as printSheets prints them
 			ws = this.getWorksheet();
-			ws.drawForPrint(printPreviewContext, null);
+			ws.drawForPrint(printPreviewContext, null, 0, null, 0 === printPreviewState.getPagesLength());
 		} else {
 			ws = this.getWorksheet(page.indexWorksheet);
 			ws.drawForPrint(printPreviewContext, page, index, printPreviewState.pages && printPreviewState.pages.arrPages);

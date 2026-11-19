@@ -127,4 +127,148 @@ $(function () {
 		printed = printedPageSetup({"spreadsheetLayout": {"fitToWidth": 0, "fitToHeight": 0, "scale": 100}, "adjustOptions": {"printType": 1}});
 		assert.strictEqual(printed.asc_getFitToWidth(), 0, "scale in the json params: not fitted");
 	});
+
+	QUnit.module("Print empty sheet");
+
+	// Runs drawFunction(wbView) with a stub pdf printer; returns the header and footer draws.
+	function drawnHeaderFooters(drawFunction) {
+		let wbView = api.wb;
+		let wsView = wbView.getWorksheet(0);
+		let saved = {
+			CPdfPrinter: AscCommonExcel.CPdfPrinter,
+			fmgrGraphics: wbView.fmgrGraphics,
+			font: wbView.m_oFont,
+			stringRender: wsView.stringRender
+		};
+		let drawn = [];
+		// This harness does not lay out the workbook view: give printSheets and drawForPrint what they read.
+		AscCommonExcel.CPdfPrinter = function () {
+			this.BeginPage = function () {};
+			this.EndPage = function () {};
+		};
+		wbView.fmgrGraphics = saved.fmgrGraphics || [];
+		wbView.m_oFont = saved.font || {clone: function () {}};
+		wbView._executeWithoutZoom = function (runFunction) {
+			runFunction();
+		};
+		wsView.stringRender = saved.stringRender || {};
+		wsView.getZoom = function () {
+			return 1;
+		};
+		wsView._drawHeaderFooter = function (drawingCtx, page, headerFooterData, index, count, bFooter) {
+			drawn.push({page: page, index: index, count: count, footer: bFooter});
+		};
+		try {
+			drawFunction(wbView);
+		} finally {
+			AscCommonExcel.CPdfPrinter = saved.CPdfPrinter;
+			wbView.fmgrGraphics = saved.fmgrGraphics;
+			wbView.m_oFont = saved.font;
+			delete wbView._executeWithoutZoom;
+			wsView.stringRender = saved.stringRender;
+			delete wsView.getZoom;
+			delete wsView._drawHeaderFooter;
+		}
+		return drawn;
+	}
+
+	// Header and footer draws of printSheets.
+	function printedHeaderFooters(arrPages, adjustPrint) {
+		return drawnHeaderFooters(function (wbView) {
+			wbView.printSheets({arrPages: arrPages}, null, adjustPrint);
+		});
+	}
+
+	// Header and footer draws of the print preview of page index, on a stub preview canvas.
+	function previewHeaderFooters(arrPages, index) {
+		return drawnHeaderFooters(function (wbView) {
+			let previewState = wbView.printPreviewState;
+			let saved = {ctx: previewState.getCtx(), pages: previewState.getPages()};
+			let fillCtx = {
+				fillRect: function () {}
+			};
+			previewState.setCtx({
+				clear: function () {},
+				setFillStyle: function () {
+					return fillCtx;
+				},
+				getWidth: function () {
+					return 0;
+				},
+				getHeight: function () {
+					return 0;
+				}
+			});
+			previewState.setPages({arrPages: arrPages});
+			try {
+				wbView.printSheetPrintPreview(index);
+			} finally {
+				previewState.setCtx(saved.ctx);
+				previewState.setPages(saved.pages);
+			}
+		});
+	}
+
+	function withHeaderFooter(runFunction) {
+		let ws = api.wbModel.getWorksheet(0);
+		let headerFooter = ws.headerFooter;
+		let pageSetup = ws.PagePrintOptions.pageSetup;
+		let saved = {oddHeader: headerFooter.oddHeader, oddFooter: headerFooter.oddFooter, scale: pageSetup.scale};
+		try {
+			headerFooter.oddHeader = new Asc.CHeaderFooterData();
+			headerFooter.oddHeader.setStr("&CHeader");
+			headerFooter.oddFooter = new Asc.CHeaderFooterData();
+			headerFooter.oddFooter.setStr("&CPage &P");
+			pageSetup.scale = 70;
+			runFunction();
+		} finally {
+			headerFooter.oddHeader = saved.oddHeader;
+			headerFooter.oddFooter = saved.oddFooter;
+			pageSetup.scale = saved.scale;
+		}
+	}
+
+	QUnit.test("The blank page of an empty print gets the header and footer", function (assert) {
+		withHeaderFooter(function () {
+			// No sheet has a print page: printSheets prints one blank page.
+			let drawn = printedHeaderFooters([]);
+
+			assert.strictEqual(drawn.length, 2, "header and footer are drawn on the blank page");
+			let defaults = AscCommon.c_oAscPrintDefaultSettings;
+			for (let i = 0; i < drawn.length; i++) {
+				let desc = i === 0 ? "header: " : "footer: ";
+				let page = drawn[i].page || {};
+				assert.strictEqual(drawn[i].footer, i === 1, desc + "drawn in order");
+				assert.strictEqual(page.pageWidth, defaults.PageWidth, desc + "width of the blank page");
+				assert.strictEqual(page.pageHeight, defaults.PageHeight, desc + "height of the blank page");
+				assert.strictEqual(page.scale, 0.7, desc + "scale of the sheet");
+				assert.strictEqual(drawn[i].index, 0, desc + "page 1");
+				assert.strictEqual(drawn[i].count, 1, desc + "of 1 page");
+			}
+		});
+	});
+
+	QUnit.test("A page range past the last page prints a blank page without header and footer", function (assert) {
+		withHeaderFooter(function () {
+			let drawn = printedHeaderFooters([{indexWorksheet: 0}], {startPageIndex: 5, endPageIndex: 6});
+			assert.strictEqual(drawn.length, 0, "nothing of the sheet is drawn on that page");
+		});
+	});
+
+	QUnit.test("The print preview of an empty print shows the header and footer of the printout", function (assert) {
+		withHeaderFooter(function () {
+			let printed = printedHeaderFooters([]);
+			let previewed = previewHeaderFooters([], 0);
+
+			assert.strictEqual(previewed.length, 2, "header and footer are drawn in the preview");
+			assert.deepEqual(previewed, printed, "same page size, scale and page number as the printout");
+		});
+	});
+
+	QUnit.test("The print preview of a page past the last page draws no header and footer", function (assert) {
+		withHeaderFooter(function () {
+			let drawn = previewHeaderFooters([{indexWorksheet: 0}], 5);
+			assert.strictEqual(drawn.length, 0, "nothing of the sheet is drawn on that page");
+		});
+	});
 });
