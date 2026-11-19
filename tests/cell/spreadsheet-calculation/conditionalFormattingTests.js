@@ -692,5 +692,57 @@ $(function () {
 		clearData(0, 0, 5, 5);
 	});
 
+	QUnit.test('Conditional formatting: rule formula with CELL("protect")', function (assert) {
+		// A1 keeps the default format (no own xfs), A2 is unlocked, A3 is bold but has no protection set
+		ws.getRange4(0, 0).fillData([["1"], ["2"], ["3"]]);
+		ws.getRange2("A2").setLocked(false);
+		ws.getRange2("A3").setBold(true);
+
+		let a1HasOwnFormat = true;
+		ws._getCellNoEmpty(0, 0, function (cell) {
+			a1HasOwnFormat = !!(cell && cell.xfs);
+		});
+		assert.strictEqual(a1HasOwnFormat, false, "A1 has no own format");
+		let a3Locked;
+		ws._getCellNoEmpty(2, 0, function (cell) {
+			a3Locked = cell && cell.xfs ? cell.xfs.getLocked() : undefined;
+		});
+		assert.strictEqual(a3Locked, null, "A3 has its own format without a protection entry");
+
+		// "Highlight unlocked cells"
+		let rule = new AscCommonExcel.CConditionalFormattingRule();
+		rule.asc_setType(Asc.c_oAscCFType.expression);
+		let xfs = new Asc.asc_CellXfs();
+		let fillColor = getRgbColor("C6EFCE");
+		xfs.asc_setFillColor(fillColor);
+		rule.asc_setDxf(xfs);
+		rule.asc_setValue1('=NOT(CELL("protect",A1))');
+		rule.asc_setLocation("$A$1:$A$3");
+
+		api.asc_setCF([rule]);
+		ws.setDirtyConditionalFormatting(new AscCommonExcel.MultiplyRange([new Asc.Range(0, 0, 0, 2)]));
+
+		let error = null;
+		let compiledStyle1, compiledStyle2, compiledStyle3;
+		try {
+			compiledStyle1 = ws.getCompiledStyle(0, 0);
+			compiledStyle2 = ws.getCompiledStyle(1, 0);
+			compiledStyle3 = ws.getCompiledStyle(2, 0);
+		} catch (e) {
+			error = e;
+		}
+		assert.strictEqual(error && error.toString(), null, "compiling the style does not recurse");
+
+		let rgbColor1 = compiledStyle1 && compiledStyle1.fill && compiledStyle1.fill.bg();
+		let rgbColor2 = compiledStyle2 && compiledStyle2.fill && compiledStyle2.fill.bg();
+		assert.strictEqual(compareAscColorAndRgbColor(fillColor, rgbColor1), false, "locked A1 is not highlighted");
+		let rgbColor3 = compiledStyle3 && compiledStyle3.fill && compiledStyle3.fill.bg();
+		assert.strictEqual(compareAscColorAndRgbColor(fillColor, rgbColor2), true, "unlocked A2 is highlighted");
+		assert.strictEqual(compareAscColorAndRgbColor(fillColor, rgbColor3), false, "bold A3 without a protection entry is locked");
+
+		// Clean up data after tests
+		clearData(0, 0, 1, 2);
+	});
+
 	QUnit.module("Conditional formatting");
 });
