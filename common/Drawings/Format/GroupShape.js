@@ -168,6 +168,16 @@
 			}
 			return arrTables;
 		};
+		CGroupShape.prototype.GetAllParagraphs = function (oProps, arrParagraphs) {
+			if (!arrParagraphs)
+				arrParagraphs = [];
+
+			for (let i = 0; i < this.spTree.length; ++i) {
+				if (this.spTree[i].GetAllParagraphs)
+					this.spTree[i].GetAllParagraphs(oProps, arrParagraphs);
+			}
+			return arrParagraphs;
+		};
 		CGroupShape.prototype.checkRunContent = function (fCallback) {
 			let aGraphics = this.getArrGraphicObjects();
 			for (let nIdx = 0; nIdx < aGraphics.length; ++nIdx) {
