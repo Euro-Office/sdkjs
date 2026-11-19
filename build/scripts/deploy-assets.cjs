@@ -40,7 +40,7 @@ const OTHER_FILES = [
         cwd:  path.join(SRC_ROOT, 'common'),
         src:  [
             'device_scale.js',
-            'Drawings/Format/path-boolean-min.js',
+            'Drawings/Format/path-boolean.js',
             'Charts/ChartStyles.js',
             'SmartArts/SmartArtData/*',
             'SmartArts/SmartArtDrawing/*',
@@ -85,7 +85,8 @@ async function deployJsFile(srcPath, destPath) {
         compress: false,
         mangle:   false,
         format:   {
-            comments: false,
+            // Keeps /*! third-party notices (paper.js MIT in path-boolean.js).
+            comments: /^!/,
             // Same invariant as the sdk-all bundles in webpack.sdk.factory.mjs:
             // several of the files deployed here (Native/*.js, and the
             // libfont/engine/fonts_*.js that doctrenderer concatenates into the
@@ -143,7 +144,11 @@ async function main() {
     process.stdout.write(`deploy-assets: ${fileCount} files deployed to ${BUILD_ROOT}\n`);
 }
 
-main().catch(err => {
-    process.stderr.write(`deploy-assets FAILED: ${err.message}\n`);
-    process.exit(1);
-});
+if (require.main === module) {
+    main().catch(err => {
+        process.stderr.write(`deploy-assets FAILED: ${err.message}\n`);
+        process.exit(1);
+    });
+}
+
+module.exports = { deployJsFile };
