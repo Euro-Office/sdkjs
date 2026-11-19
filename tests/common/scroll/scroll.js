@@ -202,6 +202,21 @@ QUnit.module("ScrollObject");
 		assert.strictEqual(t.holder.scrollTop, 300, "programmatic scrolls move the bar again");
 	});
 
+	QUnit.test("pointerup handlers run after a drag", async function (assert)
+	{
+		// the cell editor binds AscCommon.getPtrEvtName("up")
+		let t = createVertical(1000, 200);
+		let ups = [];
+		t.scroll.bind("pointerup", function ()
+		{
+			ups.push(t.scroll.scrollerMouseDown);
+		});
+		t.holder.dispatchEvent(new MouseEvent("mousedown", {button : 0, bubbles : true}));
+		window.dispatchEvent(new MouseEvent("mouseup", {button : 0}));
+		await nextFrames(4);
+		assert.deepEqual(ups, [true], "pointerup fires while the drag is still flagged");
+	});
+
 	QUnit.test("right-to-left horizontal scrollbar", async function (assert)
 	{
 		let holder = createHolder(300, 14);

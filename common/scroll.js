@@ -400,6 +400,7 @@ function (window, undefined) {
 				cancelAnimationFrame( that.frameId );
 				that._onFrame();
 				that.handleEvents( "onmouseup", e );
+				that.handleEvents( "onpointerup", e );
 				that.mouseDown = that.scrollerMouseDown = false;
 				that._requestFrame();
 			} );
