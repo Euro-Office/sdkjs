@@ -27155,7 +27155,7 @@ CDocument.prototype.ConvertTextToTable = function(oProps)
 	if (!this.IsTextSelectionUse() || this.IsTableCellSelection())
 		return;
 
-	if (!this.IsSelectionLocked(AscCommon.changestype_Document_Contentt))
+	if (!this.IsSelectionLocked(AscCommon.changestype_Document_Content))
 	{
 		this.StartAction(AscDFH.historydescription_Document_ConvertTextToTable);
 
