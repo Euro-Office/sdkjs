@@ -3036,14 +3036,52 @@ ParaRun.prototype.GetPrevRunElements = function(oRunElements, isUseContentPos, n
 };
 
 /**
+ * Counts words and symbols as LibreOffice does: deleted and hidden text is not counted, every Chinese or Japanese
+ * character is a word. En and em dashes separate words only with the option dashSeparatesWords (as in LibreOffice);
+ * without it they join words, as in Word.
+ * Words inserted or deleted with tracked changes are also counted on their own, per changed part of the text.
  * @param {CParagraphStatistics} ParaStats
  * @param {number} [nStartPos=0] first element to count
  * @param {number} [nEndPos=this.Content.length] element after the last one to count
  */
 ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEndPos)
 {
+	var Start = undefined !== nStartPos ? nStartPos : 0;
 	var Count = undefined !== nEndPos ? nEndPos : this.Content.length;
-	for (var Index = undefined !== nStartPos ? nStartPos : 0; Index < Count; Index++)
+
+	// hidden text is not counted, also not as deleted text
+	if (this.Get_CompiledPr(false).Vanish)
+		return;
+
+	// en and em dashes separate words only with the option (ParaStats.Stats is a CStatistics)
+	var isDashSeparator = ParaStats.Stats.DashSeparatesWords ? AscCommon.isWordSeparatorDash : function(){return false;};
+
+	// a deleted or hidden part inside an inserted word does not split it: the inserted (and the deleted) word only
+	// ends at a counted character that is not inserted (deleted), or at a space
+	var nReviewType = this.GetReviewType();
+	var isAdded     = reviewtype_Add === nReviewType;
+
+	if (reviewtype_Remove === nReviewType)
+	{
+		for (var nPos = Start; nPos < Count; ++nPos)
+		{
+			var oDeleted = this.Content[nPos];
+			if (para_Text === oDeleted.Type && !oDeleted.IsNBSP() && !isDashSeparator(oDeleted.Value))
+			{
+				var isDeletedCJ = AscCommon.isCJWordChar(oDeleted.Value);
+				if (!ParaStats.DeletedWord || isDeletedCJ)
+					ParaStats.Stats.DeletedWords++;
+				ParaStats.DeletedWord = !isDeletedCJ;
+			}
+			else if (para_Text === oDeleted.Type || para_Space === oDeleted.Type || para_Tab === oDeleted.Type)
+			{
+				ParaStats.DeletedWord = false;
+			}
+		}
+		return;
+	}
+
+	for (var Index = Start; Index < Count; Index++)
 	{
 		var Item     = this.Content[Index];
 		var ItemType = Item.Type;
@@ -3052,15 +3090,33 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 		var bSpace   = false;
 		var bNewWord = false;
 
-		if ((para_Text === ItemType && false === Item.IsNBSP()) || (para_PageNum === ItemType || para_PageCount === ItemType))
+		if (para_Text === ItemType && isDashSeparator(Item.Value))
 		{
-			if (false === ParaStats.Word)
+			// a dash is a symbol, but it separates words
+			bSymbol = true;
+
+			ParaStats.Word           = false;
+			ParaStats.AddedWord      = false;
+			ParaStats.DeletedWord    = false;
+			ParaStats.EmptyParagraph = false;
+		}
+		else if ((para_Text === ItemType && false === Item.IsNBSP()) || (para_PageNum === ItemType || para_PageCount === ItemType))
+		{
+			// every Chinese or Japanese character is a word of its own
+			var isCJ = para_Text === ItemType && AscCommon.isCJWordChar(Item.Value);
+
+			if (false === ParaStats.Word || isCJ)
 				bNewWord = true;
+
+			if (isAdded && (!ParaStats.AddedWord || isCJ))
+				ParaStats.Stats.AddedWords++;
+			ParaStats.AddedWord   = isAdded && !isCJ;
+			ParaStats.DeletedWord = false;
 
 			bSymbol = true;
 			bSpace  = false;
 
-			ParaStats.Word           = true;
+			ParaStats.Word           = !isCJ;
 			ParaStats.EmptyParagraph = false;
 		}
 		else if ((para_Text === ItemType && true === Item.IsNBSP()) || para_Space === ItemType || para_Tab === ItemType)
@@ -3068,7 +3124,19 @@ ParaRun.prototype.CollectDocumentStatistics = function(ParaStats, nStartPos, nEn
 			bSymbol = true;
 			bSpace  = true;
 
-			ParaStats.Word = false;
+			ParaStats.Word        = false;
+			ParaStats.AddedWord   = false;
+			ParaStats.DeletedWord = false;
+		}
+		else if ((para_FootnoteReference === ItemType || para_EndnoteReference === ItemType) && Item.GetFootnote() && !ParaStats.Stats.IsSelection)
+		{
+			// the whole note counts with the document; a selection counts only the notes it selects itself
+			// (drawings in notes are on the page's list of drawings and are counted there, like those in the main text)
+			Item.GetFootnote().CollectDocumentStatistics(ParaStats.Stats);
+		}
+		else if (para_Drawing === ItemType && ParaStats.Stats.CountDrawingsInRuns)
+		{
+			Item.documentStatistics(ParaStats.Stats);
 		}
 
 		if (true === bSymbol)

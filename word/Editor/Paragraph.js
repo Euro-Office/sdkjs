@@ -20753,6 +20753,10 @@ function CParagraphStatistics(Stats)
     this.Symbol  = false;
     this.Space   = false;
     this.NewWord = false;
+
+    // inside a word of a tracked insertion or deletion
+    this.AddedWord   = false;
+    this.DeletedWord = false;
 }
 
 function CParagraphMinMaxContentWidth()
