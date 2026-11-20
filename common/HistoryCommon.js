@@ -1390,6 +1390,9 @@
 			case AscDFH.historydescription_Document_AddCheckBoxLabel:
 				sString = "Document_AddCheckBoxLabel";
 				break;
+			case AscDFH.historydescription_Document_SplitTable:
+				sString = "Document_SplitTable";
+				break;
 		}
 		return sString;
 	}
@@ -4806,6 +4809,7 @@
 	window['AscDFH'].historydescription_Spreadsheet_SetCellFormula					= 0x01fb;
 	window['AscDFH'].historydescription_Document_AddCheckBoxLabel                   = 0x01fc;
 	window['AscDFH'].historydescription_Document_StretchFormToCell                  = 0x01fd;
+	window['AscDFH'].historydescription_Document_SplitTable                         = 0x0200;
 
 	// pdf
 	window['AscDFH'].historydescription_Pdf_AddAnnot			= 0x29a;
