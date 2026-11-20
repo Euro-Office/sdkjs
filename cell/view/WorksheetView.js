@@ -5471,11 +5471,13 @@ function isAllowPasteLink(pastedWb) {
 
 	/**
 	 * Page numbering of a workbook printed from ODF. ODF numbers the printed pages across the whole
-	 * spreadsheet (LibreOffice ScPrintFuncCache): the count restarts at a sheet whose page style sets a
-	 * first page number, unless the previous sheet has the same page style (here: the same first page
-	 * number); the sheets after it continue from that number. The first page and odd/even headers
-	 * follow the same count.
-	 * @param {Array} pages printed pages of the workbook, in print order
+	 * spreadsheet (LibreOffice ScPrintFuncCache): a sheet whose page style sets a first page number
+	 * starts the count again, the sheets after it continue from there. The first page and odd/even
+	 * headers follow the same count. Only the sheets of the print job count: printing one sheet does
+	 * not take over a number from a sheet before it.
+	 * Known difference: LibreOffice continues when the next sheet has the very same page style; the
+	 * page style names are not kept here, so every sheet with its own first page number starts again.
+	 * @param {Array} pages printed pages of the job, in print order
 	 * @param {number} indexPrintPage index of the current page in pages
 	 * @returns {?{index: number, firstPageNumber: number}} page index since the last restart and the
 	 * number of the first page of that run; null when the workbook is not from ODF
@@ -5497,20 +5499,16 @@ function isAllowPasteLink(pastedWb) {
 			return pageSetup && pageSetup.useFirstPageNumber && pageSetup.firstPageNumber ? pageSetup.firstPageNumber : null;
 		};
 
-		let sheetIndex = pages[indexPrintPage].indexWorksheet;
-		//the sheet where the current run of numbers starts, and its first number
-		let startSheet = sheetIndex;
-		let firstPageNumber = getFirstPageNumber(sheetIndex);
-		while (startSheet > 0) {
-			let own = getFirstPageNumber(startSheet);
-			let prev = getFirstPageNumber(startSheet - 1);
-			if (own !== null && own !== prev) {
-				break;
-			}
+		//the first sheet of the job, then the sheet where the current run of numbers starts
+		let firstSheet = pages[0].indexWorksheet;
+		for (let i = 1; i <= indexPrintPage; i++) {
+			firstSheet = Math.min(firstSheet, pages[i].indexWorksheet);
+		}
+		let startSheet = pages[indexPrintPage].indexWorksheet;
+		let firstPageNumber = getFirstPageNumber(startSheet);
+		while (firstPageNumber === null && startSheet > firstSheet) {
 			startSheet--;
-			if (firstPageNumber === null) {
-				firstPageNumber = prev;
-			}
+			firstPageNumber = getFirstPageNumber(startSheet);
 		}
 
 		let index = 0;

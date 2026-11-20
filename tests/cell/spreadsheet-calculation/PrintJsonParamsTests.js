@@ -337,18 +337,63 @@ $(function () {
 				"ODS: the pages are numbered across the sheets");
 			assert.deepEqual(numbering([null, 5, null], [0, 0, 1, 1, 2]), [[0, 1], [1, 1], [0, 5], [1, 5], [2, 5]],
 				"ODS: a sheet with a first page number starts again, the sheets after it continue");
-			assert.deepEqual(numbering([3, 3], [0, 0, 1]), [[0, 3], [1, 3], [2, 3]],
-				"ODS: the same first page number on the next sheet (same page style) continues");
+			assert.deepEqual(numbering([3, 3], [0, 0, 1]), [[0, 3], [1, 3], [0, 3]],
+				"ODS: every sheet with its own first page number starts again (page style names are not kept)");
 			assert.deepEqual(numbering([3, 7], [0, 1]), [[0, 3], [0, 7]], "ODS: another first page number starts again");
 			assert.deepEqual(numbering([null, 4, null], [0, 2]), [[0, 1], [0, 4]],
 				"ODS: a sheet without printed pages still starts the numbers again");
 			assert.deepEqual(numbering([null, 0], [0, 1]), [[0, 1], [1, 1]], "ODS: first page number 0 continues");
+			assert.deepEqual(numbering([5, null], [1, 1]), [[0, 1], [1, 1]],
+				"ODS, one sheet printed: no number is taken over from a sheet that is not printed");
+			assert.deepEqual(numbering([null, 5, null], [1, 2]), [[0, 5], [1, 5]],
+				"ODS, the job starts at a sheet with a first page number: the next sheet continues from it");
 			wb.sourceFileType = Asc.c_oAscFileType.FODS;
 			assert.deepEqual(numbering([null, null], [0, 1]), [[0, 1], [1, 1]], "flat ODS: numbered across the sheets");
 			wb.sourceFileType = Asc.c_oAscFileType.OTS;
 			assert.deepEqual(numbering([null, null], [0, 1]), [[0, 1], [1, 1]], "ODS template: numbered across the sheets");
 
 			assert.strictEqual(pageNumberText(2, 5), "7", "page number field: index 2 of a run that starts at 5");
+
+			// drawForPrint hands the index and the run's first number to the header/footer (blank page path, no drawing)
+			let calls = [];
+			let hadStringRender = wsView.hasOwnProperty("stringRender");
+			let stringRender = wsView.stringRender;
+			wsView.drawHeaderFooter = function (drawingCtx, printPagesData, indexPrintPage, countPrintPages, opt_firstPageNumber) {
+				calls.push([indexPrintPage, opt_firstPageNumber]);
+			};
+			wsView.getZoom = function () {
+				return 1;
+			};
+			if (!wsView.stringRender) {
+				wsView.stringRender = {};
+			}
+			let sheets = [null, 5];
+			wb.getWorksheet = function (index) {
+				return index < sheets.length ? {PagePrintOptions: {pageSetup: {useFirstPageNumber: sheets[index] !== null, firstPageNumber: sheets[index]}}} : null;
+			};
+			try {
+				let printPages = [{indexWorksheet: 0}, {indexWorksheet: 0}, {indexWorksheet: 1}, {indexWorksheet: 1}];
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages);
+				}
+				assert.deepEqual(calls, [[0, 1], [1, 1], [0, 5], [1, 5]], "ODS, drawForPrint: index since the restart and the run's first number");
+				calls = [];
+				wb.sourceFileType = Asc.c_oAscFileType.XLSX;
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages);
+				}
+				assert.deepEqual(calls, [[0, null], [1, null], [0, null], [1, null]], "XLSX, drawForPrint: per sheet index, no run number");
+				wb.sourceFileType = Asc.c_oAscFileType.ODS;
+			} finally {
+				wb.getWorksheet = getWorksheet;
+				delete wsView.drawHeaderFooter;
+				delete wsView.getZoom;
+				if (hadStringRender) {
+					wsView.stringRender = stringRender;
+				} else {
+					delete wsView.stringRender;
+				}
+			}
 			assert.strictEqual(pageNumberText(2), "3", "page number field: without a start number the sheet's own setting (1)");
 		} finally {
 			wb.getWorksheet = getWorksheet;
