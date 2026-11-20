@@ -81,4 +81,26 @@ $(function () {
 		assert.strictEqual(AscTest.GetParagraphText(p), "HeadingText", "Check text after adding ref to a locked block-level sdt");
 		assert.strictEqual(headingParagraph.GetBookmarkRefToParagraph(), "_Ref1", "Check bookmark name");
 	});
+
+	QUnit.test("Test new bookmark name check", function (assert)
+	{
+		let bookmarks = logicDocument.GetBookmarksManager();
+		let check = function (name, expected, message)
+		{
+			assert.strictEqual(bookmarks.CheckNewBookmarkName(name), expected, message);
+		};
+		check("Bookmark1", true, "Latin letters and digits");
+		check("my_mark", true, "Underscore after the first letter");
+		check("\u0417\u0430\u043a\u043b\u0430\u0434\u043a\u04301", true, "Cyrillic name");
+		check("\u4e66\u7b7e", true, "CJK name");
+		check("\u0645\u0631\u062c\u0639\u0663", true, "Arabic name with Arabic-Indic digit");
+		check("_mark", false, "Leading underscore");
+		check("1mark", false, "Leading digit");
+		check("my mark", false, "Space");
+		check("my-mark", false, "Hyphen");
+		check("", false, "Empty name");
+		check("a".repeat(40), true, "40 characters");
+		check("a".repeat(41), false, "41 characters");
+		check("\ud835\udc00bc", false, "Astral letter (letter classes are BMP only)");
+	});
 });

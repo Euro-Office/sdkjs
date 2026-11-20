@@ -157,8 +157,8 @@ function (window, undefined) {
 
 		/** @type RegExp */
 		this.rangeChars = ["=", "-", "+", "*", "/", "(", "{", "<", ">", "^", "!", "&", ":", " ", "."];
-		this.reNotFormula = new XRegExp("[^\\p{L}\\\\_\\#\\]\\[\\p{N}\\.\"\@]", "i");
-		this.reFormula = new XRegExp("^([\\p{L}\\\\_\\]\\[][\\p{L}\\\\_\\#\\]\\[\\p{N}\\.@]*)", "i");
+		this.reNotFormula = new RegExp("[^" + AscCommon.str_letters + AscCommon.str_numbers + "\\\\_#\\]\\[.\"@]", "i");
+		this.reFormula = new RegExp("^([" + AscCommon.str_letters + "\\\\_\\]\\[][" + AscCommon.str_letters + AscCommon.str_numbers + "\\\\_#\\]\\[.@]*)", "i");
 
 		this.defaults = {
 			padding: padding,

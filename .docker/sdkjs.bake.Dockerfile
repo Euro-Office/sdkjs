@@ -71,8 +71,8 @@ FROM sdkjs-sources AS sdkjs-native-build
 
     # What the engine loads: the bundles, sdkjs' native glue, presentation designs
     # (also x2t's theme directory when saving), SmartArt definitions and chart
-    # styles (the web editor loads these over the web), the third-party list for
-    # the apps' licences page and xregexp (DoctRenderer.config)
+    # styles (the web editor loads these over the web) and the third-party list for
+    # the apps' licences page
     RUN <<EOF
         set -e
         DEPLOY=${BUILD_ROOT}/sdkjs
@@ -82,14 +82,13 @@ FROM sdkjs-sources AS sdkjs-native-build
             cp $DEPLOY/$editor/sdk-all-min.js $DEPLOY/$editor/sdk-all.js $OUT/$editor/
         done
         cp -r $DEPLOY/slide/themes $OUT/slide/
-        mkdir -p $OUT/common/Native $OUT/common/libfont/engine $OUT/pdf/src/engine $OUT/common/SmartArts $OUT/common/Charts $OUT/vendor
+        mkdir -p $OUT/common/Native $OUT/common/libfont/engine $OUT/pdf/src/engine $OUT/common/SmartArts $OUT/common/Charts
         cp $DEPLOY/common/Native/*.js $OUT/common/Native/
         cp $DEPLOY/common/libfont/engine/fonts_native.js $OUT/common/libfont/engine/
         cp $DEPLOY/pdf/src/engine/drawingfile_native.js $OUT/pdf/src/engine/
         cp -r /app/common/SmartArts/SmartArtDrawing /app/common/SmartArts/SmartArtData $OUT/common/SmartArts/
         cp /app/common/Charts/ChartStyles.js $OUT/common/Charts/
         cp /app/3DPARTY.md $OUT/
-        cp /app/vendor/xregexp-all-min.js $OUT/vendor/
 EOF
 
 FROM scratch AS sdkjs-native
