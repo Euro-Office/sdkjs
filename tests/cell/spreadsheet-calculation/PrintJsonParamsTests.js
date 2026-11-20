@@ -294,8 +294,9 @@ $(function () {
 		let wb = api.wbModel;
 		let oldSourceFileType = wb.sourceFileType;
 		let getWorksheet = wb.getWorksheet;
-		// sheets: the first page number of each sheet's page style (null = continue); pages: the sheet of each printed page
-		let numbering = function (sheets, pages) {
+		// sheets: the first page number of each sheet's page style (null = continue); pages: the sheet of each printed page;
+		// opt_jobSheets: the sheets of the print job as calcPagesPrint records them (without: taken from pages)
+		let numbering = function (sheets, pages, opt_jobSheets) {
 			wb.getWorksheet = function (index) {
 				let number = sheets[index];
 				return index < sheets.length ? {PagePrintOptions: {pageSetup: {useFirstPageNumber: number !== null, firstPageNumber: number}}} : null;
@@ -304,6 +305,9 @@ $(function () {
 				let printPages = pages.map(function (sheet) {
 					return {indexWorksheet: sheet};
 				});
+				if (opt_jobSheets) {
+					printPages.jobSheets = opt_jobSheets;
+				}
 				return printPages.map(function (page, index) {
 					let res = wsView._getOdfPrintPageNumbering(printPages, index);
 					return res && [res.index, res.firstPageNumber];
@@ -347,6 +351,12 @@ $(function () {
 				"ODS, one sheet printed: no number is taken over from a sheet that is not printed");
 			assert.deepEqual(numbering([null, 5, null], [1, 2]), [[0, 5], [1, 5]],
 				"ODS, the job starts at a sheet with a first page number: the next sheet continues from it");
+			assert.deepEqual(numbering([5, null], [1, 1], [0, 1]), [[0, 5], [1, 5]],
+				"ODS, whole workbook: a first sheet without printed pages still passes on its number");
+			assert.deepEqual(numbering([5, null], [1, 1], [1]), [[0, 1], [1, 1]],
+				"ODS, one sheet printed (job sheets): no number from the sheet before it");
+			assert.deepEqual(numbering([null, 5, null], [0, 0, 2, 2], [0, 2]), [[0, 1], [1, 1], [2, 1], [3, 1]],
+				"ODS, sheets 1 and 3 printed: the numbered sheet between them is not in the job and passes nothing on");
 			wb.sourceFileType = Asc.c_oAscFileType.FODS;
 			assert.deepEqual(numbering([null, null], [0, 1]), [[0, 1], [1, 1]], "flat ODS: numbered across the sheets");
 			wb.sourceFileType = Asc.c_oAscFileType.OTS;
@@ -378,6 +388,13 @@ $(function () {
 				}
 				assert.deepEqual(calls, [[0, 1], [1, 1], [0, 5], [1, 5]], "ODS, drawForPrint: index since the restart and the run's first number");
 				calls = [];
+				sheets = [null, null];
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages);
+				}
+				assert.deepEqual(calls, [[0, 1], [1, 1], [2, 1], [3, 1]], "ODS, drawForPrint: the index runs on across the sheets");
+				sheets = [null, 5];
+				calls = [];
 				wb.sourceFileType = Asc.c_oAscFileType.XLSX;
 				for (let i = 0; i < printPages.length; i++) {
 					wsView.drawForPrint({}, null, i, printPages);
@@ -398,6 +415,51 @@ $(function () {
 		} finally {
 			wb.getWorksheet = getWorksheet;
 			wb.sourceFileType = oldSourceFileType;
+		}
+	});
+
+	QUnit.test("calcPagesPrint records the sheets of the print job", function (assert) {
+		let wbView = api.wb;
+		let calcPagesPrintSheet = wbView._calcPagesPrintSheet;
+		let changeZoom = wbView.changeZoom;
+		let getWorksheetCount = wbView.model.getWorksheetCount;
+		let getActive = wbView.model.getActive;
+		// no layout: sheet 1 has no pages, the others one each
+		wbView._calcPagesPrintSheet = function (index, printPagesData) {
+			if (index !== 1) {
+				printPagesData.arrPages.push({indexWorksheet: index});
+			}
+		};
+		wbView.changeZoom = function () {
+		};
+		wbView.model.getWorksheetCount = function () {
+			return 3;
+		};
+		wbView.model.getActive = function () {
+			return 2;
+		};
+		let jobSheets = function (printType, opt_activeSheets) {
+			let adjustPrint = new Asc.asc_CAdjustPrint();
+			adjustPrint.asc_setPrintType(printType);
+			if (opt_activeSheets) {
+				adjustPrint.asc_setActiveSheetsArray(opt_activeSheets);
+			}
+			let arrPages = wbView.calcPagesPrint(adjustPrint).arrPages;
+			return [arrPages.jobSheets, arrPages.map(function (page) {
+				return page.indexWorksheet;
+			})];
+		};
+		try {
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.EntireWorkbook), [[0, 1, 2], [0, 2]],
+				"whole workbook: every sheet, also the one without pages");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets, [0, 1]), [[0, 1], [0]], "selected sheets");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets), [[2], [2]], "active sheet");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.Selection), [[2], [2]], "selection of the active sheet");
+		} finally {
+			wbView._calcPagesPrintSheet = calcPagesPrintSheet;
+			wbView.changeZoom = changeZoom;
+			wbView.model.getWorksheetCount = getWorksheetCount;
+			wbView.model.getActive = getActive;
 		}
 	});
 });

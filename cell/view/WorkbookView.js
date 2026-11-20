@@ -4185,6 +4185,7 @@
     var printType = adjustPrint.asc_getPrintType();
 
 	var i;
+    let jobSheets = [];
     let activeSheetsArray = printType !== Asc.c_oAscPrintType.Selection ? adjustPrint.asc_getActiveSheetsArray() : null;
     if (printType === Asc.c_oAscPrintType.ActiveSheets || activeSheetsArray) {
 		if (activeSheetsArray) {
@@ -4193,9 +4194,11 @@
 					break;
 				}
 				this._calcPagesPrintSheet(activeSheetsArray[i], printPagesData, false, adjustPrint, skipEmptyPages);
+				jobSheets.push(activeSheetsArray[i]);
 			}
 		} else {
 			this._calcPagesPrintSheet(nActive, printPagesData, false, adjustPrint, skipEmptyPages);
+			jobSheets.push(nActive);
 		}
     } else if (printType === Asc.c_oAscPrintType.EntireWorkbook) {
       // Колличество листов
@@ -4205,12 +4208,16 @@
       		break;
 		}
       	this._calcPagesPrintSheet(i, printPagesData, false, adjustPrint, skipEmptyPages);
+      	jobSheets.push(i);
       }
     } else if (printType === Asc.c_oAscPrintType.Selection) {
 		let _activeSheetsArray = adjustPrint && adjustPrint.asc_getActiveSheetsArray && adjustPrint.asc_getActiveSheetsArray();
 		let activeSheet = _activeSheetsArray && _activeSheetsArray[0] != null ? _activeSheetsArray[0] : null;
 		this._calcPagesPrintSheet(activeSheet != null ? activeSheet : nActive, printPagesData, true, adjustPrint, skipEmptyPages);
+		jobSheets.push(activeSheet != null ? activeSheet : nActive);
     }
+    // the sheets of the job, also those without printed pages (ODF page numbers, see _getOdfPrintPageNumbering)
+    printPagesData.arrPages.jobSheets = jobSheets;
 
     // Nothing but empty pages: print the first of them, as before
     if (skipEmptyPages && 0 === printPagesData.arrPages.length && skipEmptyPages.firstEmptyPage) {
