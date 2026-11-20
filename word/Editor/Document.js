@@ -6764,6 +6764,141 @@ CDocument.prototype.SetParagraphTabs = function(Tabs)
 	this.UpdateInterface();
 	this.Api.Update_ParaTab(AscCommonWord.Default_Tab_Stop, Tabs);
 };
+/**
+ * Moves the indents of all selected paragraphs by the same distance, so their differences stay (e.g. the levels of a
+ * multilevel list), instead of giving them all the same indent. Used by the ruler when several paragraphs are selected,
+ * like Word does. The paragraphs are kept inside the page edges and the text area, with the same limits the ruler uses
+ * for the current paragraph. The limit applies to the group: the paragraph that reaches it first stops all of them, so
+ * the differences stay at the limit too. Paragraphs whose direction (RTL/LTR) differs from the ruler's are left as they are.
+ * Does not recalculate; the caller (inside an action) does that.
+ * @param {number} dLeft  change of the left indent (mm)
+ * @param {number} dRight change of the right indent (mm)
+ * @param {number} dFirst change of the position of the first line (mm)
+ * @param {boolean} [isRtl] direction the changes are given in (the ruler's); by default that of the current paragraph
+ * @returns {boolean} false when fewer than two paragraphs are selected (then the usual way applies)
+ */
+CDocument.prototype.ShiftParagraphIndents = function(dLeft, dRight, dFirst, isRtl)
+{
+	let paragraphs = this.GetSelectedParagraphs();
+	if (!paragraphs || paragraphs.length < 2)
+		return false;
+
+	if (undefined === isRtl)
+	{
+		let current = this.GetCurrentParagraph(false, false);
+		isRtl = !!(current && current.isRtlDirection());
+	}
+
+	// Moves value by delta, but not beyond [min, max]. Returns null for a paragraph that is already outside in the
+	// direction of the move: it is not pulled back and does not stop the others.
+	function limitShift(delta, value, min, max)
+	{
+		if (delta > 0)
+			return value > max + 0.001 ? null : Math.max(0, Math.min(delta, max - value));
+		else if (delta < 0)
+			return value < min - 0.001 ? null : Math.min(0, Math.max(delta, min - value));
+		return 0;
+	}
+
+	// The largest shift (up to delta) that every paragraph allows, so the first one to reach its limit stops the group
+	function groupShift(delta, getLimit)
+	{
+		let shift = delta;
+		items.forEach(function(item)
+		{
+			let limit = getLimit(item);
+			if (limit)
+			{
+				let allowed = limitShift(shift, limit.value, limit.min, limit.max);
+				if (null !== allowed)
+					shift = allowed;
+			}
+		});
+		return shift;
+	}
+
+	// The shift for one paragraph: the group's, or none if it is already outside
+	function itemShift(shift, limit)
+	{
+		if (!limit)
+			return shift;
+		let allowed = limitShift(shift, limit.value, limit.min, limit.max);
+		return null === allowed ? 0 : allowed;
+	}
+
+	let logicDocument = this;
+	let items = [];
+	paragraphs.forEach(function(paragraph)
+	{
+		let paraRtl = paragraph.isRtlDirection();
+		if (paraRtl !== isRtl)
+			return;
+
+		let ind  = paragraph.Get_CompiledPr2(false).ParaPr.Ind;
+		let item = {
+			paragraph : paragraph,
+			left      : ind.Left,
+			right     : ind.Right,
+			first     : ind.Left + ind.FirstLine,
+			textWidth : paragraph.XLimit - paragraph.X
+		};
+
+		if (item.textWidth > 0)
+		{
+			// Space between the text area and the page edge, on the start and the end side of the paragraph
+			let pageWidth = logicDocument.Get_PageLimits(paragraph.GetAbsolutePage(0)).XLimit;
+			item.startGap = paraRtl ? pageWidth - paragraph.XLimit : paragraph.X;
+			item.endGap   = paraRtl ? paragraph.X : pageWidth - paragraph.XLimit;
+		}
+		items.push(item);
+	});
+
+	// The right indent: not past the page edge, and at least 20 mm of text left (as the ruler does)
+	function rightLimit(item)
+	{
+		if (!(item.textWidth > 0))
+			return null;
+		return {value : item.right, min : -item.endGap, max : item.textWidth - 20 - Math.max(0, item.left, item.first)};
+	}
+	let sRight = groupShift(dRight, rightLimit);
+
+	// Left and first line: not past the page edge, and at least 20 mm before the right indent
+	let moveTogether = Math.abs(dLeft - dFirst) < 0.001;
+	function startLimit(item, value)
+	{
+		if (!(item.textWidth > 0))
+			return null;
+		let right = item.right + itemShift(sRight, rightLimit(item));
+		return {value : value, min : -item.startGap, max : item.textWidth - 20 - Math.max(0, right)};
+	}
+	function leftLimit(item)
+	{
+		// When left and first line move together the distance between them stays, so the outer one of the two limits
+		if (moveTogether)
+			return startLimit(item, dLeft > 0 ? Math.max(item.left, item.first) : Math.min(item.left, item.first));
+		return startLimit(item, item.left);
+	}
+	function firstLimit(item)
+	{
+		return startLimit(item, item.first);
+	}
+	let sLeft  = groupShift(dLeft, leftLimit);
+	let sFirst = moveTogether ? sLeft : groupShift(dFirst, firstLimit);
+
+	items.forEach(function(item)
+	{
+		let right = item.right + itemShift(sRight, rightLimit(item));
+		let left  = item.left + itemShift(sLeft, leftLimit(item));
+		let first = item.first + (moveTogether ? left - item.left : itemShift(sFirst, firstLimit(item)));
+		item.paragraph.Set_Ind({
+			Left      : left,
+			Right     : right,
+			FirstLine : first - left
+		}, false);
+	});
+
+	return true;
+};
 CDocument.prototype.SetParagraphIndent = function(Ind)
 {
 	this.Controller.SetParagraphIndent(Ind);
