@@ -4582,8 +4582,9 @@ var CPresentation = CPresentation || function(){};
             if (!oData || false === AscCommon.UserInfoParser.canViewComment(oData.asc_getUserName()))
                 return;
 
-            let aRect = oAnnot.GetRect();
-            aComments.push({annot: oAnnot, page: oAnnot.GetPage(), y: aRect[1], x: aRect[0]});
+            let oPos = getCommentPosition(oAnnot);
+            oPos.annot = oAnnot;
+            aComments.push(oPos);
         });
 
         aComments.sort(compareCommentPositions);
@@ -4591,6 +4592,10 @@ var CPresentation = CPresentation || function(){};
             return oItem.annot;
         });
     };
+    function getCommentPosition(oAnnot) {
+        let aRect = oAnnot.GetRect();
+        return {page: oAnnot.GetPage(), y: aRect[1], x: aRect[0]};
+    }
     function compareCommentPositions(oItem1, oItem2) {
         return (oItem1.page - oItem2.page) || (oItem1.y - oItem2.y) || (oItem1.x - oItem2.x);
     }
@@ -4615,32 +4620,19 @@ var CPresentation = CPresentation || function(){};
             // a selected comment works like the cursor in the text editor: go on from it
             nFound = (nSelected + (isNext ? 1 : nCount - 1)) % nCount;
         }
-        else if (oSelected && oSelected.IsUseInDocument()) {
-            // another annotation is selected: the comments after (or before) its place
-            let aRect = oSelected.GetRect();
-            let oPos = {page: oSelected.GetPage(), y: aRect[1], x: aRect[0]};
+        else {
+            // another annotation is selected: the comments after (or before) its place;
+            // nothing selected: the first comment from the top of the current page on, or the last one before it
+            let oFrom = oSelected && oSelected.IsUseInDocument()
+                ? getCommentPosition(oSelected)
+                : {page: this.GetCurPage(), y: -Infinity, x: -Infinity};
             for (let nIndex = 0; nIndex < nCount; ++nIndex) {
-                let oAnnot = aComments[nIndex];
-                let aAnnotRect = oAnnot.GetRect();
-                let nCompare = compareCommentPositions({page: oAnnot.GetPage(), y: aAnnotRect[1], x: aAnnotRect[0]}, oPos);
+                let nCompare = compareCommentPositions(getCommentPosition(aComments[nIndex]), oFrom);
                 if (isNext && nCompare > 0) {
                     nFound = nIndex;
                     break;
                 }
                 if (!isNext && nCompare < 0)
-                    nFound = nIndex;
-            }
-        }
-        else {
-            // nothing selected: the first comment from the current page on, or the last one before it
-            let nCurPage = this.GetCurPage();
-            for (let nIndex = 0; nIndex < nCount; ++nIndex) {
-                let nPage = aComments[nIndex].GetPage();
-                if (isNext && nPage >= nCurPage) {
-                    nFound = nIndex;
-                    break;
-                }
-                if (!isNext && nPage < nCurPage)
                     nFound = nIndex;
             }
         }

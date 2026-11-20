@@ -60,7 +60,6 @@ $(function ()
 			let pageAnnots = pdfDoc.GetPageInfo(annot.GetPage()).annots;
 			pageAnnots.splice(pageAnnots.indexOf(annot), 1);
 		});
-		pdfDoc.annots.length = 0;
 		pdfDoc.mouseDownAnnot = null;
 		pdfDoc.annotsHidden = false;
 		viewer.currentPage = 0;
