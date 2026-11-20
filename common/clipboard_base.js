@@ -955,6 +955,24 @@
 			g_clipboardBase.Paste_End();
 		},
 
+		// For a paste that runs after the paste event has returned and CommonIframe_PasteEnd has hidden the iframe:
+		// lay it out again as during the event, so its computed styles are available
+		CommonIframe_PasteShow : function()
+		{
+			if (this.CommonIframe)
+			{
+				this.CommonIframe.style.width = '10000px';
+				this.CommonIframe.style.display = "block";
+			}
+		},
+
+		CommonIframe_PasteHide : function()
+		{
+			if (this.CommonIframe)
+				this.CommonIframe.style.width = '100px';
+			this.CommonIframe_PasteEnd();
+		},
+
 		CommonIframe_PasteEnd : function()
 		{
 			if (this.CommonIframe && this.CommonIframe.style.display != "none")

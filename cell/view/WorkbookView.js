@@ -306,6 +306,8 @@
 
     this.autoCorrectStore = null;//объект для хранения параметров иконки авторазвертывания таблиц
 	this.cutIdSheet = null;
+	// Cells in the text copy of the pending cut, as getPasteCellCount counts them
+	this.cutCellCount = 0;
 
     this.NeedUpdateTargetForCollaboration = true;
     this.LastUpdateTargetTime = 0;
@@ -4971,6 +4973,7 @@
 				ws.setCutRange(null);
 			}
 			this.cutIdSheet = null;
+			this.cutCellCount = 0;
 
 			if(bDrawSelection && activeWs && ws && activeWs.model.Id === ws.model.Id) {
 				activeWs.updateSelection();
