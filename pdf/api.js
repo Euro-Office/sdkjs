@@ -802,6 +802,349 @@
 			oDoc.RemovePages(aPages);
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
+	/**
+	 * Asks for one or more PDF files on the user's computer and reads them. Uses the file dialog of the desktop
+	 * app, otherwise a file input of the browser. The callback is not called if the user cancels.
+	 * @param {boolean} isMulti
+	 * @param {function({name: string, path: string, bytes: Uint8Array}[])} fCallback
+	 */
+	PDFEditorApi.prototype.asc_PickPdfFiles = function(isMulti, fCallback) {
+		let oDesktop = window["AscDesktopEditor"];
+		if (oDesktop && oDesktop["OpenFilenameDialog"] && oDesktop["loadLocalFile"]) {
+			oDesktop["OpenFilenameDialog"]("PDF (*.pdf)", !!isMulti, function(files) {
+				files = (Array.isArray(files) ? files : [files]).filter(Boolean);
+				let aResult = [];
+				let nLeft = files.length;
+				if (!nLeft)
+					return;
+				files.forEach(function(sPath, nIndex) {
+					oDesktop["loadLocalFile"](sPath, function(data) {
+						aResult[nIndex] = data ? {name: sPath.split(/[\\/]/).pop(), path: sPath, bytes: new Uint8Array(data)} : null;
+						if (0 === --nLeft)
+							fCallback(aResult.filter(Boolean));
+					});
+				});
+			});
+			return;
+		}
+
+		if ("undefined" === typeof FileReader)
+			return;
+
+		let oInput = document.createElement("input");
+		oInput.type = "file";
+		oInput.multiple = !!isMulti;
+		oInput.accept = ".pdf,application/pdf";
+		oInput.onchange = function() {
+			let aFiles = Array.prototype.slice.call(oInput.files || []);
+			let aResult = [];
+			let nLeft = aFiles.length;
+			let fDone = function() {
+				if (0 === --nLeft)
+					fCallback(aResult.filter(Boolean));
+			};
+			aFiles.forEach(function(oFile, nIndex) {
+				let oReader = new FileReader();
+				oReader.onload = function() {
+					aResult[nIndex] = {name: oFile.name, path: oFile.name, bytes: new Uint8Array(oReader.result)};
+					fDone();
+				};
+				oReader.onerror = fDone;
+				oReader.readAsArrayBuffer(oFile);
+			});
+		};
+		oInput.click();
+	};
+	// The PDF engine (drawingfile.wasm) has one font storage for all its files: opening a file makes a new one and
+	// closing any file frees it. So after the other file was closed, the open document crashed on its next drawing
+	// ("RuntimeError: remainder by zero"). A tiny empty PDF is opened after each close to give the engine a new font
+	// storage; it stays open until the next one replaces it.
+	const PDF_EMPTY_FILE = "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+		"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 10 10]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n";
+	let g_oPdfEngineKeeper = null;
+	function RenewPdfEngineFontStorage() {
+		let oKeeper = g_oPdfEngineKeeper;
+		g_oPdfEngineKeeper = null;
+		oKeeper && oKeeper["close"]();
+		let CDrawingFile = window["AscViewer"] && window["AscViewer"]["CDrawingFile"];
+		if (!CDrawingFile)
+			return;
+		let aBytes = new Uint8Array(PDF_EMPTY_FILE.length);
+		for (let nIndex = 0; nIndex < aBytes.length; ++nIndex)
+			aBytes[nIndex] = PDF_EMPTY_FILE.charCodeAt(nIndex);
+		g_oPdfEngineKeeper = new CDrawingFile();
+		g_oPdfEngineKeeper["loadFromData"](aBytes);
+	}
+	/**
+	 * Reads the text lines of all pages of a file. The text of a page is only there when its fonts are loaded, which
+	 * the browser does in the background: pages without text yet are read again until their fonts are there (at most
+	 * for nTimeout ms).
+	 * @param {{pages: Array, getPageLines: function(number): ?string[]}} oFile
+	 * @param {?function(): void} fBefore called before each reading round (and fAfter after it)
+	 * @param {?function(): void} fAfter
+	 * @param {function(?{page: number, text: string}[])} fCallback null if the engine fails
+	 * @param {number} [nTimeout=15000]
+	 */
+	PDFEditorApi.prototype.readPdfLines = function(oFile, fBefore, fAfter, fCallback, nTimeout) {
+		let aPages = new Array(oFile.pages.length);
+		let nEnd = Date.now() + (undefined !== nTimeout ? nTimeout : 15000);
+		let fStep = function() {
+			let isWaiting = false;
+			try {
+				fBefore && fBefore();
+				for (let nPage = 0; nPage < aPages.length; ++nPage) {
+					if (!aPages[nPage]) {
+						aPages[nPage] = oFile.getPageLines(nPage);
+						isWaiting = isWaiting || !aPages[nPage];
+					}
+				}
+			}
+			catch (e) {
+				fAfter && fAfter();
+				fCallback(null);
+				return;
+			}
+			fAfter && fAfter();
+			if (isWaiting && Date.now() < nEnd) {
+				setTimeout(fStep, 50);
+				return;
+			}
+			let aLines = [];
+			aPages.forEach(function(aPageLines, nPage) {
+				(aPageLines || []).forEach(function(sLine) {
+					aLines.push({page: nPage, text: sLine});
+				});
+			});
+			fCallback(aLines);
+		};
+		fStep();
+	};
+	/**
+	 * The text lines of a PDF given as bytes (the file is opened in the background and closed again)
+	 * @param {Uint8Array} aBytes
+	 * @param {function(?{page: number, text: string}[])} fCallback null if the file can't be read
+	 */
+	PDFEditorApi.prototype.getPdfLinesFromBytes = function(aBytes, fCallback) {
+		// The engine keeps the last opened file in a global (it gets the font streams) and clears it on close:
+		// give it back to the open document after each step.
+		let oOpenFile = window["drawingFile"];
+		let oFile = null;
+		let fFinish = function(aLines) {
+			try {
+				oFile && oFile.close();
+				RenewPdfEngineFontStorage();
+			}
+			catch (e) {
+				aLines = null;
+			}
+			window["drawingFile"] = oOpenFile;
+			fCallback(aLines);
+		};
+		try {
+			oFile = window["AscViewer"].createFile(aBytes);
+		}
+		catch (e) {
+			oFile = null;
+		}
+		if (!oFile || !oFile.pages || !oFile.pages.length || !oFile.nativeFile || (oFile.isNeedPassword && oFile.isNeedPassword())) {
+			fFinish(null);
+			return;
+		}
+		let oNative = oFile.nativeFile;
+		window["drawingFile"] = oOpenFile;
+		this.readPdfLines(oFile, function() {
+			window["drawingFile"] = oNative;
+		}, function() {
+			window["drawingFile"] = oOpenFile;
+		}, fFinish);
+	};
+	/**
+	 * The text lines of the open PDF
+	 * @param {function(?{page: number, text: string}[])} fCallback
+	 */
+	PDFEditorApi.prototype.getPdfLines = function(fCallback) {
+		this.readPdfLines(this.getDocumentRenderer().file, null, null, fCallback);
+	};
+	/**
+	 * The text of PDF lines as sentences, with the page where each starts. Spaces are ignored for the comparison
+	 * (key), as the text layer of some PDFs has extra spaces inside words.
+	 * @param {{page: number, text: string}[]} aLines
+	 * @returns {{page: number, text: string, key: string}[]}
+	 */
+	PDFEditorApi.prototype.getPdfSentences = function(aLines) {
+		let aResult = [];
+		let oCurrent = null;
+		aLines.forEach(function(oLine) {
+			// a sentence ends at . ! ? : ; followed by a space or the end of the line
+			let aParts = oLine.text.split(/([.!?:;])(?:\s|$)/);
+			for (let nIndex = 0; nIndex < aParts.length; nIndex += 2) {
+				let sPart = aParts[nIndex] + (aParts[nIndex + 1] || "");
+				if (!oCurrent && !sPart.trim())
+					continue;
+				if (!oCurrent)
+					oCurrent = {page: oLine.page, text: ""};
+				oCurrent.text += (oCurrent.text ? " " : "") + sPart;
+				if (aParts[nIndex + 1] !== undefined) {
+					aResult.push(oCurrent);
+					oCurrent = null;
+				}
+			}
+		});
+		oCurrent && aResult.push(oCurrent);
+		return aResult.map(function(oSentence) {
+			return {page: oSentence.page, text: oSentence.text.replace(/\s+/g, " ").trim(), key: oSentence.text.replace(/\s+/g, "")};
+		}).filter(function(oSentence) { return !!oSentence.key; });
+	};
+	/**
+	 * Compares two lists of sentences with Myers' diff (shortest edit script)
+	 * @param {{page: number, text: string, key: string}[]} aA
+	 * @param {{page: number, text: string, key: string}[]} aB
+	 * @param {number} [nMaxDiff=3000] the search stops after this many differences
+	 * @returns {{removed: {page: number, text: string}[], added: {page: number, text: string}[], tooMany: boolean}}
+	 * removed = only in aA, added = only in aB
+	 */
+	PDFEditorApi.prototype.comparePdfSentences = function(aA, aB, nMaxDiff) {
+		let nN = aA.length, nM = aB.length, nMax = nN + nM;
+		let nLimit = Math.min(nMax, undefined !== nMaxDiff ? nMaxDiff : 3000);
+		let aV = new Int32Array(2 * nMax + 2);
+		// aTrace[nD] holds aV for k = -nD..nD before step nD (enough to walk back)
+		let aTrace = [];
+		let nFoundD = -1;
+		for (let nD = 0; nD <= nLimit && nFoundD < 0; ++nD) {
+			aTrace.push(aV.slice(nMax - nD, nMax + nD + 1));
+			for (let nK = -nD; nK <= nD; nK += 2) {
+				let nX;
+				if (nK === -nD || (nK !== nD && aV[nK - 1 + nMax] < aV[nK + 1 + nMax]))
+					nX = aV[nK + 1 + nMax];
+				else
+					nX = aV[nK - 1 + nMax] + 1;
+				let nY = nX - nK;
+				while (nX < nN && nY < nM && aA[nX].key === aB[nY].key) {
+					++nX;
+					++nY;
+				}
+				aV[nK + nMax] = nX;
+				if (nX >= nN && nY >= nM) {
+					nFoundD = nD;
+					break;
+				}
+			}
+		}
+		if (nFoundD < 0)
+			return {removed: [], added: [], tooMany: true};
+
+		// walk back through the trace
+		let aRemoved = [], aAdded = [];
+		let nX = nN, nY = nM;
+		for (let nD = nFoundD; nD > 0; --nD) {
+			let aPrev = aTrace[nD];
+			let nK = nX - nY;
+			let nPrevK = (nK === -nD || (nK !== nD && aPrev[nK - 1 + nD] < aPrev[nK + 1 + nD])) ? nK + 1 : nK - 1;
+			let nPrevX = aPrev[nPrevK + nD];
+			let nPrevY = nPrevX - nPrevK;
+			while (nX > nPrevX && nY > nPrevY) {
+				--nX;
+				--nY;
+			}
+			if (nX === nPrevX)
+				aAdded.unshift(aB[--nY]);
+			else
+				aRemoved.unshift(aA[--nX]);
+			nX = nPrevX;
+			nY = nPrevY;
+		}
+		let fOut = function(oSentence) { return {page: oSentence.page, text: oSentence.text}; };
+		return {removed: aRemoved.map(fOut), added: aAdded.map(fOut), tooMany: false};
+	};
+	/**
+	 * Runs one text reading of other PDFs at a time (the engine must not have two of them open in turn)
+	 * @param {function(function(): void)} fWork gets the function to call when it is done
+	 * @returns {boolean} false if another one is still running
+	 */
+	PDFEditorApi.prototype.runPdfTextReading = function(fWork) {
+		if (this.isPdfTextReading)
+			return false;
+		this.isPdfTextReading = true;
+		let t = this;
+		fWork(function() {
+			t.isPdfTextReading = false;
+		});
+		return true;
+	};
+	/**
+	 * Compares the text of the open PDF with another PDF sentence by sentence, so a different line wrapping does
+	 * not matter. Only the text layer of the files is compared (not edits made in the editor and not yet saved).
+	 * removed = only in the open PDF, added = only in the other PDF; openHasText / otherHasText are false for a file
+	 * without any text (a scanned PDF).
+	 * @param {Uint8Array} aOtherBytes
+	 * @param {function(?{removed: {page: number, text: string}[], added: {page: number, text: string}[], tooMany: boolean, openHasText: boolean, otherHasText: boolean})} fCallback
+	 * null if a file can't be read
+	 * @returns {boolean} false if a comparison or search is still running (the callback is not called then)
+	 */
+	PDFEditorApi.prototype.asc_ComparePdfText = function(aOtherBytes, fCallback) {
+		let t = this;
+		return this.runPdfTextReading(function(fDone) {
+			t.getPdfLinesFromBytes(aOtherBytes, function(aOtherLines) {
+				if (!aOtherLines) {
+					fDone();
+					fCallback(null);
+					return;
+				}
+				t.getPdfLines(function(aOpenLines) {
+					fDone();
+					if (!aOpenLines) {
+						fCallback(null);
+						return;
+					}
+					let aOpen = t.getPdfSentences(aOpenLines), aOther = t.getPdfSentences(aOtherLines);
+					let oResult = t.comparePdfSentences(aOpen, aOther);
+					oResult.openHasText = aOpen.length > 0;
+					oResult.otherHasText = aOther.length > 0;
+					fCallback(oResult);
+				});
+			});
+		});
+	};
+	/**
+	 * Searches a text in PDFs given as bytes, line by line; spaces and case are ignored
+	 * @param {string} sText
+	 * @param {{name: string, path: string, bytes: Uint8Array}[]} aFiles
+	 * @param {function({name: string, path: string, page: number, text: string}[])} fCallback a file that can't be
+	 * read has one entry with page -1, a file without any text (a scanned PDF) one with page -2
+	 * @returns {boolean} false if a comparison or search is still running (the callback is not called then)
+	 */
+	PDFEditorApi.prototype.asc_SearchInPdfFiles = function(sText, aFiles, fCallback) {
+		let t = this;
+		let sNeedle = sText.replace(/\s+/g, "").toLowerCase();
+		if (!sNeedle) {
+			fCallback([]);
+			return true;
+		}
+		return this.runPdfTextReading(function(fDone) {
+			let aResult = [];
+			let fNext = function(nFile) {
+				if (nFile >= aFiles.length) {
+					fDone();
+					fCallback(aResult);
+					return;
+				}
+				let oFile = aFiles[nFile];
+				t.getPdfLinesFromBytes(oFile.bytes, function(aLines) {
+					let isText = false;
+					(aLines || []).forEach(function(oLine) {
+						let sLine = oLine.text.replace(/\s+/g, "").toLowerCase();
+						isText = isText || !!sLine;
+						if (sLine.indexOf(sNeedle) !== -1)
+							aResult.push({name: oFile.name, path: oFile.path, page: oLine.page, text: oLine.text});
+					});
+					if (!aLines || !isText)
+						aResult.push({name: oFile.name, path: oFile.path, page: aLines ? -2 : -1, text: ""});
+					fNext(nFile + 1);
+				});
+			};
+			fNext(0);
+		});
+	};
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();
 		let oDoc = this.getPDFDoc();
@@ -5306,6 +5649,9 @@
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;
 	PDFEditorApi.prototype['asc_RemovePage']			   = PDFEditorApi.prototype.asc_RemovePage;
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
+	PDFEditorApi.prototype['asc_PickPdfFiles']             = PDFEditorApi.prototype.asc_PickPdfFiles;
+	PDFEditorApi.prototype['asc_ComparePdfText']           = PDFEditorApi.prototype.asc_ComparePdfText;
+	PDFEditorApi.prototype['asc_SearchInPdfFiles']         = PDFEditorApi.prototype.asc_SearchInPdfFiles;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
