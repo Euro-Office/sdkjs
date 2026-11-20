@@ -166,6 +166,24 @@ $(function ()
 		assert.true(Math.abs(after.Left - before.Left) < 0.1 && Math.abs(after.Right - before.Right) < 0.1, "same bounds as before");
 	});
 
+	QUnit.test("A table that is already fitted is recognised and left as it is", function (assert)
+	{
+		let table = setup(-15);
+		assert.false(logicDocument.IsTableFittedToMargins(), "not fitted before");
+		fit(assert);
+		assert.true(logicDocument.IsTableFittedToMargins(), "fitted afterwards");
+		assert.true(logicDocument.CanFitTableToMargins(), "the command itself is still possible");
+
+		let pointsBefore = AscCommon.History.Points.length;
+		assert.false(logicDocument.FitTableToMargins(), "a second fit changes nothing");
+		assert.strictEqual(AscCommon.History.Points.length, pointsBefore, "and adds no undo step");
+		checkFits(assert, table, "still fitted");
+
+		table.Set_TableInd(5);
+		AscTest.Recalculate();
+		assert.false(logicDocument.IsTableFittedToMargins(), "an indent again: not fitted");
+	});
+
 	QUnit.test("Outside a table nothing happens", function (assert)
 	{
 		setup();
@@ -173,6 +191,7 @@ $(function ()
 		logicDocument.PushToContent(paragraph);
 		AscTest.MoveCursorToParagraph(paragraph);
 		assert.false(logicDocument.CanFitTableToMargins(), "cannot fit");
+		assert.false(logicDocument.IsTableFittedToMargins(), "not a fitted table");
 		assert.false(logicDocument.FitTableToMargins(), "nothing done");
 	});
 });

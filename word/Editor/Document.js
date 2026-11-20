@@ -12053,13 +12053,24 @@ CDocument.prototype.CanFitTableToMargins = function()
 	return this.CanSplitTable() && this.GetCurrentTablesStack()[0].IsInline();
 };
 /**
+ * Is the table at the cursor already fitted between the margins (Fit table to margins would change nothing)?
+ * @returns {boolean}
+ */
+CDocument.prototype.IsTableFittedToMargins = function()
+{
+	return this.CanFitTableToMargins() && this.GetCurrentTablesStack()[0].IsFittedToMargins();
+};
+/**
  * Fits the table at the cursor between the margins, like Word's AutoFit Window: preferred width 100%, indent 0,
  * autofit layout. The columns keep their proportions. For tables from Word files that stick out of the page.
+ * A table that is already fitted is left as it is, without an undo step.
  * @returns {boolean}
  */
 CDocument.prototype.FitTableToMargins = function()
 {
-	if (!this.CanFitTableToMargins() || this.IsSelectionLocked(AscCommon.changestype_Table_Properties, null, true, false))
+	if (!this.CanFitTableToMargins()
+		|| this.IsTableFittedToMargins()
+		|| this.IsSelectionLocked(AscCommon.changestype_Table_Properties, null, true, false))
 		return false;
 
 	let table = this.GetCurrentTablesStack()[0];

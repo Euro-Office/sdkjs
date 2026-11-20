@@ -5497,6 +5497,11 @@ background-repeat: no-repeat;\
 		let logicDocument = this.private_GetLogicDocument();
 		return !!(logicDocument && logicDocument.CanFitTableToMargins());
 	};
+	asc_docs_api.prototype.asc_IsTableFittedToMargins    = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return !!(logicDocument && logicDocument.IsTableFittedToMargins());
+	};
 	asc_docs_api.prototype.asc_FitTableToMargins         = function()
 	{
 		let logicDocument = this.private_GetLogicDocument();
@@ -15300,6 +15305,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_CanSplitTable']                         = asc_docs_api.prototype.asc_CanSplitTable;
 	asc_docs_api.prototype['asc_SplitTable']                            = asc_docs_api.prototype.asc_SplitTable;
 	asc_docs_api.prototype['asc_CanFitTableToMargins']                  = asc_docs_api.prototype.asc_CanFitTableToMargins;
+	asc_docs_api.prototype['asc_IsTableFittedToMargins']                = asc_docs_api.prototype.asc_IsTableFittedToMargins;
 	asc_docs_api.prototype['asc_FitTableToMargins']                     = asc_docs_api.prototype.asc_FitTableToMargins;
 	asc_docs_api.prototype['Update_ParaInd']                            = asc_docs_api.prototype.Update_ParaInd;
 	asc_docs_api.prototype['Internal_Update_Ind_FirstLine']             = asc_docs_api.prototype.Internal_Update_Ind_FirstLine;

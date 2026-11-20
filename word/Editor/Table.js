@@ -18460,6 +18460,19 @@ CTable.prototype.FitToMargins = function()
 	return true;
 };
 /**
+ * Is the table already fitted between the margins, so that FitToMargins would change nothing?
+ * @returns {boolean}
+ */
+CTable.prototype.IsFittedToMargins = function()
+{
+	let tableW = this.GetTableW();
+	return (tableW
+		&& tblwidth_Pct === tableW.Type
+		&& Math.abs(tableW.W - 100) < 0.001
+		&& Math.abs(this.Get_TableInd()) < 0.001
+		&& tbllayout_AutoFit === this.GetTableLayout());
+};
+/**
  * Изменяем размер тширину и высоту таблицы в документе (создается точка в истории и запускается пересчет)
  * @param nWidth
  * @param nHeight
