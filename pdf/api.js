@@ -802,6 +802,56 @@
 			oDoc.RemovePages(aPages);
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
+	/**
+	 * Puts a picture (e.g. a rendered watermark text, as a data URL) centred on every page
+	 * @param {string} sUrl
+	 */
+	PDFEditorApi.prototype.asc_AddWatermarkImage = function(sUrl) {
+		this.AddImageUrl([sUrl], undefined, undefined, {isWatermark: true});
+	};
+	/**
+	 * Removes the watermark pictures added by asc_AddWatermarkImage from every page (one undo step)
+	 */
+	PDFEditorApi.prototype.asc_RemoveWatermark = function() {
+		let oDoc = this.getPDFDoc();
+		if (!oDoc || !this.asc_HasWatermark())
+			return;
+
+		oDoc.BlurActiveObject();
+		oDoc.DoAction(function() {
+			removeWatermarkPictures(oDoc);
+		}, AscDFH.historydescription_Pdf_ContextMenuRemove);
+	};
+	/**
+	 * Whether a page has a watermark picture added by asc_AddWatermarkImage
+	 * @returns {boolean}
+	 */
+	PDFEditorApi.prototype.asc_HasWatermark = function() {
+		let oDoc = this.getPDFDoc();
+		if (!oDoc)
+			return false;
+
+		for (let nPage = 0, nCount = oDoc.GetPagesCount(); nPage < nCount; ++nPage) {
+			if (oDoc.GetPageInfo(nPage).drawings.some(isWatermarkPicture))
+				return true;
+		}
+		return false;
+	};
+
+	// the watermark pictures carry this name and the "no select" lock, so they don't catch clicks meant for the page
+	const WATERMARK_PICTURE_NAME = "Watermark";
+	function isWatermarkPicture(oDrawing) {
+		let oNvPr = oDrawing.IsImage && oDrawing.IsImage() && oDrawing.getUniNvProps && oDrawing.getUniNvProps();
+		return !!(oNvPr && oNvPr.cNvPr && oNvPr.cNvPr.name === WATERMARK_PICTURE_NAME && oDrawing.getNoSelect());
+	}
+	function removeWatermarkPictures(oDoc) {
+		for (let nPage = 0, nCount = oDoc.GetPagesCount(); nPage < nCount; ++nPage) {
+			let oPageInfo = oDoc.GetPageInfo(nPage);
+			oPageInfo.drawings.filter(isWatermarkPicture).forEach(function(oDrawing) {
+				oPageInfo.RemoveDrawing(oDrawing.GetId());
+			});
+		}
+	}
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();
 		let oDoc = this.getPDFDoc();
@@ -3901,6 +3951,30 @@
 						oOptionObject.AddImage(oImage, oOptionObject.asc_curImageState);
 						return;
 					}
+					else if (oOptionObject.isWatermark) {
+						// the same picture centred on every page, at most 80 % of the page; one undo step.
+						// It replaces a watermark added before.
+						oDoc.BlurActiveObject();
+						oDoc.DoAction(function() {
+							removeWatermarkPictures(oDoc);
+							for (let nPage = 0, nCount = oDoc.GetPagesCount(); nPage < nCount; ++nPage) {
+								let nPageW = oDoc.GetPageWidthMM(nPage);
+								let nPageH = oDoc.GetPageHeightMM(nPage);
+								let nK = Math.min(0.8 * nPageW / oImage.Image.width, 0.8 * nPageH / oImage.Image.height);
+								let nW = oImage.Image.width * nK;
+								let nH = oImage.Image.height * nK;
+								let oPicture = new AscPDF.CPdfImage();
+								AscFormat.fillImage(oPicture, oImage.src, 0, 0, nW, nH);
+								let oXfrm = oPicture.getXfrm();
+								oXfrm.setOffX((nPageW - nW) / 2);
+								oXfrm.setOffY((nPageH - nH) / 2);
+								oDoc.AddDrawing(oPicture, nPage);
+								oPicture.getUniNvProps().cNvPr.setName(WATERMARK_PICTURE_NAME);
+								oPicture.setLockValue(AscFormat.LOCKS_MASKS.noSelect, true);
+							}
+						}, AscDFH.historydescription_Presentation_AddFlowImage, oApi);
+						return;
+					}
 					else if (oOptionObject.isStamp) {
 						// an image stamp, e.g. a saved signature: one undo step
 						oDoc.BlurActiveObject();
@@ -5306,6 +5380,9 @@
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;
 	PDFEditorApi.prototype['asc_RemovePage']			   = PDFEditorApi.prototype.asc_RemovePage;
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
+	PDFEditorApi.prototype['asc_AddWatermarkImage']        = PDFEditorApi.prototype.asc_AddWatermarkImage;
+	PDFEditorApi.prototype['asc_RemoveWatermark']          = PDFEditorApi.prototype.asc_RemoveWatermark;
+	PDFEditorApi.prototype['asc_HasWatermark']             = PDFEditorApi.prototype.asc_HasWatermark;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
