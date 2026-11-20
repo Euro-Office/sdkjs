@@ -27844,10 +27844,23 @@ CDocument.prototype.private_GetSpellCheckGroup = function(paragraph, getGroup)
 {
 	let count  = this.Content.length;
 	let docPos = paragraph.GetDocumentPositionFromObject();
+
+	// A paragraph in a text box is in the group of the paragraph that the text box is anchored to
+	let shape       = null;
+	let paraDrawing = null;
+	while (docPos.length
+		&& docPos[0].Class instanceof CDocumentContent
+		&& (shape = docPos[0].Class.Is_DrawingShape(true))
+		&& shape.GetParaDrawing
+		&& (paraDrawing = shape.GetParaDrawing()))
+	{
+		docPos = paraDrawing.GetDocumentPositionFromObject();
+	}
+
 	if (docPos.length && this === docPos[0].Class && docPos[0].Position < count && -1 !== getGroup(docPos[0].Position).indexOf(paragraph))
 		return docPos[0].Position;
 
-	// Notes, headers and footers, and text boxes, whose position does not lead to the main text
+	// Notes, headers and footers, and text boxes in them, whose position does not lead to the main text
 	for (let groupIndex = count + 2 - 1; groupIndex >= 0; --groupIndex)
 	{
 		if (-1 !== getGroup(groupIndex).indexOf(paragraph))

@@ -916,6 +916,68 @@ $(function () {
 		assert.strictEqual(logicDocument.GetSelectedText(), "Helo", "Then the main text again");
 	});
 
+	QUnit.test("From a text box only the group of its anchor paragraph is collected", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("Helo body");
+		let p2 = CreateParagraphWithText("Fine tset");
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		MarkMisspelled(p1, "Helo");
+		MarkMisspelled(p2, "tset");
+
+		AscTest.MoveCursorToParagraph(p2, false);
+		let drawing = new ParaDrawing(100, 100, null, logicDocument.GetDrawingDocument(), logicDocument, null);
+		let shapeTrack = new AscFormat.NewShapeTrack('rect', 0, 0, logicDocument.theme, null, null, null, 0);
+		shapeTrack.track({}, 100, 100);
+		let shape = shapeTrack.getShape(true, logicDocument.GetDrawingDocument(), null);
+		shape.setBDeleted(false);
+		shape.setParent(drawing);
+		drawing.Set_GraphicObject(shape);
+		drawing.Set_DrawingType(drawing_Anchor);
+		drawing.Set_WrappingType(WRAPPING_TYPE_NONE);
+		drawing.Set_Distance(0, 0, 0, 0);
+		p2.AddToParagraph(drawing);
+		shape.createTextBoxContent();
+		let boxParagraph = shape.getDocContent().GetElement(0);
+		AscTest.AddTextToParagraph(boxParagraph, "Txet box");
+		MarkMisspelled(boxParagraph, "Txet");
+		AscTest.Recalculate();
+
+		let requested = [];
+		function getGroup(groupIndex)
+		{
+			requested.push(groupIndex);
+			return logicDocument.private_GetSpellCheckParagraphs(groupIndex);
+		}
+		assert.strictEqual(logicDocument.private_GetSpellCheckGroup(boxParagraph, getGroup), 1, "The text box is in the group of the second paragraph");
+		assert.deepEqual(requested, [1], "Only that group is collected");
+
+		let getParagraphs = logicDocument.private_GetSpellCheckParagraphs;
+		requested = [];
+		logicDocument.private_GetSpellCheckParagraphs = function(groupIndex)
+		{
+			requested.push(groupIndex);
+			return getParagraphs.call(this, groupIndex);
+		};
+		try
+		{
+			logicDocument.RemoveSelection();
+			AscTest.MoveCursorToParagraph(p1, false);
+			logicDocument.SelectNextMisspelledWord();
+			assert.strictEqual(logicDocument.GetSelectedText(), "Txet", "Word in the text box is found");
+
+			requested = [];
+			logicDocument.SelectNextMisspelledWord();
+			assert.strictEqual(logicDocument.GetSelectedText(), "tset", "From the text box the search goes on in its anchor paragraph");
+			assert.deepEqual(requested, [1], "Only the group of the anchor paragraph is collected");
+		}
+		finally
+		{
+			logicDocument.private_GetSpellCheckParagraphs = getParagraphs;
+		}
+	});
+
 	QUnit.test("Spellcheck progress", function (assert)
 	{
 		let paragraphs = CreateMisspelledDocument();
