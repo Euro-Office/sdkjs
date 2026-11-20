@@ -288,4 +288,71 @@ $(function () {
 			ws.getRange3(r1, col, r2, col).cleanAll();
 		}
 	});
+
+	QUnit.test("Page numbers of a workbook from an ODS file run across the sheets", function (assert) {
+		let wsView = api.wb.getWorksheet(0);
+		let wb = api.wbModel;
+		let oldSourceFileType = wb.sourceFileType;
+		let getWorksheet = wb.getWorksheet;
+		// sheets: the first page number of each sheet's page style (null = continue); pages: the sheet of each printed page
+		let numbering = function (sheets, pages) {
+			wb.getWorksheet = function (index) {
+				let number = sheets[index];
+				return index < sheets.length ? {PagePrintOptions: {pageSetup: {useFirstPageNumber: number !== null, firstPageNumber: number}}} : null;
+			};
+			try {
+				let printPages = pages.map(function (sheet) {
+					return {indexWorksheet: sheet};
+				});
+				return printPages.map(function (page, index) {
+					let res = wsView._getOdfPrintPageNumbering(printPages, index);
+					return res && [res.index, res.firstPageNumber];
+				});
+			} finally {
+				wb.getWorksheet = getWorksheet;
+			}
+		};
+		let pageNumberText = function (indexPrintPage, opt_firstPageNumber) {
+			let parser = new AscCommonExcel.HeaderFooterParser();
+			parser.parse("&P");
+			parser.calculateTokens(wsView, indexPrintPage, 10, true, opt_firstPageNumber);
+			let text = null;
+			parser.tokens.forEach(function (portion) {
+				portion && portion.forEach(function (token) {
+					if (token && token.getField && token.getField() === Asc.c_oAscHeaderFooterField.pageNumber) {
+						text = token._calculatedText;
+					}
+				});
+			});
+			return text;
+		};
+		try {
+			wb.sourceFileType = Asc.c_oAscFileType.XLSX;
+			assert.deepEqual(numbering([null, 5], [0, 1]), [null, null], "XLSX: every sheet starts again (Excel), no ODF numbering");
+			wb.sourceFileType = null;
+			assert.deepEqual(numbering([null, 5], [0, 1]), [null, null], "unknown source: no ODF numbering");
+
+			wb.sourceFileType = Asc.c_oAscFileType.ODS;
+			assert.deepEqual(numbering([null, null, null], [0, 0, 1, 2]), [[0, 1], [1, 1], [2, 1], [3, 1]],
+				"ODS: the pages are numbered across the sheets");
+			assert.deepEqual(numbering([null, 5, null], [0, 0, 1, 1, 2]), [[0, 1], [1, 1], [0, 5], [1, 5], [2, 5]],
+				"ODS: a sheet with a first page number starts again, the sheets after it continue");
+			assert.deepEqual(numbering([3, 3], [0, 0, 1]), [[0, 3], [1, 3], [2, 3]],
+				"ODS: the same first page number on the next sheet (same page style) continues");
+			assert.deepEqual(numbering([3, 7], [0, 1]), [[0, 3], [0, 7]], "ODS: another first page number starts again");
+			assert.deepEqual(numbering([null, 4, null], [0, 2]), [[0, 1], [0, 4]],
+				"ODS: a sheet without printed pages still starts the numbers again");
+			assert.deepEqual(numbering([null, 0], [0, 1]), [[0, 1], [1, 1]], "ODS: first page number 0 continues");
+			wb.sourceFileType = Asc.c_oAscFileType.FODS;
+			assert.deepEqual(numbering([null, null], [0, 1]), [[0, 1], [1, 1]], "flat ODS: numbered across the sheets");
+			wb.sourceFileType = Asc.c_oAscFileType.OTS;
+			assert.deepEqual(numbering([null, null], [0, 1]), [[0, 1], [1, 1]], "ODS template: numbered across the sheets");
+
+			assert.strictEqual(pageNumberText(2, 5), "7", "page number field: index 2 of a run that starts at 5");
+			assert.strictEqual(pageNumberText(2), "3", "page number field: without a start number the sheet's own setting (1)");
+		} finally {
+			wb.getWorksheet = getWorksheet;
+			wb.sourceFileType = oldSourceFileType;
+		}
+	});
 });

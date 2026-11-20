@@ -59,7 +59,7 @@ function (window, undefined) {
 
 		return res;
 	};
-	HeaderFooterField.prototype.calculateText = function (ws, indexPrintPage, countPrintPages) {
+	HeaderFooterField.prototype.calculateText = function (ws, indexPrintPage, countPrintPages, opt_firstPageNumber) {
 		let res = "";
 		let api = window["Asc"]["editor"];
 		let printPreviewState = ws && ws.workbook && ws.workbook.printPreviewState;
@@ -74,6 +74,10 @@ function (window, undefined) {
 		switch (this.field) {
 			case asc.c_oAscHeaderFooterField.pageNumber: {
 				let firstPageNumber = (pageSetup && pageSetup.useFirstPageNumber && pageSetup.firstPageNumber) ? pageSetup.firstPageNumber : 1;
+				if (opt_firstPageNumber != null) {
+					//set by the caller when the numbers run across sheets (ODF)
+					firstPageNumber = opt_firstPageNumber;
+				}
 				res = indexPrintPage + firstPageNumber + "";
 				break;
 			}
@@ -403,7 +407,7 @@ function (window, undefined) {
 		this.endPortion();
 	};
 
-	HeaderFooterParser.prototype.calculateTokens = function (ws, indexPrintPage, countPrintPages, forceCalc) {
+	HeaderFooterParser.prototype.calculateTokens = function (ws, indexPrintPage, countPrintPages, forceCalc, opt_firstPageNumber) {
 		if (this.isCalc && !forceCalc) {
 			return;
 		}
@@ -411,7 +415,7 @@ function (window, undefined) {
 			if (this.tokens[i]) {
 				for (let j = 0; j < this.tokens[i].length; j++) {
 					let token = this.tokens[i][j];
-					token && token.calculateText(ws, indexPrintPage, countPrintPages);
+					token && token.calculateText(ws, indexPrintPage, countPrintPages, opt_firstPageNumber);
 				}
 			}
 		}

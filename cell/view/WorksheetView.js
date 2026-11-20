@@ -4159,7 +4159,15 @@ function isAllowPasteLink(pastedWb) {
 			}
 			return newIndex !== null ? newIndex : _indexPrintPage;
 		};
-		indexPrintPage = recalcIndexPrintPage(indexPrintPage);
+		//ODF numbers the pages across the sheets, see _getOdfPrintPageNumbering
+		let firstPageNumber = null;
+		let odfNumbering = this._getOdfPrintPageNumbering(pages, indexPrintPage);
+		if (odfNumbering) {
+			indexPrintPage = odfNumbering.index;
+			firstPageNumber = odfNumbering.firstPageNumber;
+		} else {
+			indexPrintPage = recalcIndexPrintPage(indexPrintPage);
+		}
 
 
 		let vector_koef = AscCommonExcel.vector_koef / t.getZoom();
@@ -4173,7 +4181,7 @@ function isAllowPasteLink(pastedWb) {
 			drawingCtx.BeginPage && drawingCtx.BeginPage(c_oAscPrintDefaultSettings.PageWidth, c_oAscPrintDefaultSettings.PageHeight);
 
 			//draw header/footer
-			this.drawHeaderFooter(drawingCtx, printPagesData, indexPrintPage, countPrintPages);
+			this.drawHeaderFooter(drawingCtx, printPagesData, indexPrintPage, countPrintPages, firstPageNumber);
 
 			if(window['Asc']['editor'].watermarkDraw)
 			{
@@ -4231,7 +4239,7 @@ function isAllowPasteLink(pastedWb) {
 			this.usePrintScale = true;
 
 			//draw header/footer
-			this.drawHeaderFooter(drawingCtx, printPagesData, indexPrintPage, countPrintPages);
+			this.drawHeaderFooter(drawingCtx, printPagesData, indexPrintPage, countPrintPages, firstPageNumber);
 
 			//отступы с учётом заголовков
 			let clipLeft, clipTop, clipWidth, clipHeight;
@@ -5461,7 +5469,58 @@ function isAllowPasteLink(pastedWb) {
 		this._RemoveClipRect(ctx);
     };
 
-	WorksheetView.prototype.drawHeaderFooter = function (drawingCtx, printPagesData, indexPrintPage, countPrintPages) {
+	/**
+	 * Page numbering of a workbook printed from ODF. ODF numbers the printed pages across the whole
+	 * spreadsheet (LibreOffice ScPrintFuncCache): the count restarts at a sheet whose page style sets a
+	 * first page number, unless the previous sheet has the same page style (here: the same first page
+	 * number); the sheets after it continue from that number. The first page and odd/even headers
+	 * follow the same count.
+	 * @param {Array} pages printed pages of the workbook, in print order
+	 * @param {number} indexPrintPage index of the current page in pages
+	 * @returns {?{index: number, firstPageNumber: number}} page index since the last restart and the
+	 * number of the first page of that run; null when the workbook is not from ODF
+	 */
+	WorksheetView.prototype._getOdfPrintPageNumbering = function (pages, indexPrintPage) {
+		let wb = this.model.workbook;
+		if (!(pages && pages[indexPrintPage] && wb && wb.isOpenDocumentSource())) {
+			return null;
+		}
+		let printPreview = this.workbook && this.workbook.printPreviewState;
+		let pageOptionsMap = printPreview && printPreview.isStart() && printPreview.advancedOptions &&
+			printPreview.advancedOptions.pageOptionsMap;
+		let getFirstPageNumber = function (sheetIndex) {
+			let pageSetup = pageOptionsMap && pageOptionsMap[sheetIndex] && pageOptionsMap[sheetIndex].pageSetup;
+			if (!pageSetup) {
+				let ws = wb.getWorksheet(sheetIndex);
+				pageSetup = ws && ws.PagePrintOptions && ws.PagePrintOptions.pageSetup;
+			}
+			return pageSetup && pageSetup.useFirstPageNumber && pageSetup.firstPageNumber ? pageSetup.firstPageNumber : null;
+		};
+
+		let sheetIndex = pages[indexPrintPage].indexWorksheet;
+		//the sheet where the current run of numbers starts, and its first number
+		let startSheet = sheetIndex;
+		let firstPageNumber = getFirstPageNumber(sheetIndex);
+		while (startSheet > 0) {
+			let own = getFirstPageNumber(startSheet);
+			let prev = getFirstPageNumber(startSheet - 1);
+			if (own !== null && own !== prev) {
+				break;
+			}
+			startSheet--;
+			if (firstPageNumber === null) {
+				firstPageNumber = prev;
+			}
+		}
+
+		let index = 0;
+		for (let i = indexPrintPage - 1; i >= 0 && pages[i].indexWorksheet >= startSheet; i--) {
+			index++;
+		}
+		return {index: index, firstPageNumber: firstPageNumber !== null ? firstPageNumber : 1};
+	};
+
+	WorksheetView.prototype.drawHeaderFooter = function (drawingCtx, printPagesData, indexPrintPage, countPrintPages, opt_firstPageNumber) {
 		//odd - нечетные страницы, even - четные. в случае если флаг differentOddEven не выставлен, используем odd
 
 		if(!printPagesData) {
@@ -5499,7 +5558,7 @@ function isAllowPasteLink(pastedWb) {
 				curHeader.parser = new AscCommonExcel.HeaderFooterParser();
 				curHeader.parser.parse(curHeader.str);
 			}
-			curHeader.parser.calculateTokens(this, indexPrintPage, countPrintPages, true);
+			curHeader.parser.calculateTokens(this, indexPrintPage, countPrintPages, true, opt_firstPageNumber);
 
 			//get current tokens -> curHeader.parser -> getTokensByPosition(AscCommomExcel.c_oPortionPosition)
 			this._drawHeaderFooter(drawingCtx, printPagesData, curHeader, indexPrintPage, countPrintPages, false, opt_headerFooter);
@@ -5520,7 +5579,7 @@ function isAllowPasteLink(pastedWb) {
 				curFooter.parser = new AscCommonExcel.HeaderFooterParser();
 				curFooter.parser.parse(curFooter.str);
 			}
-			curFooter.parser.calculateTokens(this, indexPrintPage, countPrintPages, true);
+			curFooter.parser.calculateTokens(this, indexPrintPage, countPrintPages, true, opt_firstPageNumber);
 			//get current tokens -> curHeader.parser -> getTokensByPosition(AscCommomExcel.c_oPortionPosition)
 			this._drawHeaderFooter(drawingCtx, printPagesData, curFooter, indexPrintPage, countPrintPages, true, opt_headerFooter);
 		}
