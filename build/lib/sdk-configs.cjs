@@ -13,11 +13,16 @@
 
 const path = require('path');
 const fs   = require('fs');
-const { sync: globSync, hasMagic } = require('glob');
 
-// Matches every character glob's hasMagic() treats as magic, not just *?{ —
-// a pattern like foo[0-9].js has no *?{ but is still a glob per hasMagic().
+// Glob magic characters, not just *?{ — a pattern like foo[0-9].js is a glob too.
 const MAGIC_CHARS = /[*?{}[\]!()]/;
+
+// Files (no directories) matching pattern, as paths joined onto options.cwd if given.
+function globFiles(pattern, options) {
+    return fs.globSync(pattern, { ...options, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .map((entry) => path.join(entry.parentPath, entry.name));
+}
 
 function loadJsonConfig(configsDir, name) {
     const file = path.join(configsDir, name + '.json');
@@ -113,7 +118,7 @@ function getFilesAll(sdkCfg, platform) {
 function expandGlobs(files, addContextDep) {
     const result = [];
     for (const f of files) {
-        if (hasMagic(f)) {
+        if (MAGIC_CHARS.test(f)) {
             const idx  = f.search(MAGIC_CHARS);
             const base = idx === -1 ? f : f.slice(0, idx);
             // When the magic character follows a slash (e.g. "common/Images/*"),
@@ -125,7 +130,7 @@ function expandGlobs(files, addContextDep) {
                 ? base.replace(/[\\/]+$/, '') || '.'
                 : (path.dirname(base) || '.');
             if (addContextDep) addContextDep(dir);
-            result.push(...globSync(f, { nodir: true }).sort());
+            result.push(...globFiles(f).sort());
         } else {
             result.push(f);
         }
@@ -141,4 +146,5 @@ module.exports = {
     getFilesMin,
     getFilesAll,
     expandGlobs,
+    globFiles,
 };

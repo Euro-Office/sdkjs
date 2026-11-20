@@ -8,7 +8,11 @@
 const test   = require('node:test');
 const assert = require('node:assert/strict');
 
-const { getFilesMin, getFilesAll, mergeConfigs } = require('../lib/sdk-configs.cjs');
+const fs     = require('node:fs');
+const os     = require('node:os');
+const path   = require('node:path');
+
+const { getFilesMin, getFilesAll, mergeConfigs, expandGlobs, globFiles } = require('../lib/sdk-configs.cjs');
 
 test('getFilesMin: desktop min falls back to [] when desktop config omits "min"', () => {
     const sdkCfg = { min: ['a.js'], desktop: { common: ['b.js'] } };
@@ -58,4 +62,19 @@ test('mergeConfigs: nested object properties merge recursively', () => {
     const base = { desktop: { min: ['a.js'] } };
     mergeConfigs(base, { desktop: { common: ['b.js'] } });
     assert.deepEqual(base, { desktop: { min: ['a.js'], common: ['b.js'] } });
+});
+
+test('expandGlobs: globs expand to sorted files only, literal entries pass through', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-configs-glob-'));
+    try {
+        for (const name of ['b.js', 'a.js', 'c.txt']) fs.writeFileSync(path.join(dir, name), '');
+        fs.mkdirSync(path.join(dir, 'sub.js'));
+        const watched = [];
+        const result  = expandGlobs(['/literal.js', path.join(dir, '*.js')], (d) => watched.push(d));
+        assert.deepEqual(result, ['/literal.js', path.join(dir, 'a.js'), path.join(dir, 'b.js')]);
+        assert.deepEqual(watched, [dir]);
+        assert.deepEqual(globFiles('{a,c}.*', { cwd: dir }).sort(), [path.join(dir, 'a.js'), path.join(dir, 'c.txt')]);
+    } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+    }
 });
