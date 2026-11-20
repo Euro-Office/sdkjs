@@ -802,6 +802,93 @@
 			oDoc.RemovePages(aPages);
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
+	/**
+	 * Inserts all pages of another PDF (as bytes) at a position, with their annotations and form fields; one undo step.
+	 * Afterwards the first new page is shown and selected in the thumbnails.
+	 * @param {number} [nPos] the index of the first new page; default: at the end
+	 * @param {Uint8Array} aBytes
+	 * @returns {boolean} false if nothing was inserted (for example a damaged or password-protected file)
+	 */
+	PDFEditorApi.prototype.asc_InsertPagesFromBytes = function(nPos, aBytes) {
+		let oDoc = this.getPDFDoc();
+		if (!oDoc || !aBytes || !aBytes.length || oDoc.IsMergeLock())
+			return false;
+		if (undefined === nPos || null === nPos || nPos < 0 || nPos > oDoc.GetPagesCount())
+			nPos = oDoc.GetPagesCount();
+
+		let isDone = false;
+		oDoc.DoAction(function() {
+			let oHistory = AscCommon.History;
+			let oPoint = oHistory && oHistory.Points ? oHistory.Points[oHistory.Index] : null;
+			let nItems = oPoint ? oPoint.Items.length : 0;
+			let nMerged = oDoc.mergedPagesData ? oDoc.mergedPagesData.length : 0;
+
+			isDone = !!oDoc.MergePagesBinary(nPos, aBytes);
+
+			// MergePagesBinary records the file before the engine reads it. If the engine can't read it, drop that
+			// record again (without undoing it): undoing it would undo the previous merge in the engine.
+			if (!isDone) {
+				if (oPoint)
+					oPoint.Items.length = nItems;
+				if (oDoc.mergedPagesData)
+					oDoc.mergedPagesData.length = nMerged;
+			}
+		}, AscDFH.historydescription_Pdf_AddPage, this);
+
+		if (isDone) {
+			// The thumbnails lay out the new pages only when they are drawn next: lay them out now, so that they
+			// scroll to the first new page and select it when the page view shows it.
+			let oViewer = oDoc.Viewer;
+			let oThumbnails = oViewer ? oViewer.thumbnails : null;
+			if (oThumbnails && oThumbnails.isNeedResize())
+				oThumbnails.resize(false);
+			oViewer && oViewer.navigateToPage(nPos);
+		}
+		return isDone;
+	};
+	/**
+	 * Asks for a PDF file and inserts its pages at a position
+	 * @param {number} [nPos] the index of the first new page; default: at the end
+	 * @param {function(boolean)} [fCallback] called after a file was chosen: false if no pages were inserted
+	 */
+	PDFEditorApi.prototype.asc_InsertPagesFromFile = function(nPos, fCallback) {
+		let t = this;
+		let fInsert = function(aBytes) {
+			let isDone = !!aBytes && t.asc_InsertPagesFromBytes(nPos, aBytes);
+			fCallback && fCallback(isDone);
+		};
+		let oDesktop = window["AscDesktopEditor"];
+		if (oDesktop && oDesktop["OpenFilenameDialog"] && oDesktop["loadLocalFile"]) {
+			oDesktop["OpenFilenameDialog"]("PDF (*.pdf)", false, function(file) {
+				if (Array.isArray(file))
+					file = file[0];
+				if (!file)
+					return;
+				oDesktop["loadLocalFile"](file, function(data) {
+					fInsert(data ? new Uint8Array(data) : null);
+				});
+			});
+			return;
+		}
+
+		let oInput = document.createElement("input");
+		oInput.type = "file";
+		oInput.accept = ".pdf,application/pdf";
+		oInput.onchange = function() {
+			let oFile = oInput.files && oInput.files[0];
+			if (!oFile)
+				return;
+			let oReader = new FileReader();
+			oReader.onload = function() {
+				fInsert(new Uint8Array(oReader.result));
+			};
+			oReader.onerror = function() {
+				fInsert(null);
+			};
+			oReader.readAsArrayBuffer(oFile);
+		};
+		oInput.click();
+	};
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();
 		let oDoc = this.getPDFDoc();
@@ -5306,6 +5393,8 @@
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;
 	PDFEditorApi.prototype['asc_RemovePage']			   = PDFEditorApi.prototype.asc_RemovePage;
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
+	PDFEditorApi.prototype['asc_InsertPagesFromBytes']     = PDFEditorApi.prototype.asc_InsertPagesFromBytes;
+	PDFEditorApi.prototype['asc_InsertPagesFromFile']      = PDFEditorApi.prototype.asc_InsertPagesFromFile;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
