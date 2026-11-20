@@ -816,8 +816,20 @@
 		let oViewer = this.getDocumentRenderer();
 		this.asc_StopPlaceImage();
 
+		// the placement starts now: a stop or a new start before the picture has loaded replaces this state,
+		// and the onload of this picture must not start it any more
+		let oState = {ghost: null, listeners: []};
+		this.placeImageState = oState;
+
 		let oImg = new Image();
+		oImg.onerror = function() {
+			if (t.placeImageState === oState)
+				t.placeImageState = null;
+		};
 		oImg.onload = function() {
+			if (t.placeImageState !== oState)
+				return;
+
 			let fRatio = oImg.height / Math.max(1, oImg.width);
 			let fPx = 96 / 25.4 * (oViewer.zoom || 1);
 			let nWidth = Math.max(15, Math.min(200, nWidthMM));
@@ -850,8 +862,7 @@
 				update();
 			};
 
-			let oState = {ghost: oBox, listeners: []};
-			t.placeImageState = oState;
+			oState.ghost = oBox;
 			let listen = function(sType, fHandler) {
 				document.addEventListener(sType, fHandler, {capture: true, passive: false});
 				oState.listeners.push([sType, fHandler]);
@@ -925,7 +936,7 @@
 			return;
 		this.placeImageState = null;
 		oState.listeners.forEach(function(aItem) {document.removeEventListener(aItem[0], aItem[1], {capture: true});});
-		oState.ghost.parentNode && oState.ghost.parentNode.removeChild(oState.ghost);
+		oState.ghost && oState.ghost.parentNode && oState.ghost.parentNode.removeChild(oState.ghost);
 	};
 	/**
 	 * Puts a loaded picture on a page, centred on a point, as one undo step (used by asc_StartPlaceImage)

@@ -99,4 +99,98 @@ $(function () {
 		api.asc_StopPlaceImage();
 		assert.strictEqual(api.placeImageState, null, "no state, no error");
 	});
+
+	// pictures that load only when the test says so, and a count of the capturing listeners on the document
+	function withSlowPictures(test)
+	{
+		let realImage = window.Image;
+		let realAdd = document.addEventListener;
+		let realRemove = document.removeEventListener;
+		let pictures = [];
+		let listeners = [];
+		window.Image = function() {
+			this.width = 400;
+			this.height = 100;
+			pictures.push(this);
+		};
+		document.addEventListener = function(type, handler, options) {
+			if (options && options.capture)
+				listeners.push(handler);
+			return realAdd.apply(this, arguments);
+		};
+		document.removeEventListener = function(type, handler, options) {
+			let index = listeners.indexOf(handler);
+			if (options && options.capture && -1 !== index)
+				listeners.splice(index, 1);
+			return realRemove.apply(this, arguments);
+		};
+		try {
+			test(pictures, listeners);
+		}
+		finally {
+			api.asc_StopPlaceImage();
+			window.Image = realImage;
+			document.addEventListener = realAdd;
+			document.removeEventListener = realRemove;
+		}
+	}
+
+	function getGhosts(url)
+	{
+		return document.querySelectorAll('img[src="' + url + '"]').length;
+	}
+
+	function isWheelSwallowed()
+	{
+		let wheel = new WheelEvent("wheel", {deltaY: -1, bubbles: true, cancelable: true});
+		document.body.dispatchEvent(wheel);
+		return wheel.defaultPrevented;
+	}
+
+	QUnit.test("asc_StopPlaceImage before the picture has loaded cancels the placement", function (assert)
+	{
+		withSlowPictures(function(pictures, listeners) {
+			api.asc_StartPlaceImage("slow-stop.png", 60);
+			assert.ok(api.placeImageState, "the placement has started");
+			api.asc_StopPlaceImage();
+			assert.strictEqual(api.placeImageState, null, "stopped");
+
+			pictures[0].onload();
+			assert.strictEqual(api.placeImageState, null, "the late load does not start it again");
+			assert.strictEqual(listeners.length, 0, "no listeners are left on the document");
+			assert.strictEqual(getGhosts("slow-stop.png"), 0, "no ghost is left");
+			assert.notOk(isWheelSwallowed(), "the mouse wheel scrolls again");
+		});
+	});
+
+	QUnit.test("A second asc_StartPlaceImage before the first picture has loaded replaces it", function (assert)
+	{
+		withSlowPictures(function(pictures, listeners) {
+			api.asc_StartPlaceImage("slow-first.png", 60);
+			api.asc_StartPlaceImage("slow-second.png", 60);
+			pictures[1].onload();
+			pictures[0].onload();
+
+			assert.strictEqual(getGhosts("slow-first.png"), 0, "no ghost of the first picture");
+			assert.strictEqual(getGhosts("slow-second.png"), 1, "the ghost of the second picture");
+			let count = listeners.length;
+			assert.ok(count > 0, "the second placement listens to the mouse");
+			assert.strictEqual(count, api.placeImageState.listeners.length, "only the listeners of the second placement");
+
+			api.asc_StopPlaceImage();
+			assert.strictEqual(listeners.length, 0, "stopping it removes all listeners");
+			assert.strictEqual(getGhosts("slow-second.png"), 0, "and its ghost");
+			assert.notOk(isWheelSwallowed(), "the mouse wheel scrolls again");
+		});
+	});
+
+	QUnit.test("A picture that fails to load ends the placement", function (assert)
+	{
+		withSlowPictures(function(pictures, listeners) {
+			api.asc_StartPlaceImage("broken.png", 60);
+			pictures[0].onerror();
+			assert.strictEqual(api.placeImageState, null, "nothing is waiting any more");
+			assert.strictEqual(listeners.length, 0, "no listeners");
+		});
+	});
 });
