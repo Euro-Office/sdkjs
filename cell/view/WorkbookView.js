@@ -4213,8 +4213,9 @@
     } else if (printType === Asc.c_oAscPrintType.Selection) {
 		let _activeSheetsArray = adjustPrint && adjustPrint.asc_getActiveSheetsArray && adjustPrint.asc_getActiveSheetsArray();
 		let activeSheet = _activeSheetsArray && _activeSheetsArray[0] != null ? _activeSheetsArray[0] : null;
-		this._calcPagesPrintSheet(activeSheet != null ? activeSheet : nActive, printPagesData, true, adjustPrint, skipEmptyPages);
-		jobSheets.push(activeSheet != null ? activeSheet : nActive);
+		let selectionSheet = activeSheet != null ? activeSheet : nActive;
+		this._calcPagesPrintSheet(selectionSheet, printPagesData, true, adjustPrint, skipEmptyPages);
+		jobSheets.push(selectionSheet);
     }
     // the sheets of the job, also those without printed pages (ODF page numbers, see _getOdfPrintPageNumbering)
     printPagesData.arrPages.jobSheets = jobSheets;

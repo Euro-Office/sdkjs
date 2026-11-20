@@ -357,6 +357,8 @@ $(function () {
 				"ODS, one sheet printed (job sheets): no number from the sheet before it");
 			assert.deepEqual(numbering([null, 5, null], [0, 0, 2, 2], [0, 2]), [[0, 1], [1, 1], [2, 1], [3, 1]],
 				"ODS, sheets 1 and 3 printed: the numbered sheet between them is not in the job and passes nothing on");
+			assert.deepEqual(numbering([5, null, null], [2, 2, 0, 0], [2, 0]), [[0, 1], [1, 1], [0, 5], [1, 5]],
+				"ODS, selected tabs in the order 3, 1: numbered in print order, sheet 3 takes no number from sheet 1 printed after it");
 			wb.sourceFileType = Asc.c_oAscFileType.FODS;
 			assert.deepEqual(numbering([null, null], [0, 1]), [[0, 1], [1, 1]], "flat ODS: numbered across the sheets");
 			wb.sourceFileType = Asc.c_oAscFileType.OTS;
@@ -420,10 +422,6 @@ $(function () {
 
 	QUnit.test("calcPagesPrint records the sheets of the print job", function (assert) {
 		let wbView = api.wb;
-		let calcPagesPrintSheet = wbView._calcPagesPrintSheet;
-		let changeZoom = wbView.changeZoom;
-		let getWorksheetCount = wbView.model.getWorksheetCount;
-		let getActive = wbView.model.getActive;
 		// no layout: sheet 1 has no pages, the others one each
 		wbView._calcPagesPrintSheet = function (index, printPagesData) {
 			if (index !== 1) {
@@ -456,10 +454,10 @@ $(function () {
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets), [[2], [2]], "active sheet");
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.Selection), [[2], [2]], "selection of the active sheet");
 		} finally {
-			wbView._calcPagesPrintSheet = calcPagesPrintSheet;
-			wbView.changeZoom = changeZoom;
-			wbView.model.getWorksheetCount = getWorksheetCount;
-			wbView.model.getActive = getActive;
+			delete wbView._calcPagesPrintSheet;
+			delete wbView.changeZoom;
+			delete wbView.model.getWorksheetCount;
+			delete wbView.model.getActive;
 		}
 	});
 });
