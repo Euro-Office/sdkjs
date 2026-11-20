@@ -870,6 +870,119 @@
 		const oDoc = this.getPDFDoc();
 		return !oDoc.IsMergeLock();
 	};
+	/**
+	 * The page indexes sorted and without duplicates, or null if one of them is not a page of the document.
+	 * @param {CPDFDoc} oDoc
+	 * @param {number[]} aPages
+	 * @returns {?number[]}
+	 */
+	function GetValidPageIndexes(oDoc, aPages) {
+		if (!Array.isArray(aPages) || !aPages.length)
+			return null;
+
+		let nPagesCount = oDoc.GetPagesCount();
+		let aResult = [];
+		for (let i = 0; i < aPages.length; i++) {
+			let nPage = aPages[i];
+			if (typeof nPage !== "number" || nPage % 1 !== 0 || nPage < 0 || nPage >= nPagesCount)
+				return null;
+			if (aResult.indexOf(nPage) === -1)
+				aResult.push(nPage);
+		}
+		return aResult.sort(function(a, b) {
+			return a - b;
+		});
+	}
+	/**
+	 * Whether the pages can be written into a new PDF file with asc_GetPagesAsPdf.
+	 * The new file is made by the PDF engine from the pages of the opened file, with their annotations and form fields.
+	 * The engine can't write what was added in the editor as drawings (text boxes, shapes, pictures, edited page
+	 * text), applied redactions, drawn annotations changed since opening, new blank pages or a changed page order.
+	 * Such pages give false: they can be extracted after the file was saved and opened again.
+	 * @param {number[]} aPages page indexes
+	 * @returns {boolean}
+	 */
+	PDFEditorApi.prototype.asc_CanGetPagesAsPdf = function(aPages) {
+		let oDoc = this.getPDFDoc();
+		let oFile = oDoc && oDoc.Viewer && oDoc.Viewer.file;
+		if (!oFile || oFile.type !== 0)
+			return false;
+
+		let aIndexes = GetValidPageIndexes(oDoc, aPages);
+		if (!aIndexes)
+			return false;
+
+		let nPrevOriginIndex = -1;
+		for (let i = 0; i < aIndexes.length; i++) {
+			let oFilePage = oFile.pages[aIndexes[i]];
+			let oPageInfo = oDoc.GetPageInfo(aIndexes[i]);
+			if (!oFilePage || !oPageInfo || undefined == oFilePage.originIndex || oFilePage.isRecognized)
+				return false;
+
+			// the engine writes the pages in the order of the opened file
+			if (oFilePage.originIndex < nPrevOriginIndex)
+				return false;
+			nPrevOriginIndex = oFilePage.originIndex;
+
+			if (oPageInfo.drawings && oPageInfo.drawings.length)
+				return false;
+
+			let aAnnots = oPageInfo.annots || [];
+			for (let j = 0; j < aAnnots.length; j++) {
+				let oAnnot = aAnnots[j];
+				if (oAnnot.IsRedact() && oAnnot.GetRedactId())
+					return false;
+				// the engine writes drawn annotations without their appearance
+				if (oAnnot.IsShapeBased() && oAnnot.IsChanged())
+					return false;
+			}
+		}
+
+		let aPageIds = aIndexes.map(function(nPage) {
+			return oDoc.GetPageInfo(nPage).GetId();
+		});
+		let aRedacts = oDoc.appliedRedactsData || [];
+		for (let i = 0; i < aRedacts.length; i++) {
+			if (aPageIds.indexOf(aRedacts[i].pageId) !== -1)
+				return false;
+		}
+
+		return true;
+	};
+	/**
+	 * The given pages as a new PDF file (the same as "copy page" writes for paste), for saving it under a new name.
+	 * The opened document is not changed.
+	 * @param {number[]} aPages page indexes
+	 * @returns {?Uint8Array} the bytes of the PDF file, null if asc_CanGetPagesAsPdf is false or the engine fails
+	 */
+	PDFEditorApi.prototype.asc_GetPagesAsPdf = function(aPages) {
+		if (!this.asc_CanGetPagesAsPdf(aPages))
+			return null;
+
+		let oDoc = this.getPDFDoc();
+		let aBytes = null;
+		try {
+			aBytes = oDoc.GetPagesBinary(GetValidPageIndexes(oDoc, aPages), false);
+		}
+		catch (e) {
+			aBytes = null;
+		}
+		return aBytes && aBytes.length ? aBytes : null;
+	};
+	/**
+	 * Saves the given pages as a new PDF file: the browser downloads it, the desktop app asks where to save it.
+	 * @param {number[]} aPages page indexes
+	 * @param {string} sFileName
+	 * @returns {boolean} false if nothing was saved (see asc_CanGetPagesAsPdf)
+	 */
+	PDFEditorApi.prototype.asc_SavePagesAsPdf = function(aPages, sFileName) {
+		let aBytes = this.asc_GetPagesAsPdf(aPages);
+		if (!aBytes)
+			return false;
+
+		AscCommon.DownloadFileFromBytes(aBytes, sFileName || "pages.pdf", "application/pdf");
+		return true;
+	};
 	PDFEditorApi.prototype.asc_GetSelectedText = function(bClearText, select_Pr) {
 		if (!this.DocumentRenderer)
 			return "";
@@ -5308,6 +5421,9 @@
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
+	PDFEditorApi.prototype['asc_CanGetPagesAsPdf']         = PDFEditorApi.prototype.asc_CanGetPagesAsPdf;
+	PDFEditorApi.prototype['asc_GetPagesAsPdf']            = PDFEditorApi.prototype.asc_GetPagesAsPdf;
+	PDFEditorApi.prototype['asc_SavePagesAsPdf']           = PDFEditorApi.prototype.asc_SavePagesAsPdf;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
 	PDFEditorApi.prototype['asc_undoAllChanges']		   = PDFEditorApi.prototype.asc_undoAllChanges;
 	PDFEditorApi.prototype['asc_addChartDrawingObject']	   = PDFEditorApi.prototype.asc_addChartDrawingObject;
