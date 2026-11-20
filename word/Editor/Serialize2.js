@@ -1079,7 +1079,8 @@ var c_oSerDocPr = {
 var c_oSerBackgroundType = {
 	Color: 0,
 	ColorTheme: 1,
-	pptxDrawing: 2
+	pptxDrawing: 2,
+	FirstPageOnly: 3
 };
 var c_oSerSdt = {
 	Pr: 0,
@@ -5414,6 +5415,10 @@ function BinaryDocumentTableWriter(memory, doc, oMapCommentId, oNumIdMap, copyPa
 			this.memory.WriteByte(c_oSerBackgroundType.pptxDrawing);
 			this.memory.WriteByte(c_oSerPropLenType.Variable);
 			this.bs.WriteItemWithLength(function(){oThis.WriteGraphicObj(oBackground.shape);});
+		}
+		if (oBackground.firstPageOnly) {
+			this.memory.WriteByte(c_oSerBackgroundType.FirstPageOnly);
+			this.memory.WriteByte(c_oSerPropLenType.Null);
 		}
 	}
     this.WriteParapraph = function(par, bUseSelection, selectedAll)
@@ -11676,6 +11681,11 @@ function Binary_DocumentTableReader(doc, oReadResult, openParams, stream, curNot
 			res = this.ReadDrawing (type, length, null, oDrawing);
 			if(null != oDrawing.content.GraphicObj)
 				oBackground.shape = oDrawing.content.GraphicObj;
+		} else if(c_oSerBackgroundType.FirstPageOnly === type) {
+			if (0 !== length)
+				res = c_oSerConstants.ReadUnknown;
+			else
+				oBackground.firstPageOnly = true;
 		} else
 			res = c_oSerConstants.ReadUnknown;
 		return res;
