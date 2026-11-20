@@ -29120,6 +29120,7 @@ window['AscWord'] = window['AscWord'] || {};
 
 window['AscWord'].CDocument = CDocument;
 window['AscWord'].Document = CDocument;
+window['AscWord'].CStatistics = CStatistics;
 window['AscCommonWord'].CDocument = CDocument;
 window['AscCommonWord'].docpostype_Content        = docpostype_Content;
 window['AscCommonWord'].docpostype_HdrFtr         = docpostype_HdrFtr;

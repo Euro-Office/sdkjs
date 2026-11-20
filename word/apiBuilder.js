@@ -9344,7 +9344,7 @@
 		let oLogicDocument = this.Document;
 
 		// own statistics object: always the default rules, and a count running in the interface is not disturbed
-		let oStats = new CStatistics(oLogicDocument);
+		let oStats = new AscWord.CStatistics(oLogicDocument);
 
 		oStats.Update_Pages(oLogicDocument.Pages.length);
 		for (let CurPage = 0, PagesCount = oLogicDocument.Pages.length; CurPage < PagesCount; ++CurPage)
