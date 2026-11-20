@@ -7714,6 +7714,51 @@ background-repeat: no-repeat;\
 			oLogicDocument.FinalizeAction();
 		}
 	};
+	/**
+	 * Replaces the author of every comment, reply and tracked change with one name and removes the document
+	 * properties, as the document inspector of Word does
+	 * @param {string} [sName="Author"]
+	 */
+	asc_docs_api.prototype.asc_RemovePersonalInformation = function(sName)
+	{
+		let oLogicDocument = this.private_GetLogicDocument();
+		if (!oLogicDocument)
+			return;
+
+		if (!sName)
+			sName = "Author";
+
+		if (oLogicDocument.IsSelectionLocked(AscCommon.changestype_None, {
+			Type      : AscCommon.changestype_2_ElementsArray_and_Type,
+			Elements  : oLogicDocument.GetAllParagraphs({All : true}),
+			CheckType : AscCommon.changestype_Paragraph_Properties
+		}))
+			return;
+
+		oLogicDocument.StartAction(AscDFH.historydescription_Document_RemovePersonalInformation);
+
+		// the new author info must not be recorded as a tracked change itself
+		let isTrackRevisions = oLogicDocument.GetLocalTrackRevisions();
+		if (false !== isTrackRevisions)
+			oLogicDocument.SetLocalTrackRevisions(false);
+
+		let arrCommentIds = oLogicDocument.RemovePersonalInformation(sName);
+
+		if (false !== isTrackRevisions)
+			oLogicDocument.SetLocalTrackRevisions(isTrackRevisions);
+
+		for (let nIndex = 0, nCount = arrCommentIds.length; nIndex < nCount; ++nIndex)
+		{
+			let oComment = oLogicDocument.Comments.Get_ById(arrCommentIds[nIndex]);
+			if (oComment)
+				this.sync_ChangeCommentData(arrCommentIds[nIndex], oComment.GetData());
+		}
+
+		oLogicDocument.Recalculate();
+		oLogicDocument.UpdateInterface();
+		this.UpdateInterfaceState();
+		oLogicDocument.FinalizeAction();
+	};
 	asc_docs_api.prototype.asc_GetCommentLogicPosition = function(sId)
 	{
 		var oLogicDocument = this.private_GetLogicDocument();
@@ -15398,6 +15443,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['sync_LockComment']                          = asc_docs_api.prototype.sync_LockComment;
 	asc_docs_api.prototype['sync_UnLockComment']                        = asc_docs_api.prototype.sync_UnLockComment;
 	asc_docs_api.prototype['asc_RemoveAllComments']                     = asc_docs_api.prototype.asc_RemoveAllComments;
+	asc_docs_api.prototype['asc_RemovePersonalInformation']              = asc_docs_api.prototype.asc_RemovePersonalInformation;
 	asc_docs_api.prototype['asc_ResolveAllComments']                    = asc_docs_api.prototype.asc_ResolveAllComments;
 	asc_docs_api.prototype['asc_GetCommentLogicPosition']               = asc_docs_api.prototype.asc_GetCommentLogicPosition;
 	asc_docs_api.prototype['sync_LockHeaderFooters']                    = asc_docs_api.prototype.sync_LockHeaderFooters;

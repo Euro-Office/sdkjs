@@ -42,6 +42,7 @@ AscDFH.changesFactory[AscDFH.historyitem_Document_Settings_ConsecutiveHyphenLimi
 AscDFH.changesFactory[AscDFH.historyitem_Document_Settings_DoNotHyphenateCaps]     = CChangesDocumentSettingsDoNotHyphenateCaps;
 AscDFH.changesFactory[AscDFH.historyitem_Document_Settings_HyphenationZone]        = CChangesDocumentSettingsHyphenationZone;
 AscDFH.changesFactory[AscDFH.historyitem_Document_PageColor]                       = CChangesDocumentPageColor;
+AscDFH.changesFactory[AscDFH.historyitem_Document_AppProps]                        = CChangesDocumentAppProps;
 
 AscDFH.changesFactory[AscDFH.historyitem_Document_DisconnectEveryone]              = CChangesDocumentDisconnectEveryone;
 //----------------------------------------------------------------------------------------------------------------------
@@ -65,6 +66,7 @@ AscDFH.changesRelationMap[AscDFH.historyitem_Document_Settings_MirrorMargins]   
 AscDFH.changesRelationMap[AscDFH.historyitem_Document_SpecialFormsGlobalSettings] = [AscDFH.historyitem_Document_SpecialFormsGlobalSettings];
 AscDFH.changesRelationMap[AscDFH.historyitem_Document_Settings_TrackRevisions]    = [AscDFH.historyitem_Document_Settings_TrackRevisions];
 AscDFH.changesRelationMap[AscDFH.historyitem_Document_DisconnectEveryone]         = [AscDFH.historyitem_Document_DisconnectEveryone];
+AscDFH.changesRelationMap[AscDFH.historyitem_Document_AppProps]                   = [AscDFH.historyitem_Document_AppProps];
 //----------------------------------------------------------------------------------------------------------------------
 
 /**
@@ -1177,6 +1179,81 @@ CChangesDocumentPageColor.prototype.ReadFromBinary = function(reader)
 CChangesDocumentPageColor.prototype.CreateReverseChange = function()
 {
 	return new CChangesDocumentPageColor(this.Class, this.New, this.Old);
+};
+
+/**
+ * Company, manager and hyperlink base of the app properties (docProps/app.xml). The app properties have no id of
+ * their own, so the change belongs to the document.
+ * @constructor
+ * @extends {AscDFH.CChangesBase}
+ * @param {CDocument} Class
+ * @param {{Company: ?string, Manager: ?string, HyperlinkBase: ?string}} Old
+ * @param {{Company: ?string, Manager: ?string, HyperlinkBase: ?string}} New
+ */
+function CChangesDocumentAppProps(Class, Old, New)
+{
+	AscDFH.CChangesBase.call(this, Class);
+
+	this.Old = Old;
+	this.New = New;
+}
+CChangesDocumentAppProps.prototype = Object.create(AscDFH.CChangesBase.prototype);
+CChangesDocumentAppProps.prototype.constructor = CChangesDocumentAppProps;
+CChangesDocumentAppProps.prototype.Type = AscDFH.historyitem_Document_AppProps;
+CChangesDocumentAppProps.prototype.Fields = ["Company", "Manager", "HyperlinkBase"];
+CChangesDocumentAppProps.prototype.private_SetProps = function(oProps)
+{
+	let oApp = this.Class.App;
+	if (!oApp || !oProps)
+		return;
+
+	this.Fields.forEach(function(sField)
+	{
+		oApp[sField] = oProps[sField];
+	});
+};
+CChangesDocumentAppProps.prototype.Undo = function()
+{
+	this.private_SetProps(this.Old);
+};
+CChangesDocumentAppProps.prototype.Redo = function()
+{
+	this.private_SetProps(this.New);
+};
+CChangesDocumentAppProps.prototype.private_WriteProps = function(oWriter, oProps)
+{
+	// for each field: Bool : is set, String : value
+	this.Fields.forEach(function(sField)
+	{
+		let sValue = oProps ? oProps[sField] : null;
+		let isSet  = null !== sValue && undefined !== sValue;
+		oWriter.WriteBool(isSet);
+		if (isSet)
+			oWriter.WriteString2(sValue);
+	});
+};
+CChangesDocumentAppProps.prototype.private_ReadProps = function(oReader)
+{
+	let oProps = {};
+	this.Fields.forEach(function(sField)
+	{
+		oProps[sField] = oReader.GetBool() ? oReader.GetString2() : null;
+	});
+	return oProps;
+};
+CChangesDocumentAppProps.prototype.WriteToBinary = function(oWriter)
+{
+	this.private_WriteProps(oWriter, this.New);
+	this.private_WriteProps(oWriter, this.Old);
+};
+CChangesDocumentAppProps.prototype.ReadFromBinary = function(oReader)
+{
+	this.New = this.private_ReadProps(oReader);
+	this.Old = this.private_ReadProps(oReader);
+};
+CChangesDocumentAppProps.prototype.CreateReverseChange = function()
+{
+	return new CChangesDocumentAppProps(this.Class, this.New, this.Old);
 };
 
 /**

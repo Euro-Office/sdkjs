@@ -14222,6 +14222,163 @@ CDocument.prototype.GetSelectionAnchorPos = function()
  * @param isCurrent {boolean} удаляем только все комментарии, находящиеся в текущей позиции
  * @returns {Array.string}
  */
+/**
+ * Replaces the author of every comment, reply and tracked change with one name and removes the document properties,
+ * custom properties included, and the company, manager and hyperlink base, like the document inspector of Word.
+ * The dates of comments and changes and the template are kept.
+ * @param {string} sName
+ * @returns {string[]} ids of the changed comments
+ */
+CDocument.prototype.RemovePersonalInformation = function(sName)
+{
+	function anonymizeReviewInfo(oInfo)
+	{
+		if (!oInfo)
+			return oInfo;
+
+		let oNewInfo = oInfo.Copy();
+		for (let oCurInfo = oNewInfo; oCurInfo; oCurInfo = oCurInfo.PrevInfo)
+		{
+			oCurInfo.UserName = sName;
+			oCurInfo.UserId   = "";
+		}
+		return oNewInfo;
+	}
+
+	function anonymizeCommentData(oData)
+	{
+		oData.m_sUserName   = sName;
+		oData.m_sUserId     = "";
+		oData.m_sProviderId = "";
+		oData.m_sInitials   = "";
+		for (let nIndex = 0, nCount = oData.m_aReplies.length; nIndex < nCount; ++nIndex)
+		{
+			anonymizeCommentData(oData.m_aReplies[nIndex]);
+		}
+	}
+
+	function anonymizeMoveMarks(arrContent)
+	{
+		for (let nIndex = 0, nCount = arrContent ? arrContent.length : 0; nIndex < nCount; ++nIndex)
+		{
+			let oItem = arrContent[nIndex];
+			// move marks have no change of their own, their info is replaced directly
+			if (para_RevisionMove === oItem.Type && oItem.ReviewInfo)
+				oItem.ReviewInfo = anonymizeReviewInfo(oItem.ReviewInfo);
+			else if (oItem.Content && para_Run !== oItem.Type)
+				anonymizeMoveMarks(oItem.Content);
+		}
+	}
+
+	let arrCommentIds = [];
+	let oComments     = this.Comments.GetAllComments();
+	for (let sId in oComments)
+	{
+		let oComment = oComments[sId];
+		if (!oComment || !oComment.GetData())
+			continue;
+
+		let oData = oComment.GetData().Copy();
+		anonymizeCommentData(oData);
+		oComment.SetData(oData);
+		arrCommentIds.push(oComment.GetId());
+	}
+
+	let arrParagraphs = this.GetAllParagraphs({All : true});
+	for (let nIndex = 0, nCount = arrParagraphs.length; nIndex < nCount; ++nIndex)
+	{
+		let oParagraph = arrParagraphs[nIndex];
+		oParagraph.CheckRunContent(function(oRun)
+		{
+			if (reviewtype_Common !== oRun.GetReviewType())
+				oRun.SetReviewTypeWithInfo(oRun.GetReviewType(), anonymizeReviewInfo(oRun.GetReviewInfo()));
+
+			if (oRun.HavePrChange())
+				oRun.SetPrChange(oRun.Pr.PrChange, anonymizeReviewInfo(oRun.Pr.ReviewInfo));
+
+			return false;
+		});
+
+		if (oParagraph.HavePrChange())
+			oParagraph.SetPrChange(oParagraph.Pr.PrChange, anonymizeReviewInfo(oParagraph.Pr.ReviewInfo));
+
+		anonymizeMoveMarks(oParagraph.Content);
+	}
+
+	function anonymizePrChange(oElement, fChangeClass)
+	{
+		if (!oElement.HavePrChange())
+			return;
+
+		let oPrChange   = oElement.Pr.PrChange;
+		let oReviewInfo = anonymizeReviewInfo(oElement.Pr.ReviewInfo);
+		AscCommon.History.Add(new fChangeClass(oElement, {
+			PrChange   : oPrChange,
+			ReviewInfo : oElement.Pr.ReviewInfo
+		}, {
+			PrChange   : oPrChange,
+			ReviewInfo : oReviewInfo
+		}));
+		oElement.Pr.SetPrChange(oPrChange, oReviewInfo);
+	}
+
+	let arrTables = this.GetAllTables({All : true});
+	for (let nTableIndex = 0, nTablesCount = arrTables.length; nTableIndex < nTablesCount; ++nTableIndex)
+	{
+		let oTable = arrTables[nTableIndex];
+		anonymizePrChange(oTable, CChangesTablePrChange);
+		for (let nRowIndex = 0, nRowsCount = oTable.GetRowsCount(); nRowIndex < nRowsCount; ++nRowIndex)
+		{
+			let oRow = oTable.GetRow(nRowIndex);
+			if (reviewtype_Common !== oRow.GetReviewType())
+				oRow.SetReviewTypeWithInfo(oRow.GetReviewType(), anonymizeReviewInfo(oRow.GetReviewInfo()));
+
+			anonymizePrChange(oRow, CChangesTableRowPrChange);
+			for (let nCellIndex = 0, nCellsCount = oRow.GetCellsCount(); nCellIndex < nCellsCount; ++nCellIndex)
+			{
+				anonymizePrChange(oRow.GetCell(nCellIndex), CChangesTableCellPrChange);
+			}
+		}
+		oTable.updateTrackRevisions();
+	}
+
+	if (this.Core)
+	{
+		let oCoreProps = this.Core.copy();
+		// setProps takes exactly these fields; the save writes a new modified date anyway
+		["category", "contentStatus", "created", "creator", "description", "identifier", "keywords", "language",
+			"lastModifiedBy", "lastPrinted", "revision", "subject", "title", "version"].forEach(function(sKey)
+		{
+			oCoreProps[sKey] = null;
+		});
+		this.Core.setProps(oCoreProps);
+	}
+
+	if (this.CustomProperties)
+	{
+		for (let nIndex = this.CustomProperties.getAllProperties().length - 1; nIndex >= 0; --nIndex)
+		{
+			this.CustomProperties.RemoveProperty(nIndex);
+		}
+	}
+
+	if (this.App)
+	{
+		// recorded as a change, the server saves by replaying the changes onto the original file
+		let oNewAppProps = {Company : null, Manager : null, HyperlinkBase : null};
+		let oOldAppProps = {
+			Company       : this.App.Company,
+			Manager       : this.App.Manager,
+			HyperlinkBase : this.App.HyperlinkBase
+		};
+		AscCommon.History.Add(new CChangesDocumentAppProps(this, oOldAppProps, oNewAppProps));
+		this.App.Company       = null;
+		this.App.Manager       = null;
+		this.App.HyperlinkBase = null;
+	}
+
+	return arrCommentIds;
+};
 CDocument.prototype.GetAllComments = function(isMine, isCurrent)
 {
 	var arrCommentsId = [];
