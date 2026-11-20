@@ -1179,3 +1179,7 @@ window['AscFormat'].NODE_TYPE_WITHGROUP = window['AscFormat']["NODE_TYPE_WITHGRO
 //special values for repeat count
 window['AscFormat'].untilNextClick = window['AscFormat']["untilNextClick"] = -1;
 window['AscFormat'].untilNextSlide = window['AscFormat']["untilNextSlide"] = -2;
+
+//text sequence of animations (effect options: "as one object" / "by paragraph")
+window['AscFormat'].TEXT_SEQUENCE_AS_ONE_OBJECT = window['AscFormat']["TEXT_SEQUENCE_AS_ONE_OBJECT"] = 0;
+window['AscFormat'].TEXT_SEQUENCE_BY_PARAGRAPH = window['AscFormat']["TEXT_SEQUENCE_BY_PARAGRAPH"] = 1;
