@@ -7,8 +7,9 @@
 
 $(function ()
 {
-	// Reading the text of a PDF needs the native PDF engine, which does not run headless.
-	// These tests give the text lines directly and check the sentence split, the diff and the search.
+	// Reading the text of a PDF needs the native PDF engine, which does not run here (no fonts, file:// page).
+	// These tests give the text lines directly and check the sentence split, the diff, the search and how the
+	// files are opened and closed in the engine (with a stand-in for it).
 	const api = window["Asc"]["PDFEditorApi"].prototype;
 
 	function Lines(aTexts, nPage)
@@ -36,15 +37,28 @@ $(function ()
 	function CreateApi(aOpenLines, oOtherLines)
 	{
 		let oApi = Object.create(api);
-		oApi.getPdfLines = function()
+		oApi.getPdfLines = function(fCallback)
 		{
-			return aOpenLines;
+			fCallback(aOpenLines);
 		};
-		oApi.getPdfLinesFromBytes = function(aBytes)
+		oApi.getPdfLinesFromBytes = function(aBytes, fCallback)
 		{
-			return oOtherLines[aBytes] !== undefined ? oOtherLines[aBytes] : null;
+			fCallback(oOtherLines[aBytes] !== undefined ? oOtherLines[aBytes] : null);
 		};
 		return oApi;
+	}
+
+	// Calls a function of the api that takes a callback as its last parameter and gives back what the callback got
+	function CallSync(oApi, sName)
+	{
+		let aArgs = Array.prototype.slice.call(arguments, 2);
+		let oResult = "callback not called";
+		aArgs.push(function(oValue)
+		{
+			oResult = oValue;
+		});
+		oApi[sName].apply(oApi, aArgs);
+		return oResult;
 	}
 
 	QUnit.module("PDF compare and search");
@@ -157,29 +171,179 @@ $(function ()
 	QUnit.test("Compare with another file", function (assert)
 	{
 		let aOpen = Lines(["First sentence. Second", "sentence."], 0).concat(Lines(["Third sentence."], 1));
-		let oApi = CreateApi(aOpen, {"other" : Lines(["First sentence. Second sentence.", "Third sentence. Fourth."], 0), "bad" : null});
+		let oApi = CreateApi(aOpen, {"other" : Lines(["First sentence. Second sentence.", "Third sentence. Fourth."], 0), "bad" : null, "scan" : Lines(["", " "], 0)});
 
-		let oResult = oApi.asc_ComparePdfText("other");
-		assert.deepEqual(oResult, {removed : [], added : [{page : 0, text : "Fourth."}], tooMany : false}, "Only the new sentence");
-		assert.strictEqual(oApi.asc_ComparePdfText("bad"), null, "Unreadable file gives null");
+		assert.deepEqual(CallSync(oApi, "asc_ComparePdfText", "other"),
+			{removed : [], added : [{page : 0, text : "Fourth."}], tooMany : false, openHasText : true, otherHasText : true}, "Only the new sentence");
+		assert.strictEqual(CallSync(oApi, "asc_ComparePdfText", "bad"), null, "Unreadable file gives null");
+
+		let oResult = CallSync(oApi, "asc_ComparePdfText", "scan");
+		assert.deepEqual([oResult.openHasText, oResult.otherHasText], [true, false], "Other file without text (scanned)");
+		oResult = CallSync(CreateApi([], {"other" : aOpen}), "asc_ComparePdfText", "other");
+		assert.deepEqual([oResult.openHasText, oResult.otherHasText], [false, true], "Open file without text");
 	});
 
 	QUnit.test("Search in several files", function (assert)
 	{
 		let oApi = CreateApi([], {
-			"a"   : Lines(["Hello World", "nothing here"], 0).concat(Lines(["hello again, w o r l d"], 2)),
-			"b"   : Lines(["no hit"], 0),
-			"bad" : null
+			"a"    : Lines(["Hello World", "nothing here"], 0).concat(Lines(["hello again, w o r l d"], 2)),
+			"b"    : Lines(["no hit"], 0),
+			"bad"  : null,
+			"scan" : []
 		});
-		let aFiles = [{name : "a.pdf", path : "C:/a.pdf", bytes : "a"}, {name : "b.pdf", path : "b.pdf", bytes : "b"}, {name : "c.pdf", path : "c.pdf", bytes : "bad"}];
+		let aFiles = [{name : "a.pdf", path : "C:/a.pdf", bytes : "a"}, {name : "b.pdf", path : "b.pdf", bytes : "b"}, {name : "c.pdf", path : "c.pdf", bytes : "bad"},
+			{name : "d.pdf", path : "d.pdf", bytes : "scan"}];
 
-		assert.deepEqual(oApi.asc_SearchInPdfFiles("world", aFiles), [
+		assert.deepEqual(CallSync(oApi, "asc_SearchInPdfFiles", "world", aFiles), [
 			{name : "a.pdf", path : "C:/a.pdf", page : 0, text : "Hello World"},
 			{name : "a.pdf", path : "C:/a.pdf", page : 2, text : "hello again, w o r l d"},
-			{name : "c.pdf", path : "c.pdf", page : -1, text : ""}
-		], "Case and spaces are ignored; unreadable file has page -1");
-		assert.deepEqual(oApi.asc_SearchInPdfFiles("HelloWorld", aFiles.slice(0, 2)).length, 1, "Spaces in the search text are ignored too");
-		assert.deepEqual(oApi.asc_SearchInPdfFiles("   ", aFiles), [], "Empty search text finds nothing");
-		assert.deepEqual(oApi.asc_SearchInPdfFiles("world", []), [], "No files");
+			{name : "c.pdf", path : "c.pdf", page : -1, text : ""},
+			{name : "d.pdf", path : "d.pdf", page : -2, text : ""}
+		], "Case and spaces are ignored; unreadable file has page -1, file without text page -2");
+		assert.deepEqual(CallSync(oApi, "asc_SearchInPdfFiles", "HelloWorld", aFiles.slice(0, 2)).length, 1, "Spaces in the search text are ignored too");
+		assert.deepEqual(CallSync(oApi, "asc_SearchInPdfFiles", "   ", aFiles), [], "Empty search text finds nothing");
+		assert.deepEqual(CallSync(oApi, "asc_SearchInPdfFiles", "world", []), [], "No files");
+	});
+
+	QUnit.test("Only one reading at a time", function (assert)
+	{
+		let oApi = CreateApi([], {});
+		let fPending = null;
+		oApi.getPdfLinesFromBytes = function(aBytes, fCallback)
+		{
+			fPending = fCallback;
+		};
+		let aResults = [];
+		assert.strictEqual(oApi.asc_ComparePdfText("x", function(oResult) { aResults.push(oResult); }), true, "First comparison starts");
+		assert.strictEqual(oApi.asc_SearchInPdfFiles("a", [{name : "a", path : "a", bytes : "a"}], function() { aResults.push("search"); }), false, "A search is refused while the comparison runs");
+		assert.strictEqual(oApi.asc_ComparePdfText("y", function() { aResults.push("second"); }), false, "A second comparison is refused");
+		fPending(null);
+		assert.deepEqual(aResults, [null], "Only the first callback is called");
+		assert.strictEqual(oApi.asc_ComparePdfText("z", function() {}), true, "After the end a new comparison starts");
+	});
+
+	QUnit.test("Pages whose fonts are still loading are read again", function (assert)
+	{
+		let done = assert.async();
+		let nCalls = 0;
+		let oFile = {
+			pages        : [{}, {}, {}],
+			getPageLines : function(nPage)
+			{
+				++nCalls;
+				// page 2 has no text in the first two rounds (its fonts are loading)
+				if (1 === nPage && nCalls < 5)
+					return null;
+				return ["Page " + (nPage + 1)];
+			}
+		};
+		let aEvents = [];
+		api.readPdfLines(oFile, function() { aEvents.push("before"); }, function() { aEvents.push("after"); }, function(aLines)
+		{
+			assert.deepEqual(aLines, [{page : 0, text : "Page 1"}, {page : 1, text : "Page 2"}, {page : 2, text : "Page 3"}], "All pages once their fonts are there");
+			assert.strictEqual(nCalls, 5, "Pages with text are not read again");
+			assert.deepEqual(aEvents, ["before", "after", "before", "after", "before", "after"], "Before and after each round");
+
+			let oNeverFile = {pages : [{}, {}], getPageLines : function(nPage) { return nPage ? null : ["Only"]; }};
+			api.readPdfLines(oNeverFile, null, null, function(aLines)
+			{
+				assert.deepEqual(aLines, [{page : 0, text : "Only"}], "Stops after the time limit with the pages it has");
+
+				let oBrokenFile = {pages : [{}], getPageLines : function() { throw new Error("engine"); }};
+				let aEvents2 = [];
+				api.readPdfLines(oBrokenFile, null, function() { aEvents2.push("after"); }, function(aLines)
+				{
+					assert.strictEqual(aLines, null, "An engine error gives null");
+					assert.deepEqual(aEvents2, ["after"], "fAfter is called after an error too");
+					done();
+				});
+			}, 120);
+		});
+	});
+
+	QUnit.test("The other file is closed and the engine gets a new font storage", function (assert)
+	{
+		// The engine frees its shared font storage when any file is closed; opening a file makes a new one.
+		// Without a new one the open document crashed on its next drawing ("remainder by zero").
+		let done = assert.async();
+		let oViewer = window["AscViewer"];
+		let fOldCreate = oViewer.createFile, fOldDrawingFile = oViewer["CDrawingFile"], oOldGlobal = window["drawingFile"];
+		let aLog = [];
+		let nKeeper = 0;
+		function CKeeper()
+		{
+			this.id = "empty" + (++nKeeper);
+		}
+		CKeeper.prototype["loadFromData"] = function(aBytes)
+		{
+			aLog.push("open " + this.id + (String.fromCharCode.apply(null, aBytes.slice(0, 5)) === "%PDF-" ? " (pdf)" : ""));
+			window["drawingFile"] = this;
+			return 0;
+		};
+		CKeeper.prototype["close"] = function()
+		{
+			aLog.push("close " + this.id);
+			window["drawingFile"] = null;
+		};
+		let oOpenNative = {id : "open document"};
+		let oOtherNative = {id : "other"};
+		function Restore()
+		{
+			oViewer.createFile = fOldCreate;
+			oViewer["CDrawingFile"] = fOldDrawingFile;
+			window["drawingFile"] = oOldGlobal;
+		}
+		oViewer["CDrawingFile"] = CKeeper;
+		oViewer.createFile = function(aBytes)
+		{
+			aLog.push("open other");
+			window["drawingFile"] = oOtherNative;
+			if ("bad" === aBytes)
+			{
+				// createFile closes a file it can't read
+				aLog.push("close other");
+				window["drawingFile"] = null;
+				return null;
+			}
+			return {
+				nativeFile   : oOtherNative,
+				pages        : [{}],
+				getPageLines : function()
+				{
+					aLog.push("read with " + (window["drawingFile"] && window["drawingFile"].id));
+					return ["Text."];
+				},
+				close        : function()
+				{
+					aLog.push("close other");
+					window["drawingFile"] = null;
+				}
+			};
+		};
+		window["drawingFile"] = oOpenNative;
+		try
+		{
+			api.getPdfLinesFromBytes("good", function(aLines)
+			{
+				assert.deepEqual(aLines, [{page : 0, text : "Text."}], "Lines of the other file");
+				assert.deepEqual(aLog, ["open other", "read with other", "close other", "open empty1 (pdf)"], "An empty PDF is opened after the other file is closed");
+				assert.strictEqual(window["drawingFile"], oOpenNative, "The engine's current file is the open document again");
+				aLog = [];
+				api.getPdfLinesFromBytes("bad", function(aLines)
+				{
+					assert.strictEqual(aLines, null, "Unreadable file gives null");
+					assert.deepEqual(aLog, ["open other", "close other", "close empty1", "open empty2 (pdf)"], "Also after a file that can't be read; only one empty PDF stays open");
+					assert.strictEqual(window["drawingFile"], oOpenNative, "The engine's current file is the open document again");
+					Restore();
+					done();
+				});
+			});
+		}
+		catch (e)
+		{
+			Restore();
+			assert.ok(false, "Exception: " + e);
+			done();
+		}
 	});
 });

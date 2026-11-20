@@ -855,49 +855,115 @@
 		};
 		oInput.click();
 	};
+	// The PDF engine (drawingfile.wasm) has one font storage for all its files: opening a file makes a new one and
+	// closing any file frees it. So after the other file was closed, the open document crashed on its next drawing
+	// ("RuntimeError: remainder by zero"). A tiny empty PDF is opened after each close to give the engine a new font
+	// storage; it stays open until the next one replaces it.
+	const PDF_EMPTY_FILE = "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+		"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 10 10]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n";
+	let g_oPdfEngineKeeper = null;
+	function RenewPdfEngineFontStorage() {
+		let oKeeper = g_oPdfEngineKeeper;
+		g_oPdfEngineKeeper = null;
+		oKeeper && oKeeper["close"]();
+		let CDrawingFile = window["AscViewer"] && window["AscViewer"]["CDrawingFile"];
+		if (!CDrawingFile)
+			return;
+		let aBytes = new Uint8Array(PDF_EMPTY_FILE.length);
+		for (let nIndex = 0; nIndex < aBytes.length; ++nIndex)
+			aBytes[nIndex] = PDF_EMPTY_FILE.charCodeAt(nIndex);
+		g_oPdfEngineKeeper = new CDrawingFile();
+		g_oPdfEngineKeeper["loadFromData"](aBytes);
+	}
+	/**
+	 * Reads the text lines of all pages of a file. The text of a page is only there when its fonts are loaded, which
+	 * the browser does in the background: pages without text yet are read again until their fonts are there (at most
+	 * for nTimeout ms).
+	 * @param {{pages: Array, getPageLines: function(number): ?string[]}} oFile
+	 * @param {?function(): void} fBefore called before each reading round (and fAfter after it)
+	 * @param {?function(): void} fAfter
+	 * @param {function(?{page: number, text: string}[])} fCallback null if the engine fails
+	 * @param {number} [nTimeout=15000]
+	 */
+	PDFEditorApi.prototype.readPdfLines = function(oFile, fBefore, fAfter, fCallback, nTimeout) {
+		let aPages = new Array(oFile.pages.length);
+		let nEnd = Date.now() + (undefined !== nTimeout ? nTimeout : 15000);
+		let fStep = function() {
+			let isWaiting = false;
+			try {
+				fBefore && fBefore();
+				for (let nPage = 0; nPage < aPages.length; ++nPage) {
+					if (!aPages[nPage]) {
+						aPages[nPage] = oFile.getPageLines(nPage);
+						isWaiting = isWaiting || !aPages[nPage];
+					}
+				}
+			}
+			catch (e) {
+				fAfter && fAfter();
+				fCallback(null);
+				return;
+			}
+			fAfter && fAfter();
+			if (isWaiting && Date.now() < nEnd) {
+				setTimeout(fStep, 50);
+				return;
+			}
+			let aLines = [];
+			aPages.forEach(function(aPageLines, nPage) {
+				(aPageLines || []).forEach(function(sLine) {
+					aLines.push({page: nPage, text: sLine});
+				});
+			});
+			fCallback(aLines);
+		};
+		fStep();
+	};
 	/**
 	 * The text lines of a PDF given as bytes (the file is opened in the background and closed again)
 	 * @param {Uint8Array} aBytes
-	 * @returns {?{page: number, text: string}[]} null if the file can't be read
+	 * @param {function(?{page: number, text: string}[])} fCallback null if the file can't be read
 	 */
-	PDFEditorApi.prototype.getPdfLinesFromBytes = function(aBytes) {
-		// The PDF engine keeps the last opened file in a global (it gets the font streams) and clears it on close:
-		// give it back to the open document afterwards.
+	PDFEditorApi.prototype.getPdfLinesFromBytes = function(aBytes, fCallback) {
+		// The engine keeps the last opened file in a global (it gets the font streams) and clears it on close:
+		// give it back to the open document after each step.
 		let oOpenFile = window["drawingFile"];
 		let oFile = null;
+		let fFinish = function(aLines) {
+			try {
+				oFile && oFile.close();
+				RenewPdfEngineFontStorage();
+			}
+			catch (e) {
+				aLines = null;
+			}
+			window["drawingFile"] = oOpenFile;
+			fCallback(aLines);
+		};
 		try {
 			oFile = window["AscViewer"].createFile(aBytes);
-			if (!oFile || !oFile.pages || (oFile.isNeedPassword && oFile.isNeedPassword()))
-				return null;
-			let aLines = [];
-			for (let nPage = 0; nPage < oFile.pages.length; ++nPage) {
-				oFile.getPageLines(nPage).forEach(function(sLine) {
-					aLines.push({page: nPage, text: sLine});
-				});
-			}
-			return aLines;
 		}
 		catch (e) {
-			return null;
+			oFile = null;
 		}
-		finally {
-			oFile && oFile.close();
+		if (!oFile || !oFile.pages || !oFile.pages.length || !oFile.nativeFile || (oFile.isNeedPassword && oFile.isNeedPassword())) {
+			fFinish(null);
+			return;
+		}
+		let oNative = oFile.nativeFile;
+		window["drawingFile"] = oOpenFile;
+		this.readPdfLines(oFile, function() {
+			window["drawingFile"] = oNative;
+		}, function() {
 			window["drawingFile"] = oOpenFile;
-		}
+		}, fFinish);
 	};
 	/**
 	 * The text lines of the open PDF
-	 * @returns {{page: number, text: string}[]}
+	 * @param {function(?{page: number, text: string}[])} fCallback
 	 */
-	PDFEditorApi.prototype.getPdfLines = function() {
-		let oFile = this.getDocumentRenderer().file;
-		let aLines = [];
-		for (let nPage = 0; nPage < oFile.pages.length; ++nPage) {
-			oFile.getPageLines(nPage).forEach(function(sLine) {
-				aLines.push({page: nPage, text: sLine});
-			});
-		}
-		return aLines;
+	PDFEditorApi.prototype.getPdfLines = function(fCallback) {
+		this.readPdfLines(this.getDocumentRenderer().file, null, null, fCallback);
 	};
 	/**
 	 * The text of PDF lines as sentences, with the page where each starts. Spaces are ignored for the comparison
@@ -991,42 +1057,93 @@
 		return {removed: aRemoved.map(fOut), added: aAdded.map(fOut), tooMany: false};
 	};
 	/**
+	 * Runs one text reading of other PDFs at a time (the engine must not have two of them open in turn)
+	 * @param {function(function(): void)} fWork gets the function to call when it is done
+	 * @returns {boolean} false if another one is still running
+	 */
+	PDFEditorApi.prototype.runPdfTextReading = function(fWork) {
+		if (this.isPdfTextReading)
+			return false;
+		this.isPdfTextReading = true;
+		let t = this;
+		fWork(function() {
+			t.isPdfTextReading = false;
+		});
+		return true;
+	};
+	/**
 	 * Compares the text of the open PDF with another PDF sentence by sentence, so a different line wrapping does
 	 * not matter. Only the text layer of the files is compared (not edits made in the editor and not yet saved).
+	 * removed = only in the open PDF, added = only in the other PDF; openHasText / otherHasText are false for a file
+	 * without any text (a scanned PDF).
 	 * @param {Uint8Array} aOtherBytes
-	 * @returns {?{removed: {page: number, text: string}[], added: {page: number, text: string}[], tooMany: boolean}}
-	 * removed = only in the open PDF, added = only in the other PDF; null if the other file can't be read
+	 * @param {function(?{removed: {page: number, text: string}[], added: {page: number, text: string}[], tooMany: boolean, openHasText: boolean, otherHasText: boolean})} fCallback
+	 * null if a file can't be read
+	 * @returns {boolean} false if a comparison or search is still running (the callback is not called then)
 	 */
-	PDFEditorApi.prototype.asc_ComparePdfText = function(aOtherBytes) {
-		let aOtherLines = this.getPdfLinesFromBytes(aOtherBytes);
-		if (!aOtherLines)
-			return null;
-		return this.comparePdfSentences(this.getPdfSentences(this.getPdfLines()), this.getPdfSentences(aOtherLines));
+	PDFEditorApi.prototype.asc_ComparePdfText = function(aOtherBytes, fCallback) {
+		let t = this;
+		return this.runPdfTextReading(function(fDone) {
+			t.getPdfLinesFromBytes(aOtherBytes, function(aOtherLines) {
+				if (!aOtherLines) {
+					fDone();
+					fCallback(null);
+					return;
+				}
+				t.getPdfLines(function(aOpenLines) {
+					fDone();
+					if (!aOpenLines) {
+						fCallback(null);
+						return;
+					}
+					let aOpen = t.getPdfSentences(aOpenLines), aOther = t.getPdfSentences(aOtherLines);
+					let oResult = t.comparePdfSentences(aOpen, aOther);
+					oResult.openHasText = aOpen.length > 0;
+					oResult.otherHasText = aOther.length > 0;
+					fCallback(oResult);
+				});
+			});
+		});
 	};
 	/**
 	 * Searches a text in PDFs given as bytes, line by line; spaces and case are ignored
 	 * @param {string} sText
 	 * @param {{name: string, path: string, bytes: Uint8Array}[]} aFiles
-	 * @returns {{name: string, path: string, page: number, text: string}[]} unreadable files have one entry with page -1
+	 * @param {function({name: string, path: string, page: number, text: string}[])} fCallback a file that can't be
+	 * read has one entry with page -1, a file without any text (a scanned PDF) one with page -2
+	 * @returns {boolean} false if a comparison or search is still running (the callback is not called then)
 	 */
-	PDFEditorApi.prototype.asc_SearchInPdfFiles = function(sText, aFiles) {
+	PDFEditorApi.prototype.asc_SearchInPdfFiles = function(sText, aFiles, fCallback) {
 		let t = this;
 		let sNeedle = sText.replace(/\s+/g, "").toLowerCase();
-		let aResult = [];
-		if (!sNeedle)
-			return aResult;
-		aFiles.forEach(function(oFile) {
-			let aLines = t.getPdfLinesFromBytes(oFile.bytes);
-			if (!aLines) {
-				aResult.push({name: oFile.name, path: oFile.path, page: -1, text: ""});
-				return;
-			}
-			aLines.forEach(function(oLine) {
-				if (oLine.text.replace(/\s+/g, "").toLowerCase().indexOf(sNeedle) !== -1)
-					aResult.push({name: oFile.name, path: oFile.path, page: oLine.page, text: oLine.text});
-			});
+		if (!sNeedle) {
+			fCallback([]);
+			return true;
+		}
+		return this.runPdfTextReading(function(fDone) {
+			let aResult = [];
+			let fNext = function(nFile) {
+				if (nFile >= aFiles.length) {
+					fDone();
+					fCallback(aResult);
+					return;
+				}
+				let oFile = aFiles[nFile];
+				t.getPdfLinesFromBytes(oFile.bytes, function(aLines) {
+					let isText = false;
+					(aLines || []).forEach(function(oLine) {
+						let sLine = oLine.text.replace(/\s+/g, "").toLowerCase();
+						isText = isText || !!sLine;
+						if (sLine.indexOf(sNeedle) !== -1)
+							aResult.push({name: oFile.name, path: oFile.path, page: oLine.page, text: oLine.text});
+					});
+					if (!aLines || !isText)
+						aResult.push({name: oFile.name, path: oFile.path, page: aLines ? -2 : -1, text: ""});
+					fNext(nFile + 1);
+				});
+			};
+			fNext(0);
 		});
-		return aResult;
 	};
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();

@@ -415,14 +415,18 @@ void main() {\n\
     /**
      * The text lines of a page, read like the search does; loads the text of the page if needed
      * @param {number} pageIndex
-     * @returns {string[]}
+     * @returns {?string[]} null while the fonts of the page are still loading (no text yet)
      */
     CFile.prototype.getPageLines = function(pageIndex) {
         let page = this.pages[pageIndex];
         if (!page)
             return [];
         if (null == page.text && undefined !== page.originIndex)
+        {
             page.text = this.getText(page.originIndex);
+            if (null == page.text)
+                return null;
+        }
 
         let stream = this.getPageTextStream(pageIndex);
         if (!stream)
