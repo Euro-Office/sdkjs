@@ -112,28 +112,28 @@ $(function ()
 		assert.deepEqual(inds(paras), [[10, -5, 0], [20, -5, 0], [30, 0, 0]], "all three back after one undo");
 	});
 
-	QUnit.test("Each paragraph stays inside the page and the text area", function (assert)
+	QUnit.test("The paragraphs stay inside the page and the text area, the first one at the limit stops all", function (assert)
 	{
 		let paras = setup();
 		let p = paras[0];
 		let textWidth = p.XLimit - p.X;
 		let startGap  = p.X;
 		let endGap    = logicDocument.Get_PageLimits(0).XLimit - p.XLimit;
+		let round = function (v) {return Math.round(v * 100) / 100;};
 		assert.true(textWidth > 100, "the paragraphs are laid out (text width " + textWidth + " mm)");
 
+		// left 10/20/30: the third paragraph reaches the limit (20 mm before the right indent) first
 		AscTest.SelectDocumentRange(0, 2);
 		logicDocument.ShiftParagraphIndents(500, 0, 500);
 		let r = inds(paras);
-		assert.deepEqual(r.map(function (ind) {return ind[0];}), [textWidth - 20, textWidth - 20, textWidth - 20].map(function (v) {return Math.round(v * 100) / 100;}), "left stops 20 mm before the right indent");
+		assert.deepEqual(r.map(function (ind) {return ind[0];}), [round(textWidth - 40), round(textWidth - 30), round(textWidth - 20)], "the third stops 20 mm before the right indent, the others keep their distance");
 		assert.deepEqual(r.map(function (ind) {return ind[1];}), [-5, -5, 0], "the hanging indents stay");
 
+		// first lines at 5/15/30: the first paragraph's first line reaches the left page edge first
 		paras = setup();
 		AscTest.SelectDocumentRange(0, 2);
 		logicDocument.ShiftParagraphIndents(-500, 0, -500);
-		r = inds(paras);
-		// the first line of the first two paragraphs is 5 mm left of their left indent; it stops at the page edge
-		let round = function (v) {return Math.round(v * 100) / 100;};
-		assert.deepEqual(r, [[round(5 - startGap), -5, 0], [round(5 - startGap), -5, 0], [round(-startGap), 0, 0]], "the first line stops at the left page edge");
+		assert.deepEqual(inds(paras), [[round(5 - startGap), -5, 0], [round(15 - startGap), -5, 0], [round(25 - startGap), 0, 0]], "the first line of the first paragraph stops at the left page edge, the others keep their distance");
 
 		paras = setup();
 		AscTest.SelectDocumentRange(0, 2);
@@ -143,7 +143,57 @@ $(function ()
 		paras = setup();
 		AscTest.SelectDocumentRange(0, 2);
 		logicDocument.ShiftParagraphIndents(0, 0, 500);
-		assert.deepEqual(inds(paras).map(function (ind) {return round(ind[0] + ind[1]);}), [round(textWidth - 20), round(textWidth - 20), round(textWidth - 20)], "the first line alone stops 20 mm before the right indent");
+		assert.deepEqual(inds(paras).map(function (ind) {return round(ind[0] + ind[1]);}), [round(textWidth - 45), round(textWidth - 35), round(textWidth - 20)], "the first line alone: the third stops 20 mm before the right indent, the others keep their distance");
+	});
+
+	QUnit.test("A paragraph that is already outside the limit is not pulled back and does not stop the others", function (assert)
+	{
+		let paras = setup();
+		let textWidth = paras[0].XLimit - paras[0].X;
+		let round = function (v) {return Math.round(v * 100) / 100;};
+		paras[2].Set_Ind({Left : round(textWidth - 10), FirstLine : 0, Right : 0}, false);
+		AscTest.Recalculate();
+
+		AscTest.SelectDocumentRange(0, 2);
+		logicDocument.ShiftParagraphIndents(5, 0, 5);
+		assert.deepEqual(inds(paras), [[15, -5, 0], [25, -5, 0], [round(textWidth - 10), 0, 0]], "the first two move by 5, the third stays");
+	});
+
+	QUnit.test("List levels at the right limit keep their differences", function (assert)
+	{
+		AscTest.ClearDocument();
+		let numberingManager = logicDocument.GetNumberingManager();
+		let num = numberingManager.CreateNum();
+		AscWord.GetNumberingObjectByDeprecatedTypes(2, 7).FillNum(num);
+		numberingManager.AddNum(num);
+
+		let paras = [];
+		for (let lvl = 1; lvl < 4; ++lvl)
+		{
+			let p = AscTest.CreateParagraph();
+			AscTest.AddTextToParagraph(p, "Ebene " + (lvl + 1));
+			p.SetNumPr(num.GetId(), lvl);
+			logicDocument.PushToContent(p);
+			paras.push(p);
+		}
+		AscTest.Recalculate();
+
+		let textWidth = paras[0].XLimit - paras[0].X;
+		let before    = inds(paras);
+		let maxStart  = function (ind) {return Math.max(ind[0], ind[0] + ind[1]);};
+		let last      = before.reduce(function (a, ind) {return Math.max(a, maxStart(ind));}, 0);
+		let shift     = textWidth - 20 - last;
+		assert.true(shift > 0 && before[0][0] < before[2][0], "the levels have different indents and can move right");
+
+		// drag the left marker (with the first line) far to the right, past the limit
+		AscTest.SelectDocumentRange(0, 2);
+		logicDocument.ShiftParagraphIndents(500, 0, 500);
+		let after = inds(paras);
+		assert.deepEqual(after, before.map(function (ind)
+		{
+			return [Math.round((ind[0] + shift) * 100) / 100, ind[1], ind[2]];
+		}), "all levels move by the same distance until the deepest one reaches the limit");
+		assert.notEqual(after[0][0], after[2][0], "the levels do not collapse to one position");
 	});
 
 	QUnit.test("Paragraphs with the other direction are left as they are", function (assert)
