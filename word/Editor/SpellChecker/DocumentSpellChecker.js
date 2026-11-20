@@ -148,14 +148,8 @@
 	};
 	CDocumentSpellChecker.prototype.ContinueSpellCheck = function()
 	{
-		if (!this.IsOn())
+		if (!this.IsOn() || this.IsErrorsExceed())
 			return;
-
-		if (this.IsErrorsExceed())
-		{
-			this.private_SendProgress();
-			return;
-		}
 
 		// Пока не обработались предыдущие параграфы, новые не стартуем
 		if (!this.private_HaveWaitingParagraphs())

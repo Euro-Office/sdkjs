@@ -1008,6 +1008,52 @@ $(function () {
 		}
 	});
 
+	QUnit.test("Past the limit of 2000 errors the spellcheck timer does nothing", function (assert)
+	{
+		let paragraphs = CreateMisspelledDocument();
+		let spelling = logicDocument.Spelling;
+		spelling.Reset();
+		spelling.Progress = null;
+		let getErrorsCount = spelling.GetErrorsCount;
+		spelling.GetErrorsCount = function()
+		{
+			return 2001;
+		};
+		let getPendingCount = spelling.GetPendingParagraphsCount;
+		try
+		{
+			let events = CatchEvents("asc_onSpellCheckProgress", function()
+			{
+				spelling.ContinueSpellCheck();
+			});
+			assert.strictEqual(spelling.IsErrorsExceed(), true, "This tick hits the limit");
+			assert.deepEqual(events, [[0, 0, true, false]], "The tick that hits the limit sends the progress");
+
+			spelling.AddParagraphToCheck(paragraphs[0]);
+			spelling.AddParagraphToCheck(paragraphs[1]);
+			let counted = 0;
+			spelling.GetPendingParagraphsCount = function()
+			{
+				++counted;
+				return getPendingCount.call(this);
+			};
+			events = CatchEvents("asc_onSpellCheckProgress", function()
+			{
+				spelling.ContinueSpellCheck();
+				spelling.ContinueSpellCheck();
+			});
+			assert.deepEqual(events, [], "A tick past the limit sends no progress");
+			assert.strictEqual(counted, 0, "And does not count the pending paragraphs");
+		}
+		finally
+		{
+			spelling.GetErrorsCount = getErrorsCount;
+			delete spelling.GetPendingParagraphsCount;
+			spelling.Reset();
+			spelling.Progress = null;
+		}
+	});
+
 	QUnit.test("Suggestions for the next word are sent when the spellchecker answers", function (assert)
 	{
 		let paragraphs = CreateMisspelledDocument();
