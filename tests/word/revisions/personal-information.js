@@ -229,4 +229,69 @@ $(function ()
 		assert.strictEqual(replayed.NewLastPrinted, null, "The last printed date is removed, not an invalid date");
 		assert.strictEqual(replayed.NewTitle, null, "The title is removed");
 	});
+
+	QUnit.test("Company and manager are removed by a recorded change that the save replays", function (assert)
+	{
+		// the server saves by opening the original file and replaying the changes, so a value set only in memory
+		// would stay in docProps/app.xml
+		AscTest.ClearDocument();
+		logicDocument.PushToContent(AscTest.CreateParagraph());
+
+		let app = logicDocument.App;
+		logicDocument.App = new AscCommon.CApp();
+		logicDocument.App.Company       = "Acme Ltd";
+		logicDocument.App.Manager       = "Ivan";
+		logicDocument.App.HyperlinkBase = "https://acme.example/";
+		logicDocument.App.Template      = "Normal.dotm";
+
+		AscCommon.History.Clear();
+		logicDocument.StartAction(AscDFH.historydescription_Document_RemovePersonalInformation);
+		logicDocument.RemovePersonalInformation("Author");
+		logicDocument.FinalizeAction();
+
+		let change = null;
+		AscCommon.History.Points[AscCommon.History.Index].Items.forEach(function(item)
+		{
+			if (AscDFH.historyitem_Document_AppProps === item.Data.Type)
+				change = item.Data;
+		});
+		assert.ok(change, "Removing company and manager is recorded as a change");
+		if (!change)
+		{
+			logicDocument.App = app;
+			return;
+		}
+
+		// replay onto the document as it was opened from the original file
+		let writer = AscTest.GetBinaryWriter();
+		writer.WriteString2(change.Class.Get_Id());
+		writer.WriteLong(change.Type);
+		change.WriteToBinary(writer);
+
+		logicDocument.App.Company       = "Acme Ltd";
+		logicDocument.App.Manager       = "Ivan";
+		logicDocument.App.HyperlinkBase = "https://acme.example/";
+
+		let reader   = AscTest.GetBinaryReader(writer);
+		let classId  = reader.GetString2();
+		let type     = reader.GetLong();
+		let replayed = new AscDFH.changesFactory[type](AscCommon.g_oTableId.Get_ById(classId));
+		replayed.ReadFromBinary(reader);
+		replayed.Redo();
+
+		let props = logicDocument.App;
+		assert.deepEqual([props.Company, props.Manager, props.HyperlinkBase], [null, null, null], "The replayed change removes company, manager and hyperlink base");
+		assert.strictEqual(props.Template, "Normal.dotm", "The template is kept");
+
+		replayed.CreateReverseChange().Redo();
+		assert.deepEqual([props.Company, props.Manager], ["Acme Ltd", "Ivan"], "The reverse change brings them back");
+
+		logicDocument.Document_Undo();
+		logicDocument.Document_Redo();
+		assert.deepEqual([props.Company, props.Manager], [null, null], "Redo removes them again");
+		logicDocument.Document_Undo();
+		assert.deepEqual([props.Company, props.Manager, props.HyperlinkBase], ["Acme Ltd", "Ivan", "https://acme.example/"], "Undo brings them back");
+
+		logicDocument.App = app;
+	});
 });

@@ -14226,7 +14226,6 @@ CDocument.prototype.GetSelectionAnchorPos = function()
  * Replaces the author of every comment, reply and tracked change with one name and removes the document properties,
  * custom properties included, and the company, manager and hyperlink base, like the document inspector of Word.
  * The dates of comments and changes and the template are kept.
- * The company, manager and hyperlink base have no undo and are only removed from the file saved here.
  * @param {string} sName
  * @returns {string[]} ids of the changed comments
  */
@@ -14365,6 +14364,14 @@ CDocument.prototype.RemovePersonalInformation = function(sName)
 
 	if (this.App)
 	{
+		// recorded as a change, the server saves by replaying the changes onto the original file
+		let oNewAppProps = {Company : null, Manager : null, HyperlinkBase : null};
+		let oOldAppProps = {
+			Company       : this.App.Company,
+			Manager       : this.App.Manager,
+			HyperlinkBase : this.App.HyperlinkBase
+		};
+		AscCommon.History.Add(new CChangesDocumentAppProps(this, oOldAppProps, oNewAppProps));
 		this.App.Company       = null;
 		this.App.Manager       = null;
 		this.App.HyperlinkBase = null;
