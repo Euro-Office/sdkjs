@@ -802,6 +802,166 @@
 			oDoc.RemovePages(aPages);
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
+	/**
+	 * Lets the user place a picture (e.g. a signature) with the mouse: a see-through copy follows the mouse, the mouse
+	 * wheel or + / - change its size, and a left click on a page drops it there. Esc, a right click or a click outside
+	 * the pages cancels.
+	 * @param {string} sUrl
+	 * @param {number} nWidthMM the start width of the placed picture
+	 * @param {function(number)} [fOnPlaced] gets the width (mm) the picture was placed with
+	 * @param {string} [sHint] a short help text shown under the picture
+	 */
+	PDFEditorApi.prototype.asc_StartPlaceImage = function(sUrl, nWidthMM, fOnPlaced, sHint) {
+		let t = this;
+		let oViewer = this.getDocumentRenderer();
+		this.asc_StopPlaceImage();
+
+		// the placement starts now: a stop or a new start before the picture has loaded replaces this state,
+		// and the onload of this picture must not start it any more
+		let oState = {ghost: null, listeners: []};
+		this.placeImageState = oState;
+
+		let oImg = new Image();
+		oImg.onerror = function() {
+			if (t.placeImageState === oState)
+				t.placeImageState = null;
+		};
+		oImg.onload = function() {
+			if (t.placeImageState !== oState)
+				return;
+
+			let fRatio = oImg.height / Math.max(1, oImg.width);
+			let fPx = 96 / 25.4 * (oViewer.zoom || 1);
+			let nWidth = Math.max(15, Math.min(200, nWidthMM));
+			let nLastX = 0, nLastY = 0, isShown = false;
+
+			let oBox = document.createElement("div");
+			oBox.style.cssText = "position:fixed;pointer-events:none;z-index:10000;display:none;text-align:center;";
+			let oGhost = document.createElement("img");
+			oGhost.src = sUrl;
+			oGhost.style.cssText = "display:block;opacity:0.75;";
+			oBox.appendChild(oGhost);
+			if (sHint) {
+				let oHint = document.createElement("div");
+				oHint.textContent = sHint;
+				oHint.style.cssText = "display:inline-block;margin-top:4px;padding:2px 6px;font:12px Arial,sans-serif;color:#fff;background:rgba(0,0,0,0.65);border-radius:3px;white-space:nowrap;";
+				oBox.appendChild(oHint);
+			}
+			document.body.appendChild(oBox);
+
+			let update = function() {
+				let nW = nWidth * fPx, nH = nWidth * fRatio * fPx;
+				oGhost.style.width = nW + "px";
+				oGhost.style.height = nH + "px";
+				oBox.style.left = (nLastX - nW / 2) + "px";
+				oBox.style.top = (nLastY - nH / 2) + "px";
+				oBox.style.display = isShown ? "block" : "none";
+			};
+			let resize = function(fFactor) {
+				nWidth = Math.max(15, Math.min(200, nWidth * fFactor));
+				update();
+			};
+
+			oState.ghost = oBox;
+			let listen = function(sType, fHandler) {
+				document.addEventListener(sType, fHandler, {capture: true, passive: false});
+				oState.listeners.push([sType, fHandler]);
+			};
+			let isOnPages = function(e) {
+				return oViewer.canvas && (e.target === oViewer.canvas || e.target === oViewer.canvasForms || oViewer.parent.contains(e.target));
+			};
+			let swallowUp = function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+			};
+
+			["pointermove", "mousemove"].forEach(function(sType) {
+				listen(sType, function(e) {
+					nLastX = e.clientX;
+					nLastY = e.clientY;
+					isShown = true;
+					update();
+				});
+			});
+			listen("wheel", function(e) {
+				e.preventDefault();
+				e.stopPropagation();
+				resize(e.deltaY < 0 ? 1.1 : 1 / 1.1);
+			});
+			["pointerdown", "mousedown"].forEach(function(sType) {
+				listen(sType, function(e) {
+					if (t.placeImageState !== oState)
+						return;
+					let isPlace = (0 === e.button && isOnPages(e));
+					let oPos = isPlace ? oViewer.getPageByCoords2(e.clientX, e.clientY) : null;
+					if (isPlace) {
+						e.preventDefault();
+						e.stopPropagation();
+					}
+					t.asc_StopPlaceImage();
+					// the release of this click must not reach the viewer
+					if (isPlace) {
+						document.addEventListener("pointerup", swallowUp, true);
+						document.addEventListener("mouseup", swallowUp, true);
+						setTimeout(function() {
+							document.removeEventListener("pointerup", swallowUp, true);
+							document.removeEventListener("mouseup", swallowUp, true);
+						}, 500);
+					}
+					if (oPos) {
+						t.AddImageUrl([sUrl], undefined, undefined, {placeAt: {page: oPos.index, x: oPos.x, y: oPos.y, w: nWidth}});
+						fOnPlaced && fOnPlaced(nWidth);
+					}
+				});
+			});
+			listen("keydown", function(e) {
+				if (27 === e.keyCode) {
+					t.asc_StopPlaceImage();
+				} else if (187 === e.keyCode || 107 === e.keyCode || "+" === e.key) {
+					e.preventDefault();
+					e.stopPropagation();
+					resize(1.1);
+				} else if (189 === e.keyCode || 109 === e.keyCode || "-" === e.key) {
+					e.preventDefault();
+					e.stopPropagation();
+					resize(1 / 1.1);
+				}
+			});
+		};
+		oImg.src = sUrl;
+	};
+	PDFEditorApi.prototype.asc_StopPlaceImage = function() {
+		let oState = this.placeImageState;
+		if (!oState)
+			return;
+		this.placeImageState = null;
+		oState.listeners.forEach(function(aItem) {document.removeEventListener(aItem[0], aItem[1], {capture: true});});
+		oState.ghost && oState.ghost.parentNode && oState.ghost.parentNode.removeChild(oState.ghost);
+	};
+	/**
+	 * Puts a loaded picture on a page, centred on a point, as one undo step (used by asc_StartPlaceImage)
+	 * @param {AscFonts.CImage} oImage the loaded picture (src and Image)
+	 * @param {{page: number, x: number, y: number, w: number}} oPlace page index, centre in mm, width in mm
+	 * @returns {?AscPDF.CPdfImage}
+	 */
+	PDFEditorApi.prototype.placeImageAt = function(oImage, oPlace) {
+		let oDoc = this.getPDFDoc();
+		let oPicture = null;
+		oDoc.BlurActiveObject();
+		oDoc.DoAction(function() {
+			let nW = oPlace.w;
+			let nH = nW * oImage.Image.height / Math.max(1, oImage.Image.width);
+			oPicture = new AscPDF.CPdfImage();
+			AscFormat.fillImage(oPicture, oImage.src, 0, 0, nW, nH);
+			let oXfrm = oPicture.getXfrm();
+			oXfrm.setOffX(oPlace.x - nW / 2);
+			oXfrm.setOffY(oPlace.y - nH / 2);
+			oDoc.AddDrawing(oPicture, oPlace.page);
+			oDoc.SetMouseDownObject(oPicture);
+			oPicture.select(oDoc.GetController(), oPlace.page);
+		}, AscDFH.historydescription_Presentation_AddFlowImage, this);
+		return oPicture;
+	};
 	PDFEditorApi.prototype.asc_CanRemovePages = function(aPages) {
 		let oViewer = this.getDocumentRenderer();
 		let oDoc = this.getPDFDoc();
@@ -3909,6 +4069,11 @@
 						}, AscDFH.historydescription_Pdf_AddAnnot, oApi);
 						return;
 					}
+					else if (oOptionObject.placeAt) {
+						// a picture placed where the user clicked (e.g. a signature), centred on that point
+						oApi.placeImageAt(oImage, oOptionObject.placeAt);
+						return;
+					}
 				}
 
 				const arrImages = [];
@@ -5308,6 +5473,8 @@
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
+	PDFEditorApi.prototype['asc_StartPlaceImage']          = PDFEditorApi.prototype.asc_StartPlaceImage;
+	PDFEditorApi.prototype['asc_StopPlaceImage']           = PDFEditorApi.prototype.asc_StopPlaceImage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
 	PDFEditorApi.prototype['asc_undoAllChanges']		   = PDFEditorApi.prototype.asc_undoAllChanges;
 	PDFEditorApi.prototype['asc_addChartDrawingObject']	   = PDFEditorApi.prototype.asc_addChartDrawingObject;
