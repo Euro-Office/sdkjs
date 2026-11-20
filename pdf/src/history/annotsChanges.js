@@ -1164,11 +1164,13 @@ CChangesPDFAnnotUserId.prototype.private_SetValue = function(Value)
 {
 	let oAnnot = this.Class;
 	oAnnot.SetUserId(Value);
-	let oAscCommData = oAnnot.GetAscCommentData();
+	// a reply is shown in the comment of the annotation it belongs to
+	let oComment = oAnnot.GetInReplyTo() || oAnnot;
+	let oAscCommData = oComment.GetAscCommentData();
 	if (oAscCommData) {
 		let oCommData = new AscCommon.CCommentData();
 		oCommData.Read_FromAscCommentData(oAscCommData);
-		Asc.editor.sync_ChangeCommentData(oAnnot.GetId(), oCommData);
+		Asc.editor.sync_ChangeCommentData(oComment.GetId(), oCommData);
 	}
 };
 
@@ -1187,11 +1189,13 @@ CChangesPDFAnnotAuthor.prototype.private_SetValue = function(Value)
 {
 	let oAnnot = this.Class;
 	oAnnot.SetAuthor(Value);
-	let oAscCommData = oAnnot.GetAscCommentData();
+	// a reply is shown in the comment of the annotation it belongs to
+	let oComment = oAnnot.GetInReplyTo() || oAnnot;
+	let oAscCommData = oComment.GetAscCommentData();
 	if (oAscCommData) {
 		let oCommData = new AscCommon.CCommentData();
 		oCommData.Read_FromAscCommentData(oAscCommData);
-		Asc.editor.sync_ChangeCommentData(oAnnot.GetId(), oCommData);
+		Asc.editor.sync_ChangeCommentData(oComment.GetId(), oCommData);
 	}
 };
 

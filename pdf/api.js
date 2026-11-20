@@ -469,6 +469,22 @@
 			(oAnnot.GetReplies && oAnnot.GetReplies() || []).forEach(collect);
 		});
 		oDoc.DoAction(function() {
+			// Replies added in the comment panel exist on every client (and on the save server) as separate objects
+			// with their own ids, so their own changes don't reach the other copies. They follow the comment data of
+			// the annotation they belong to, so that data gets the new name too. This comes first, so undo brings
+			// back the old names in it.
+			oDoc.annots.forEach(function(oAnnot) {
+				let oAscData = oAnnot.GetReplies && oAnnot.GetReplies().length && oAnnot.GetAscCommentData();
+				if (!oAscData)
+					return;
+				let oData = new AscCommon.CCommentData();
+				oData.Read_FromAscCommentData(oAscData);
+				[oData].concat(oData.m_aReplies).forEach(function(oItem) {
+					oItem.m_sUserName = sName;
+					oItem.m_sUserId = "";
+				});
+				oAnnot.EditCommentData(oData);
+			});
 			aAll.forEach(function(oAnnot) {
 				oAnnot.SetAuthor(sName);
 				oAnnot.SetUserId("");
