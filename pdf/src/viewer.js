@@ -536,6 +536,120 @@
 		};
 	};
 
+	CAutoScroll.CURSOR = "all-scroll";
+	/**
+	 * Starts the auto-scroll in the viewer: the marker at the start point, the scroll cursor, the listeners that
+	 * follow the mouse and stop it, and the timer that scrolls.
+	 * @param {CHtmlPage} viewer - uses autoScroll, m_oScrollVerApi, m_oScrollHorApi and isVisibleHorScroll
+	 * @param {number} x
+	 * @param {number} y
+	 */
+	CAutoScroll.start = function(viewer, x, y)
+	{
+		CAutoScroll.stop(viewer);
+
+		let marker = document.createElement("div");
+		marker.style.cssText = "position:fixed;left:" + (x - 14) + "px;top:" + (y - 14) + "px;width:28px;height:28px;" +
+			"pointer-events:none;z-index:10000;";
+		marker.innerHTML = '<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">' +
+			'<circle cx="14" cy="14" r="13" fill="#ffffff" fill-opacity="0.9" stroke="#444444"/>' +
+			'<circle cx="14" cy="14" r="2" fill="#444444"/>' +
+			'<path d="M14 4l-4 5h8zM14 24l-4-5h8zM4 14l5-4v8zM24 14l-5-4v8z" fill="#444444"/></svg>';
+		document.body.appendChild(marker);
+
+		// the viewer sets its own cursor on every mouse move, so the scroll cursor is forced with a style rule
+		let cursorStyle = document.createElement("style");
+		cursorStyle.textContent = "*{cursor:" + CAutoScroll.CURSOR + " !important;}";
+		(document.head || document.body).appendChild(cursorStyle);
+
+		let state = new CAutoScroll(x, y);
+		let listeners = [];
+		viewer.autoScroll = {state: state, marker: marker, cursorStyle: cursorStyle, timer: null, listeners: listeners};
+
+		function listen(target, type, handler)
+		{
+			target.addEventListener(type, handler, true);
+			listeners.push([target, type, handler]);
+		}
+		function onMove(ev)
+		{
+			state.onMove(ev.clientX, ev.clientY);
+		}
+		function onUp(ev)
+		{
+			if (1 !== ev.button || !state.held)
+				return;
+			ev.preventDefault();
+			ev.stopPropagation();
+			if (state.onButtonUp())
+				CAutoScroll.stop(viewer);
+		}
+		function onDown(ev)
+		{
+			if (!state.onButtonDown())
+				return;
+			ev.preventDefault();
+			ev.stopPropagation();
+			CAutoScroll.stop(viewer);
+		}
+		function onKey(ev)
+		{
+			if (27 === ev.keyCode)
+				CAutoScroll.stop(viewer);
+		}
+		function onOut(ev)
+		{
+			// no related target: the mouse has left the window (or the editor frame), and no more moves come
+			// to update the speed, so the auto-scroll stops instead of going on at the last speed
+			if (!ev.relatedTarget)
+				CAutoScroll.stop(viewer);
+		}
+		function onVisibility()
+		{
+			if (document.hidden)
+				CAutoScroll.stop(viewer);
+		}
+		function stop()
+		{
+			CAutoScroll.stop(viewer);
+		}
+		listen(document, "pointermove", onMove);
+		listen(document, "mousemove", onMove);
+		listen(document, "pointerup", onUp);
+		listen(document, "mouseup", onUp);
+		listen(document, "pointerdown", onDown);
+		listen(document, "mousedown", onDown);
+		listen(document, "keydown", onKey);
+		listen(document, "wheel", stop);
+		listen(document, "mouseout", onOut);
+		listen(document, "visibilitychange", onVisibility);
+		listen(window, "blur", stop);
+
+		viewer.autoScroll.timer = setInterval(function()
+		{
+			let step = state.getStep();
+			if (step.y && viewer.m_oScrollVerApi)
+				viewer.m_oScrollVerApi.scrollBy(0, step.y, false);
+			if (step.x && viewer.isVisibleHorScroll && viewer.m_oScrollHorApi)
+				viewer.m_oScrollHorApi.scrollBy(step.x, 0, false);
+		}, CAutoScroll.STEP_INTERVAL);
+	};
+	/**
+	 * Stops the auto-scroll in the viewer and removes everything that start added.
+	 * @param {CHtmlPage} viewer
+	 */
+	CAutoScroll.stop = function(viewer)
+	{
+		let autoScroll = viewer.autoScroll;
+		if (!autoScroll)
+			return;
+		viewer.autoScroll = null;
+		clearInterval(autoScroll.timer);
+		autoScroll.listeners.forEach(function(item) {item[0].removeEventListener(item[1], item[2], true);});
+		autoScroll.marker.parentNode && autoScroll.marker.parentNode.removeChild(autoScroll.marker);
+		autoScroll.cursorStyle.parentNode && autoScroll.cursorStyle.parentNode.removeChild(autoScroll.cursorStyle);
+	};
+
 	function CHtmlPage(id, api)
 	{
 		this.Api = api;
@@ -1982,84 +2096,11 @@
 		};
 		this.startAutoScroll = function(x, y)
 		{
-			oThis.stopAutoScroll();
-
-			let marker = document.createElement("div");
-			marker.style.cssText = "position:fixed;left:" + (x - 14) + "px;top:" + (y - 14) + "px;width:28px;height:28px;" +
-				"pointer-events:none;z-index:10000;";
-			marker.innerHTML = '<svg width="28" height="28" viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">' +
-				'<circle cx="14" cy="14" r="13" fill="#ffffff" fill-opacity="0.9" stroke="#444444"/>' +
-				'<circle cx="14" cy="14" r="2" fill="#444444"/>' +
-				'<path d="M14 4l-4 5h8zM14 24l-4-5h8zM4 14l5-4v8zM24 14l-5-4v8z" fill="#444444"/></svg>';
-			document.body.appendChild(marker);
-
-			let state = new CAutoScroll(x, y);
-			let listeners = [];
-			oThis.autoScroll = {state: state, marker: marker, timer: null, listeners: listeners};
-
-			function listen(target, type, handler)
-			{
-				target.addEventListener(type, handler, true);
-				listeners.push([target, type, handler]);
-			}
-			function onMove(ev)
-			{
-				state.onMove(ev.clientX, ev.clientY);
-			}
-			function onUp(ev)
-			{
-				if (1 !== ev.button || !state.held)
-					return;
-				ev.preventDefault();
-				ev.stopPropagation();
-				if (state.onButtonUp())
-					oThis.stopAutoScroll();
-			}
-			function onDown(ev)
-			{
-				if (!state.onButtonDown())
-					return;
-				ev.preventDefault();
-				ev.stopPropagation();
-				oThis.stopAutoScroll();
-			}
-			function onKey(ev)
-			{
-				if (27 === ev.keyCode)
-					oThis.stopAutoScroll();
-			}
-			function stop()
-			{
-				oThis.stopAutoScroll();
-			}
-			listen(document, "pointermove", onMove);
-			listen(document, "mousemove", onMove);
-			listen(document, "pointerup", onUp);
-			listen(document, "mouseup", onUp);
-			listen(document, "pointerdown", onDown);
-			listen(document, "mousedown", onDown);
-			listen(document, "keydown", onKey);
-			listen(document, "wheel", stop);
-			listen(window, "blur", stop);
-
-			oThis.autoScroll.timer = setInterval(function()
-			{
-				let step = state.getStep();
-				if (step.y && oThis.m_oScrollVerApi)
-					oThis.m_oScrollVerApi.scrollBy(0, step.y, false);
-				if (step.x && oThis.isVisibleHorScroll && oThis.m_oScrollHorApi)
-					oThis.m_oScrollHorApi.scrollBy(step.x, 0, false);
-			}, CAutoScroll.STEP_INTERVAL);
+			CAutoScroll.start(oThis, x, y);
 		};
 		this.stopAutoScroll = function()
 		{
-			let autoScroll = oThis.autoScroll;
-			if (!autoScroll)
-				return;
-			oThis.autoScroll = null;
-			clearInterval(autoScroll.timer);
-			autoScroll.listeners.forEach(function(item) {item[0].removeEventListener(item[1], item[2], true);});
-			autoScroll.marker.parentNode && autoScroll.marker.parentNode.removeChild(autoScroll.marker);
+			CAutoScroll.stop(oThis);
 		};
 
 		this.onMouseDown = function(e)

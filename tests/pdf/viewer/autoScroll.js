@@ -8,7 +8,7 @@
 $(function ()
 {
 	// The auto-scroll with the middle mouse button (pdf/src/viewer.js): the speed and when it stops.
-	// The DOM part (listeners, marker, timer) is in the viewer and is not tested here.
+	// The DOM part (listeners, marker, cursor) is tested with a stand-in for the viewer and simulated events.
 	const CAutoScroll = AscPDF.CAutoScroll;
 
 	QUnit.module("PDF auto-scroll");
@@ -66,5 +66,71 @@ $(function ()
 		assert.ok(state.getStep().y > 0, "it scrolls when the mouse moves after the click");
 		assert.strictEqual(state.onButtonUp(), false, "a second release is ignored");
 		assert.strictEqual(state.onButtonDown(), true, "the next click stops");
+	});
+
+	function createViewer()
+	{
+		return {autoScroll : null, m_oScrollVerApi : null, m_oScrollHorApi : null, isVisibleHorScroll : false};
+	}
+	function mouseEvent(type, props)
+	{
+		return new MouseEvent(type, Object.assign({bubbles : true, cancelable : true}, props));
+	}
+
+	QUnit.test("Start and stop: marker and scroll cursor", function (assert)
+	{
+		let viewer = createViewer();
+		let styles = document.querySelectorAll("style").length;
+		CAutoScroll.start(viewer, 100, 100);
+		assert.ok(viewer.autoScroll, "auto-scroll is on");
+		assert.ok(viewer.autoScroll.marker.parentNode, "the marker is shown");
+		assert.strictEqual(document.querySelectorAll("style").length, styles + 1, "a scroll cursor rule is added");
+		assert.ok(-1 !== viewer.autoScroll.cursorStyle.textContent.indexOf(CAutoScroll.CURSOR), "with the scroll cursor");
+
+		let marker = viewer.autoScroll.marker;
+		CAutoScroll.stop(viewer);
+		assert.strictEqual(viewer.autoScroll, null, "auto-scroll is off");
+		assert.notOk(marker.parentNode, "the marker is removed");
+		assert.strictEqual(document.querySelectorAll("style").length, styles, "the normal cursor is back");
+	});
+
+	QUnit.test("Leaving the window stops", function (assert)
+	{
+		let viewer = createViewer();
+		CAutoScroll.start(viewer, 100, 100);
+		document.dispatchEvent(mouseEvent("mousemove", {clientX : 100, clientY : 400}));
+		assert.ok(viewer.autoScroll.state.getStep().y > 0, "it scrolls down");
+
+		document.body.dispatchEvent(mouseEvent("mouseout", {relatedTarget : document.documentElement}));
+		assert.ok(viewer.autoScroll, "moving from one element to another doesn't stop");
+
+		document.body.dispatchEvent(mouseEvent("mouseout", {relatedTarget : null}));
+		assert.strictEqual(viewer.autoScroll, null, "leaving the window stops");
+
+		CAutoScroll.stop(viewer);
+	});
+
+	QUnit.test("Hiding the page or losing the focus stops", function (assert)
+	{
+		let viewer = createViewer();
+		CAutoScroll.start(viewer, 100, 100);
+		document.dispatchEvent(new Event("visibilitychange"));
+		assert.ok(viewer.autoScroll, "a visible page goes on");
+
+		Object.defineProperty(document, "hidden", {configurable : true, get : function() {return true;}});
+		try
+		{
+			document.dispatchEvent(new Event("visibilitychange"));
+		}
+		finally
+		{
+			delete document.hidden;
+		}
+		assert.strictEqual(viewer.autoScroll, null, "a hidden page stops");
+
+		CAutoScroll.start(viewer, 100, 100);
+		window.dispatchEvent(new Event("blur"));
+		assert.strictEqual(viewer.autoScroll, null, "losing the focus stops");
+		CAutoScroll.stop(viewer);
 	});
 });
