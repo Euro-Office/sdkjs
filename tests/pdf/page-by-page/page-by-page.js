@@ -271,4 +271,29 @@ $(function ()
 		assert.ok(viewer.isPageByPage, "it is on");
 		assert.strictEqual(viewer.scrollY, 520, "the page at the top of the window is shown from its top");
 	});
+
+	QUnit.test("Page Down and Page Up on pages higher than the window: through the page first, then the next page", function (assert)
+	{
+		// 100 % zoom in a small window: an A4 page (1123 px) is higher than the window (650 px)
+		let viewer = createViewer(1123, 650);
+		viewer.isPageByPage = true;
+		viewer.doc = {
+			GetController : function () { return {}; },
+			GetDrawingDocument : function () { return {}; },
+			executeShortcut : function () { return false; },
+			UpdateCopyCutState : function () {}
+		};
+		function key(code)
+		{
+			viewer.OnKeyDown({KeyCode : code, CtrlKey : false, ShiftKey : false, AltKey : false, MacCmdKey : false});
+		}
+		key(34);
+		assert.strictEqual(viewer.scrollY, 513, "the first Page Down shows the lower part of the first page");
+		key(34);
+		assert.strictEqual(viewer.scrollY, 1143, "the next one goes to the top of the second page");
+		key(33);
+		assert.strictEqual(viewer.scrollY, 513, "Page Up shows the lower part of the first page again");
+		key(33);
+		assert.strictEqual(viewer.scrollY, 0, "and then its top");
+	});
 });
