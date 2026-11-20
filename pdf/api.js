@@ -804,9 +804,10 @@
 	};
 	/**
 	 * Inserts all pages of another PDF (as bytes) at a position, with their annotations and form fields; one undo step.
+	 * Afterwards the first new page is shown and selected in the thumbnails.
 	 * @param {number} [nPos] the index of the first new page; default: at the end
 	 * @param {Uint8Array} aBytes
-	 * @returns {boolean}
+	 * @returns {boolean} false if nothing was inserted (for example a damaged or password-protected file)
 	 */
 	PDFEditorApi.prototype.asc_InsertPagesFromBytes = function(nPos, aBytes) {
 		let oDoc = this.getPDFDoc();
@@ -817,16 +818,45 @@
 
 		let isDone = false;
 		oDoc.DoAction(function() {
+			let oHistory = AscCommon.History;
+			let oPoint = oHistory && oHistory.Points ? oHistory.Points[oHistory.Index] : null;
+			let nItems = oPoint ? oPoint.Items.length : 0;
+			let nMerged = oDoc.mergedPagesData ? oDoc.mergedPagesData.length : 0;
+
 			isDone = !!oDoc.MergePagesBinary(nPos, aBytes);
+
+			// MergePagesBinary records the file before the engine reads it. If the engine can't read it, drop that
+			// record again (without undoing it): undoing it would undo the previous merge in the engine.
+			if (!isDone) {
+				if (oPoint)
+					oPoint.Items.length = nItems;
+				if (oDoc.mergedPagesData)
+					oDoc.mergedPagesData.length = nMerged;
+			}
 		}, AscDFH.historydescription_Pdf_AddPage, this);
+
+		if (isDone) {
+			// The thumbnails lay out the new pages only when they are drawn next: lay them out now, so that they
+			// scroll to the first new page and select it when the page view shows it.
+			let oViewer = oDoc.Viewer;
+			let oThumbnails = oViewer ? oViewer.thumbnails : null;
+			if (oThumbnails && oThumbnails.isNeedResize())
+				oThumbnails.resize(false);
+			oViewer && oViewer.navigateToPage(nPos);
+		}
 		return isDone;
 	};
 	/**
 	 * Asks for a PDF file and inserts its pages at a position
 	 * @param {number} [nPos] the index of the first new page; default: at the end
+	 * @param {function(boolean)} [fCallback] called after a file was chosen: false if no pages were inserted
 	 */
-	PDFEditorApi.prototype.asc_InsertPagesFromFile = function(nPos) {
+	PDFEditorApi.prototype.asc_InsertPagesFromFile = function(nPos, fCallback) {
 		let t = this;
+		let fInsert = function(aBytes) {
+			let isDone = !!aBytes && t.asc_InsertPagesFromBytes(nPos, aBytes);
+			fCallback && fCallback(isDone);
+		};
 		let oDesktop = window["AscDesktopEditor"];
 		if (oDesktop && oDesktop["OpenFilenameDialog"] && oDesktop["loadLocalFile"]) {
 			oDesktop["OpenFilenameDialog"]("PDF (*.pdf)", false, function(file) {
@@ -835,7 +865,7 @@
 				if (!file)
 					return;
 				oDesktop["loadLocalFile"](file, function(data) {
-					data && t.asc_InsertPagesFromBytes(nPos, new Uint8Array(data));
+					fInsert(data ? new Uint8Array(data) : null);
 				});
 			});
 			return;
@@ -850,7 +880,10 @@
 				return;
 			let oReader = new FileReader();
 			oReader.onload = function() {
-				t.asc_InsertPagesFromBytes(nPos, new Uint8Array(oReader.result));
+				fInsert(new Uint8Array(oReader.result));
+			};
+			oReader.onerror = function() {
+				fInsert(null);
 			};
 			oReader.readAsArrayBuffer(oFile);
 		};
