@@ -9342,38 +9342,30 @@
 	ApiDocument.prototype.GetStatistics = function()
 	{
 		let oLogicDocument = this.Document;
-		
-		// always the default rules, whatever the last count in the interface used
-		oLogicDocument.Statistics.SetOptions();
-		oLogicDocument.Statistics.StartPos = 0;
-        oLogicDocument.Statistics.CurPage  = 0;
 
-        oLogicDocument.Statistics.Pages           = 0;
-        oLogicDocument.Statistics.Words           = 0;
-        oLogicDocument.Statistics.Paragraphs      = 0;
-        oLogicDocument.Statistics.SymbolsWOSpaces = 0;
-        oLogicDocument.Statistics.SymbolsWhSpaces = 0;
+		// own statistics object: always the default rules, and a count running in the interface is not disturbed
+		let oStats = new CStatistics(oLogicDocument);
 
-		oLogicDocument.Statistics.Update_Pages(oLogicDocument.Pages.length);
+		oStats.Update_Pages(oLogicDocument.Pages.length);
 		for (let CurPage = 0, PagesCount = oLogicDocument.Pages.length; CurPage < PagesCount; ++CurPage)
 		{
-			oLogicDocument.DrawingObjects.documentStatistics(CurPage, oLogicDocument.Statistics);
+			oLogicDocument.DrawingObjects.documentStatistics(CurPage, oStats);
 		}
 
 		let Count = oLogicDocument.Content.length;
-		for (let Index = oLogicDocument.Statistics.StartPos; Index < Count; ++Index)
+		for (let Index = 0; Index < Count; ++Index)
 		{
 			let Element = oLogicDocument.Content[Index];
-			Element.CollectDocumentStatistics(oLogicDocument.Statistics);
+			Element.CollectDocumentStatistics(oStats);
 		}
 
 		return {
-            "PageCount"      : oLogicDocument.Statistics.Pages,
-            "WordsCount"     : oLogicDocument.Statistics.Words,
-            "ParagraphCount" : oLogicDocument.Statistics.Paragraphs,
-            "SymbolsCount"   : oLogicDocument.Statistics.SymbolsWOSpaces,
-            "SymbolsWSCount" : oLogicDocument.Statistics.SymbolsWhSpaces
-        }
+			"PageCount"      : oStats.Pages,
+			"WordsCount"     : oStats.Words,
+			"ParagraphCount" : oStats.Paragraphs,
+			"SymbolsCount"   : oStats.SymbolsWOSpaces,
+			"SymbolsWSCount" : oStats.SymbolsWhSpaces
+		}
 	};
 	/**
 	 * Returns a number of pages in the current document.

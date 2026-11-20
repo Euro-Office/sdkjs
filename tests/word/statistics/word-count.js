@@ -355,4 +355,28 @@ $(function ()
 		assert.strictEqual(docApi.asc_GetSelectionDocInfo.call(api).get_WordsCount(), 1, "Selection without the option");
 		assert.strictEqual(docApi.asc_GetSelectionDocInfo.call(api, {dashSeparatesWords : true}).get_WordsCount(), 2, "Selection with the option");
 	});
+
+	QUnit.test("The Document Builder count uses the default rules and leaves the interface count alone", function (assert)
+	{
+		let api = Object.create(AscTest.Editor);
+		api.sync_GetDocInfoStartCallback = function(){};
+		api.sync_GetDocInfoStopCallback  = function(){};
+		let docApi = Asc.asc_docs_api.prototype;
+		let stats  = logicDocument.Statistics;
+
+		AscTest.ClearDocument();
+		createParagraph(createRun("Haus–Boot Rot—Blau"));
+
+		// the interface count with the dash option, its paragraph part already done
+		docApi.startGetDocInfo.call(api, {dashSeparatesWords : true});
+		logicDocument.Statistics_GetParagraphsInfo();
+		assert.strictEqual(stats.Words, 4, "The interface count splits at the dashes");
+
+		let builderStats = AscBuilder.Word.Api.GetDocument.call(AscTest.Editor).GetStatistics();
+		assert.strictEqual(builderStats["WordsCount"], 2, "GetStatistics uses the default rules");
+		assert.strictEqual(stats.DashSeparatesWords, true, "The interface count keeps its dash option");
+		assert.strictEqual(stats.Words, 4, "The interface count keeps its words");
+
+		docApi.stopGetDocInfo.call(api);
+	});
 });
