@@ -428,6 +428,10 @@ $(function () {
 				printPagesData.arrPages.push({indexWorksheet: index});
 			}
 		};
+		// no drawing context here: the zoom is read and set around the page layout
+		wbView.getZoom = function () {
+			return 1;
+		};
 		wbView.changeZoom = function () {
 		};
 		wbView.model.getWorksheetCount = function () {
@@ -455,6 +459,7 @@ $(function () {
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.Selection), [[2], [2]], "selection of the active sheet");
 		} finally {
 			delete wbView._calcPagesPrintSheet;
+			delete wbView.getZoom;
 			delete wbView.changeZoom;
 			delete wbView.model.getWorksheetCount;
 			delete wbView.model.getActive;
