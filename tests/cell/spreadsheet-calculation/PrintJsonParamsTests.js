@@ -455,6 +455,8 @@ $(function () {
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.EntireWorkbook), [[0, 1, 2], [0, 2]],
 				"whole workbook: every sheet, also the one without pages");
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets, [0, 1]), [[0, 1], [0]], "selected sheets");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets, [2, 0]), [[2, 0], [2, 0]],
+				"selected sheets keep the order they were selected in");
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets), [[2], [2]], "active sheet");
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.Selection), [[2], [2]], "selection of the active sheet");
 		} finally {

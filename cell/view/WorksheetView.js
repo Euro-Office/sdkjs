@@ -5482,7 +5482,9 @@ function isAllowPasteLink(pastedWb) {
 	 * sheet has the very same page style, and starts again at 1 when the next sheet switches to a page
 	 * style without a first page number; here every sheet with its own first page number starts again
 	 * and a sheet without one continues. LibreOffice also starts the count again at a numbered sheet
-	 * that is not printed; here such a sheet is skipped.
+	 * that is not printed; here such a sheet is skipped. LibreOffice prints and numbers selected sheets
+	 * in sheet order; here they are numbered in the order they print, which is the order they were
+	 * selected in.
 	 * @param {Array} pages printed pages of the job, in print order
 	 * @param {number} indexPrintPage index of the current page in pages
 	 * @returns {?{index: number, firstPageNumber: number}} page index since the last restart and the
