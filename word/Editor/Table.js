@@ -4934,6 +4934,12 @@ CTable.prototype.Selection_SetStart = function(X, Y, CurPage, MouseEvent)
 
 	var Page = this.Pages[CurPage];
 
+	// The mark "this drag has already left its start cell" belongs to one drag. An outer table replays the start of
+	// the same drag on every mouse move (nested tables), so the mark stays only when the start point is the same.
+	var oCellDragAnchor = this.Selection.CellDragAnchor;
+	if (oCellDragAnchor && (oCellDragAnchor.X !== X || oCellDragAnchor.Y !== Y || oCellDragAnchor.PageIndex !== CurPage))
+		this.Selection.CellDragAnchor = null;
+
 	var oHitInfo = this.private_CheckHitInBorder(X, Y, CurPage);
 
 	var Pos = oHitInfo.Pos;
@@ -5718,11 +5724,24 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 	this.Selection.EndPos.MouseEvent = MouseEvent;
 	this.Selection.CurRow            = Pos.Row;
 
+	var isSameCell = (this.Selection.StartPos.Pos.Row === this.Selection.EndPos.Pos.Row
+		&& this.Selection.StartPos.Pos.Cell === this.Selection.EndPos.Pos.Cell);
+
+	// Once the drag has left its start cell, going back into the start cell keeps the whole cell selected
+	if (table_Selection_Common === this.Selection.Type2 && !isSameCell)
+	{
+		this.Selection.CellDragAnchor = {
+			X         : this.Selection.StartPos.X,
+			Y         : this.Selection.StartPos.Y,
+			PageIndex : this.Selection.StartPos.PageIndex
+		};
+	}
+
 	// При селекте внутри ячейки мы селектим содержимое ячейки
 	if (table_Selection_Common === this.Selection.Type2
 		&& (this.Parent.IsSelectedSingleElement() || (LogicDocument && LogicDocument.IsDocumentEditor() && LogicDocument.IsNumberingSelection()))
-		&& this.Selection.StartPos.Pos.Row === this.Selection.EndPos.Pos.Row
-		&& this.Selection.StartPos.Pos.Cell === this.Selection.EndPos.Pos.Cell)
+		&& isSameCell
+		&& !this.Selection.CellDragAnchor)
 	{
 		this.private_SetSelectionData(null);
 
@@ -5764,6 +5783,9 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 		this.Selection.Type = table_Selection_Cell;
 		this.private_UpdateSelectedCellsArray(table_Selection_Rows === this.Selection.Type2 ? true : false);
 	}
+
+	if (AscCommon.g_mouse_event_type_up === MouseEvent.Type)
+		this.Selection.CellDragAnchor = null;
 };
 CTable.prototype.Selection_Stop = function()
 {
