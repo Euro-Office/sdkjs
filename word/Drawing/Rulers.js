@@ -2303,9 +2303,10 @@ function CHorRuler()
 				return;
 			logicDocument.TurnOff_InterfaceEvents();
 			logicDocument.StartAction(AscDFH.historydescription_Document_SetParagraphTabs);
+			let previewPoint = this.GetLastHistoryPoint();
 			logicDocument.SetParagraphTabs(_arr);
 			logicDocument.FinalizeAction();
-			AscCommon.History.SetLastPointTemporary();
+			this.SetPreviewPointTemporary(previewPoint);
 			logicDocument.TurnOn_InterfaceEvents();
 			return;
 		}
@@ -2343,6 +2344,7 @@ function CHorRuler()
 			logicDocument.TurnOff_InterfaceEvents();
 		
 		logicDocument.StartAction(AscDFH.historydescription_Document_SetParagraphIndentFromRulers);
+		let previewPoint = isTemporary ? this.GetLastHistoryPoint() : null;
 		logicDocument.SetParagraphIndent({
 			Left      : left,
 			Right     : right,
@@ -2354,10 +2356,25 @@ function CHorRuler()
 		
 		if (isTemporary)
 		{
-			AscCommon.History.SetLastPointTemporary();
+			this.SetPreviewPointTemporary(previewPoint);
 			logicDocument.TurnOn_InterfaceEvents();
 		}
 	}
+
+	this.GetLastHistoryPoint = function()
+	{
+		let history = AscCommon.History;
+		return history.Index >= 0 ? history.Points[history.Index] : null;
+	};
+
+	// The next preview step (or the final apply on mouse up) undoes the temporary point. A step that changed nothing
+	// (the marker has not moved far enough yet, or is back at its old place) leaves no point of its own: the last point
+	// then belongs to the action before, for example new column widths, and that one must not be undone.
+	this.SetPreviewPointTemporary = function(previewPoint)
+	{
+		if (previewPoint && previewPoint === this.GetLastHistoryPoint())
+			AscCommon.History.SetLastPointTemporary();
+	};
     this.SetMarginProperties = function()
     {
         if ( false === this.m_oWordControl.m_oLogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_Document_SectPr) )
