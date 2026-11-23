@@ -845,7 +845,7 @@ CTable.prototype.private_DrawCellsBorders = function(pGraphics, PNum, Row_start,
                                 pGraphics.DrawEmptyTableLine( X_cell_end, Y0, X_cell_end, Y1 );
                             }
                         }
-                        else if ( border_None === CurBorderInfo.Value )
+                        else if ( border_Single !== CurBorderInfo.Value ) // an invisible border of any kind, as for the outer borders
                         {
                             pGraphics.DrawEmptyTableLine( X_cell_end, Y0, X_cell_end, Y1 );
                         }
@@ -1238,7 +1238,7 @@ CTable.prototype.private_DrawCellsBorders = function(pGraphics, PNum, Row_start,
                             pGraphics.DrawEmptyTableLine( X_cell_end, Y0, X_cell_end, Y1 );
                         }
                     }
-                    else if ( border_None === CurBorderInfo.Value )
+                    else if ( border_Single !== CurBorderInfo.Value ) // an invisible border of any kind, as for the outer borders
                     {
                         pGraphics.DrawEmptyTableLine( X_cell_end, Y0, X_cell_end, Y1 );
                     }
