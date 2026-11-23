@@ -5485,10 +5485,10 @@ function isAllowPasteLink(pastedWb) {
 	 * that is not printed; here such a sheet is skipped. LibreOffice prints and numbers selected sheets
 	 * in sheet order; here they are numbered in the order they print, which is the order they were
 	 * selected in.
-	 * @param {Array} pages printed pages of the job, in print order
+	 * @param {Array} pages printed pages of the job, in print order, with the sheets of the job in pages.jobSheets
 	 * @param {number} indexPrintPage index of the current page in pages
 	 * @returns {?{index: number, firstPageNumber: number}} page index since the last restart and the
-	 * number of the first page of that run; null when the workbook is not from ODF
+	 * number of the first page of that run; null when the workbook is not from ODF or pages has no jobSheets
 	 */
 	WorksheetView.prototype._getOdfPrintPageNumbering = function (pages, indexPrintPage) {
 		let wb = this.model.workbook;
@@ -5507,38 +5507,24 @@ function isAllowPasteLink(pastedWb) {
 			return pageSetup && pageSetup.useFirstPageNumber && pageSetup.firstPageNumber ? pageSetup.firstPageNumber : null;
 		};
 
-		let currentSheet = pages[indexPrintPage].indexWorksheet;
-		let firstPageNumber = null;
-		let index = 0;
 		//the sheets of the job (also those without printed pages), in print order: the order of the selected tabs need not
 		//be the order of the sheets, so walk back by position in the job, not by sheet index
 		let jobSheets = pages.jobSheets;
+		let currentSheet = pages[indexPrintPage].indexWorksheet;
 		let pos = jobSheets ? jobSheets.indexOf(currentSheet) : -1;
-		if (pos !== -1) {
-			let startPos = pos;
+		if (pos === -1) {
+			//calcPagesPrint records the sheets of every print job
+			return null;
+		}
+		let startPos = pos;
+		let firstPageNumber = getFirstPageNumber(jobSheets[startPos]);
+		while (firstPageNumber === null && startPos > 0) {
+			startPos--;
 			firstPageNumber = getFirstPageNumber(jobSheets[startPos]);
-			while (firstPageNumber === null && startPos > 0) {
-				startPos--;
-				firstPageNumber = getFirstPageNumber(jobSheets[startPos]);
-			}
-			for (let i = indexPrintPage - 1; i >= 0 && jobSheets.indexOf(pages[i].indexWorksheet) >= startPos; i--) {
-				index++;
-			}
-		} else {
-			//no job sheets: the sheets are taken from the printed pages
-			let firstSheet = pages[0].indexWorksheet;
-			for (let i = 1; i <= indexPrintPage; i++) {
-				firstSheet = Math.min(firstSheet, pages[i].indexWorksheet);
-			}
-			let startSheet = currentSheet;
-			firstPageNumber = getFirstPageNumber(startSheet);
-			while (firstPageNumber === null && startSheet > firstSheet) {
-				startSheet--;
-				firstPageNumber = getFirstPageNumber(startSheet);
-			}
-			for (let i = indexPrintPage - 1; i >= 0 && pages[i].indexWorksheet >= startSheet; i--) {
-				index++;
-			}
+		}
+		let index = 0;
+		for (let i = indexPrintPage - 1; i >= 0 && jobSheets.indexOf(pages[i].indexWorksheet) >= startPos; i--) {
+			index++;
 		}
 		return {index: index, firstPageNumber: firstPageNumber !== null ? firstPageNumber : 1};
 	};
