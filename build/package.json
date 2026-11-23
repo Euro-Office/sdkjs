@@ -8,6 +8,7 @@
     "node": ">=18.13.0"
   },
   "dependencies": {
+    "esbuild": "0.25.10",
     "glob": "^8.1.0",
     "source-map-js": "^1.2.1",
     "terser": "^5.20.0",

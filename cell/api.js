@@ -2516,23 +2516,8 @@ var editor;
 					return;
 				}
 				
-				//TODO возможно стоит делать это в worksheet после полного чтения
-				//***array-formula***
-				//добавление ко всем ячейкам массива головной формулы
-				for (var j = 0; j < tmp.formulaArray.length; j++) {
-					var curFormula = tmp.formulaArray[j];
-					var ref = curFormula.ref;
-					if (ref) {
-						var rangeFormulaArray = tmp.ws.getRange3(ref.r1, ref.c1, ref.r2, ref.c2);
-						rangeFormulaArray._foreach(function (cell) {
-							cell.setFormulaInternal(curFormula);
-							if (curFormula.ca || cell.isNullTextString()) {
-								tmp.ws.workbook.dependencyFormulas.addToChangedCell(cell);
-							}
-						});
-					}
-				}
-				
+				xmlParserContext.InitOpenManager.setArrayFormulasOpen(tmp);
+
 				// Previous formulas dependencies
 				for (var nCol in tmp.prevFormulas) {
 					if (tmp.prevFormulas.hasOwnProperty(nCol)) {
@@ -4384,10 +4369,10 @@ var editor;
     	//check user protected range. if sheet at least one protected for this user range
     	if (options.isReplaceAll) {
 			if (options.scanOnOnlySheet === Asc.c_oAscSearchBy.Workbook && wb.model.isUserProtectedRangesIntersection()) {
-				this.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+				this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 				return;
 			} else if (options.scanOnOnlySheet === Asc.c_oAscSearchBy.Sheet && ws.model.isUserProtectedRangesIntersection()) {
-				this.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+				this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 				return;
 			}
 		}
@@ -6560,6 +6545,38 @@ var editor;
     this.wb.restoreFocus();
   };
 
+  spreadsheet_api.prototype.asc_insertCheckbox = function () {
+    if (this.collaborativeEditing.getGlobalLock() || !this.canEdit()) {
+      return;
+    }
+    var cellInfo = this.asc_getCellInfo();
+    var hasCheckbox = cellInfo && cellInfo.asc_getCheckbox && cellInfo.asc_getCheckbox();
+    var ws = this.wb.getWorksheet();
+    if (hasCheckbox) {
+      ws.setSelectionInfo("removeCheckbox", true);
+    } else {
+      // Inserting writes FALSE into blank cells, so it needs the same protection checks as editing
+      var ranges = ws.model.selectionRange.ranges;
+      if (ws.model.isUserProtectedRangesIntersection(ranges)) {
+        this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+        return;
+      }
+      ws.checkProtectRangeOnEdit(ranges, function (isSuccess) {
+        isSuccess && ws.setSelectionInfo("checkbox", true);
+      }, true);
+    }
+    this.wb.restoreFocus();
+  };
+
+  spreadsheet_api.prototype.asc_removeCheckbox = function () {
+    if (this.collaborativeEditing.getGlobalLock() || !this.canEdit()) {
+      return;
+    }
+    this.wb.getWorksheet().setSelectionInfo("removeCheckbox", true);
+    this.wb.restoreFocus();
+  };
+
+
 	spreadsheet_api.prototype.asc_checkProtectedRange = function () {
 		var ws = this.wbModel.getActiveWs();
 		/*if (!ws.isLockedActiveCell()) {
@@ -8413,7 +8430,7 @@ var editor;
 		var wsView = this.wb.getWorksheet();
 		var ws = wsView && wsView.model;
 		if (ws && ws.isUserProtectedRangesIntersection(null, null, true)) {
-			this.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+			this.sendEvent("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 			return;
 		}
 
@@ -10401,6 +10418,8 @@ var editor;
   prot["asc_setCellFontName"] = prot.asc_setCellFontName;
   prot["asc_setCellFontSize"] = prot.asc_setCellFontSize;
   prot["asc_setCellBold"] = prot.asc_setCellBold;
+  prot["asc_insertCheckbox"] = prot.asc_insertCheckbox;
+  prot["asc_removeCheckbox"] = prot.asc_removeCheckbox;
   prot["asc_setCellItalic"] = prot.asc_setCellItalic;
   prot["asc_setCellUnderline"] = prot.asc_setCellUnderline;
   prot["asc_setCellStrikeout"] = prot.asc_setCellStrikeout;

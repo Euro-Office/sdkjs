@@ -215,7 +215,8 @@
         QuotePrefix: 11,
         XfId: 12,
         Aligment: 13,
-        Protection: 14
+        Protection: 14,
+        Checkbox: 100
     };
 	var c_oSerProtectionTypes =
     {
@@ -2112,6 +2113,7 @@
 		this.applyProtection = null;
 		this.locked = null;
 		this.hidden = null;
+		this.checkbox = null;
 	}
 
 	function ReadColorSpreadsheet2(bcr, length) {
@@ -3449,6 +3451,12 @@
 					this.memory.WriteByte(c_oSerPropLenType.Variable);
 					this.bs.WriteItemWithLength(function(){oThis.WriteProtection(xf);});
                 }
+				if(null != xf.checkbox)
+				{
+					this.memory.WriteByte(c_oSerXfsTypes.Checkbox);
+					this.memory.WriteByte(c_oSerPropLenType.Byte);
+					this.memory.WriteBool(xf.checkbox);
+				}
             }
         };
 		this.WriteProtection = function(xf)
@@ -9124,6 +9132,8 @@
 					return oThis.ReadProtection(t,l,oXfs);
 				});
 			}
+			else if ( c_oSerXfsTypes.Checkbox == type )
+				oXfs.checkbox = this.stream.GetBool();
             else
                 res = c_oSerConstants.ReadUnknown;
             return res;
@@ -11026,24 +11036,7 @@
                 });
 
 				if (!bNoBuildDep) {
-					//TODO возможно стоит делать это в worksheet после полного чтения
-					//***array-formula***
-					//добавление ко всем ячейкам массива головной формулы
-					for(var j = 0; j < tmp.formulaArray.length; j++) {
-						var curFormula = tmp.formulaArray[j];
-						var ref = curFormula.ref;
-						if(ref) {
-							var rangeFormulaArray = tmp.ws.getRange3(ref.r1, ref.c1, ref.r2, ref.c2);
-							rangeFormulaArray._foreach(function(cell, row, col){
-								if (!(row === ref.r1 && col === ref.c1 && cell.formulaParsed)) {
-									cell.setFormulaInternal(curFormula);
-								}
-								if (curFormula.ca || cell.isNullTextString()) {
-									tmp.ws.workbook.dependencyFormulas.addToChangedCell(cell);
-								}
-							});
-						}
-					}
+					this.InitOpenManager.setArrayFormulasOpen(tmp);
 					for (var nCol in tmp.prevFormulas) {
 						if (tmp.prevFormulas.hasOwnProperty(nCol)) {
 							var prevFormula = tmp.prevFormulas[nCol];
@@ -14600,6 +14593,9 @@
 					newXf.locked = oStyleObject.xfs.locked;
                 if(null != oStyleObject.xfs.applyProtection)
                     newXf.applyProtection = oStyleObject.xfs.applyProtection;
+				// checkbox
+				if(null != oStyleObject.xfs.checkbox)
+					newXf.checkbox = oStyleObject.xfs.checkbox;
                 // align
                 if(null != oStyleObject.xfs.align)
 					newXf.align = g_StyleCache.addAlign(oStyleObject.xfs.align);
@@ -15050,6 +15046,67 @@
             }
         }
     };
+	//***array-formula***
+	//добавление ко всем ячейкам массива головной формулы
+	//TODO возможно стоит делать это в worksheet после полного чтения
+	InitOpenManager.prototype.setArrayFormulasOpen = function(tmp) {
+		let wb = tmp.ws.workbook;
+		let sheetId = tmp.ws.getId();
+		// fullCalcOnLoad is read from Editor.bin; with it, cells without values are recalculated like on main (cells
+		// with values are not, as before)
+		let isFullCalcOnLoad = !!wb.calcPr.fullCalcOnLoad;
+		for (let i = 0; i < tmp.formulaArray.length; i++) {
+			let parsed = tmp.formulaArray[i];
+			// setFormulaOpen adds only formulas with an array ref
+			let ref = parsed.getArrayFormulaRef();
+			// a dynamic array (cm, read with the formula) may be resized by its calculation
+			let isRecalcCellsWithoutValue = isFullCalcOnLoad || null != parsed.cm;
+			let isVolatile = parsed.ca;
+			let hasMemberValue = false;
+			let headWithoutValue = false;
+			let cellsWithoutValue = isVolatile ? null : [];
+			tmp.ws.getRange3(ref.r1, ref.c1, ref.r2, ref.c2)._foreach(function(cell, row, col) {
+				let isHead = row === ref.r1 && col === ref.c1;
+				if (!(isHead && cell.formulaParsed)) {
+					cell.setFormulaInternal(parsed);
+				}
+				// once a member has a value, cells without values are not used any more
+				if (isVolatile || (hasMemberValue && !isRecalcCellsWithoutValue)) {
+					return;
+				}
+				if (cell.isNullTextString()) {
+					if (isHead) {
+						headWithoutValue = true;
+					}
+					if (isRecalcCellsWithoutValue) {
+						wb.dependencyFormulas.addToChangedCell2(sheetId, row, col);
+					} else {
+						cellsWithoutValue.push(row, col);
+					}
+				} else if (!isHead) {
+					hasMemberValue = true;
+				}
+			});
+			if (isVolatile) {
+				wb.dependencyFormulas.addToChangedRange2(sheetId, ref.clone());
+			} else if (!hasMemberValue) {
+				// Only the head has a value, or none: the array may never have been calculated, recalculate the cells
+				// without values with their dependents
+				for (let j = 0; j < cellsWithoutValue.length; j += 2) {
+					wb.dependencyFormulas.addToChangedCell2(sheetId, cellsWithoutValue[j], cellsWithoutValue[j + 1]);
+				}
+			} else if (headWithoutValue) {
+				// The array was calculated (a member has a value), so its blank members keep their saved blank and
+				// read as empty (Cell.isBlankArrayResult). A head saved without a value is the exception: recalculate
+				// it alone, as main and setFormulaOpen on the binary path already do. Marking it here makes it
+				// independent of the reader — the XML path's sdkjs-ooxml reader does not call setFormulaOpen per cell.
+				wb.dependencyFormulas.addToChangedCell2(sheetId, ref.r1, ref.c1);
+			}
+			// Otherwise (a calculated array whose head has a value) nothing is marked: every member without a value is
+			// a blank result (e.g. of UNIQUE over a column with an empty cell in a Google Sheets file) and keeps its
+			// cached value like any other formula, read as empty via Cell.isBlankArrayResult.
+		}
+	};
     InitOpenManager.prototype.InitStyleManager = function (oStyleObject, aCellXfs)
     {
         var i, xf, firstFont, firstFill, secondFill, firstBorder, firstXf, newXf, oCellStyle;
@@ -15210,6 +15267,9 @@
                 newXf.locked = oCellStyleXfs.locked;
             if(null != oCellStyleXfs.applyProtection)
                 newXf.applyProtection = oCellStyleXfs.applyProtection;
+            // checkbox
+            if(null != oCellStyleXfs.checkbox)
+                newXf.checkbox = oCellStyleXfs.checkbox;
             // align
             if(null != oCellStyleXfs.align)
                 newXf.align = oCellStyleXfs.align;
@@ -15290,6 +15350,9 @@
                 newXf.locked = xfs.locked;
             if(null != xfs.applyProtection)
                 newXf.applyProtection = xfs.applyProtection;
+            // checkbox
+            if(null != xfs.checkbox)
+                newXf.checkbox = xfs.checkbox;
             if(null != xfs.align)
                 newXf.align = xfs.align;
             if (null !== xfs.XfId) {

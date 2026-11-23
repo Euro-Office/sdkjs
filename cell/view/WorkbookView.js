@@ -493,6 +493,10 @@
 				  self._onPivotFiltersClick.apply(self, arguments);
 			  }, "pivotCollapseClick": function () {
 				  self._onPivotCollapseClick.apply(self, arguments);
+			  }, "checkboxClick": function () {
+				  self._onCheckboxClick.apply(self, arguments);
+			  }, "toggleActiveCellCheckbox": function () {
+				  return self.getWorksheet().toggleActiveCellCheckbox();
 			  }, "refreshConnections": function () {
 				  return self._onRefreshConnections.apply(self, arguments);
 			  }, "commentCellClick": function () {
@@ -2003,6 +2007,13 @@
     pivotTable.setVisibleFieldItem(this.Api, !idPivotCollapse.sd, idPivotCollapse.fld, idPivotCollapse.index);
   };
 
+  WorkbookView.prototype._onCheckboxClick = function(col, row) {
+    var ws = this.getWorksheet();
+    if (ws) {
+      ws.toggleCheckbox(col, row);
+    }
+  };
+
   WorkbookView.prototype._onRefreshConnections = function(isAll) {
     //todo all connections
     if (isAll) {
@@ -2158,7 +2169,7 @@
       if (ct.target === c_oTargetType.ColumnResize) {
       	ws.autoFitColumnsWidth(ct.col);
       } else {
-      	ws.autoFitRowHeight(ct.row, ct.row);
+      	ws.autoFitRowHeight(ct.row, ct.row, true);
       }
       asc_applyFunction(callback);
     } else {
