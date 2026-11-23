@@ -105,6 +105,7 @@ const allTests = [
 	'word/js-api/js-api.html',
 	'word/js-api/js-api-forms.html',
 	'word/copypaste/copy-paste-tests.html',
+	'word/split-cell/split-cell.html',
 
 	'cell/shortcuts/shortcuts.html',
 	'slide/shortcuts/shortcuts.html',

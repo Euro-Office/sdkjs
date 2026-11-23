@@ -9865,9 +9865,13 @@ CTable.prototype.SplitTableCells = function(Cols, Rows, isFailureEvents)
 		// Добавим в данной строке (Cols - 1) ячеек, с теми же настроками,
 		// что и исходной. Значение GridSpan мы берем из массива Grid_Info_new
 
+		// Like Word, the parts get the width they have now as their preferred width. With an automatic width, an autofit
+		// table calculates the columns from the contents again and the new empty cell becomes a narrow strip.
 		var oCellW = Cell.GetW().Copy();
-		if (!oCellW.IsAuto())
+		if (oCellW.IsPercent())
 			oCellW.SetValue(oCellW.GetValue() / Cols);
+		else
+			oCellW = new CTableMeasurement(tblwidth_Mm, Grid_width);
 
 		for (var Index2 = 0; Index2 < Rows_.length; Index2++)
 		{
@@ -9891,8 +9895,11 @@ CTable.prototype.SplitTableCells = function(Cols, Rows, isFailureEvents)
 			}
 		}
 
+		// The new columns are calculated from the columns as they are drawn (TableGridCalc). The grid saved in the file
+		// can differ from them (a table with a width in %, a table fitted to its contents): mixed with it, the table got
+		// wider or narrower and all columns moved.
 		var OldTableGridLen = this.TableGridCalc.length;
-		var arrNewGrid      = this.private_CopyTableGrid();
+		var arrNewGrid      = this.private_CopyTableGridCalc();
 
 		// Добавим новые колонки в TableGrid
 		// начинаем с конца, чтобы не пересчитывать номера
