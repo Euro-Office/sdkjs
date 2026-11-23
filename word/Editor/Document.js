@@ -27574,22 +27574,21 @@ CDocument.prototype.private_ConvertTableToText = function(oTable, oProps)
 
 		if (!isConvertAll)
 		{
-			for (var i = oSelectedRows.End; i >= oSelectedRows.Start; i--)
+			// Cut the copy into the rows before and after the selection. RemoveTableRow is not used here: it moves
+			// the cursor and makes the table current in its parent, but the copy is not in the document yet.
+			if (oSelectedRows.End < TableC.GetRowsCount() - 1)
 			{
-				TableC.RemoveTableRow(i);
+				TableC.CurCell = TableC.GetRow(oSelectedRows.End + 1).GetCell(0);
+				NewContent.after = TableC.Split();
+				// A cell merged across the end of the selection starts its merge again in the first row
+				NewContent.after.CorrectVMerge();
 			}
-			if (!oSelectedRows.IsSelectionToEnd && oSelectedRows.Start) {
-				var oNewTable = TableC.Split();
-				NewContent.after = oNewTable;
+
+			if (oSelectedRows.Start > 0)
+			{
+				TableC.CurCell = TableC.GetRow(oSelectedRows.Start).GetCell(0);
+				TableC.Split();
 				NewContent.before = TableC;
-			}
-			if (oSelectedRows.IsSelectionToEnd)
-			{
-				NewContent.before = TableC;
-			}
-			else if (!oSelectedRows.Start)
-			{
-				NewContent.after = TableC;
 			}
 		}
 
