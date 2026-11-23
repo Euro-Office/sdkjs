@@ -65,6 +65,7 @@ const allTests = [
 	'word/unit-tests/fieldInstructionParser.html',
 	'word/paragraph-borders/paragraph-borders.html',
 	'word/table-border-move/table-border-move.html',
+	'word/multi-cell-resize/multi-cell-resize.html',
 	'word/content-control/block-level/cursorAndSelection.html',
 	'word/content-control/inline-level/checkbox.html',
 	'word/content-control/inline-level/cursorAndSelection.html',
