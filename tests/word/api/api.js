@@ -1116,6 +1116,123 @@ $(function () {
 		}
 	});
 
+	// Runs the background check the way the editor timer does: a tick, then the spellchecker answers. The words in
+	// wrongWords are misspelled.
+	function RunSpellCheckTicks(requests, wrongWords, count)
+	{
+		let spelling = logicDocument.Spelling;
+		for (let tick = 0; tick < count; ++tick)
+		{
+			spelling.ContinueSpellCheck();
+			while (requests.length)
+			{
+				let request   = requests.shift();
+				let paragraph = null;
+				logicDocument.private_GetSpellCheckParagraphs().forEach(function(item)
+				{
+					if (item.GetId() === request["ParagraphId"])
+						paragraph = item;
+				});
+				if (!paragraph)
+					continue;
+
+				if ("spell" === request["type"])
+				{
+					paragraph.SpellChecker.SpellCheckResponse(request["RecalcId"], request["usrWords"].map(function(word)
+					{
+						return !wrongWords[word];
+					}));
+				}
+				else
+				{
+					paragraph.SpellChecker.SuggestResponse(request["RecalcId"], request["ElementId"], ["fixed"]);
+				}
+			}
+		}
+	}
+
+	QUnit.test("The word changed last does not keep the spellcheck from completing", function (assert)
+	{
+		AscTest.ClearDocument();
+		let p1 = CreateParagraphWithText("Helo there");
+		let p2 = CreateParagraphWithText("Fine text wrld");
+		logicDocument.AddToContent(0, p1);
+		logicDocument.AddToContent(1, p2);
+		AscTest.Recalculate();
+
+		let spelling = logicDocument.Spelling;
+		spelling.Reset();
+		let isSpellCheckCurrentWord = AscTest.Editor.asc_IsSpellCheckCurrentWord;
+		AscTest.Editor.asc_IsSpellCheckCurrentWord = function()
+		{
+			return false;
+		};
+		let wrongWords = {"Helo" : true, "wrld" : true};
+		try
+		{
+			MockSpellCheckApi(function()
+			{
+				return true;
+			}, function(requests)
+			{
+				logicDocument.RemoveSelection();
+				AscTest.MoveCursorToParagraph(p2, true);
+				logicDocument.RestartSpellCheck();
+				RunSpellCheckTicks(requests, wrongWords, 5);
+				assert.strictEqual(spelling.GetErrorsCount(), 2, "The two misspelled words are marked");
+
+				// What the panel does: Next, then Change, as asc_replaceMisspelledWord does it, for every word
+				let changed = [];
+				for (let step = 0; step < 5 && CallSpellApi("asc_nextWord"); ++step)
+				{
+					let paragraph = logicDocument.GetCurrentParagraph();
+					let element   = CallSpellApi("private_GetSelectedMisspelledElement", paragraph);
+					changed.push(element.GetWord());
+					logicDocument.StartAction(AscDFH.historydescription_Document_ReplaceMisspelledWord);
+					paragraph.ReplaceMisspelledWord("fixed", element);
+					paragraph.Document_SetThisElementCurrent(true);
+					logicDocument.Recalculate();
+					logicDocument.FinalizeAction();
+					RunSpellCheckTicks(requests, wrongWords, 1);
+				}
+				assert.deepEqual(changed, ["wrld", "Helo"], "Both words are changed");
+				assert.strictEqual(AscTest.GetParagraphText(p1), "fixed there", "The cursor is at the last changed word");
+
+				RunSpellCheckTicks(requests, wrongWords, 5);
+				assert.strictEqual(logicDocument.GetSpellCheckState().IsComplete, true, "After the last Next the check completes");
+				assert.strictEqual(CallSpellApi("asc_nextWord"), false, "No more words");
+				assert.deepEqual(p1.SpellChecker.Elements.filter(function(element)
+				{
+					return element.IsUndefined() || element.IsCurrent();
+				}), [], "The changed word is checked");
+			});
+		}
+		finally
+		{
+			if (isSpellCheckCurrentWord)
+				AscTest.Editor.asc_IsSpellCheckCurrentWord = isSpellCheckCurrentWord;
+			else
+				delete AscTest.Editor.asc_IsSpellCheckCurrentWord;
+			spelling.Reset();
+		}
+	});
+
+	QUnit.test("Spellcheck counts as stopped when the spellchecker is disconnected", function (assert)
+	{
+		let spelling = logicDocument.Spelling;
+		spelling.Reset();
+		assert.strictEqual(logicDocument.GetSpellCheckState().IsStopped, false, "Spellcheck runs");
+		spelling.TurnOff();
+		try
+		{
+			assert.strictEqual(logicDocument.GetSpellCheckState().IsStopped, true, "No check without the spellchecker");
+		}
+		finally
+		{
+			spelling.TurnOn();
+		}
+	});
+
 	QUnit.test("Suggestions for the next word are sent when the spellchecker answers", function (assert)
 	{
 		let paragraphs = CreateMisspelledDocument();

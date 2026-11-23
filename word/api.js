@@ -7173,13 +7173,16 @@ background-repeat: no-repeat;\
 	 * Selects the next misspelled word after the cursor, like asc_nextWord of the spreadsheet editor.
 	 * The suggestions for the word are sent with asc_onSpellCheckVariantsFound(asc_CSpellCheckProperty): at once if
 	 * they are known, otherwise when the spellchecker has answered.
-	 * Only words that the background check has already marked are found.
+	 * Only words that the background check has already marked are found. If there is none, the word at the cursor
+	 * is checked at once, the background check leaves it for later.
 	 * @returns {boolean} false if the document has no misspelled words (yet)
 	 */
 	asc_docs_api.prototype.asc_nextWord = function()
 	{
 		let logicDocument = this.private_GetLogicDocument();
 		let found = logicDocument ? logicDocument.SelectNextMisspelledWord() : null;
+		if (logicDocument && !found)
+			logicDocument.Spelling.CheckCurrentWord(logicDocument.GetCurrentParagraph(false, false));
 		this.spellNextWord = found ? {Paragraph : found.Paragraph, Element : found.Element, Word : found.Element.GetWord()} : null;
 		this.private_SendNextWordVariants(null);
 		return !!found;

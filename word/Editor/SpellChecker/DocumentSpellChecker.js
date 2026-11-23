@@ -225,7 +225,7 @@
 			Checked    : this.PassTotal - pending,
 			Total      : this.PassTotal,
 			IsComplete : 0 === pending,
-			IsStopped  : !this.Use
+			IsStopped  : !this.Use || !this.IsOn()
 		};
 	};
 	/**
@@ -282,6 +282,32 @@
 			delete this.CurPara[sId];
 			oParagraph.SpellChecker.ResetElementsWithCurrentState();
 			oParagraph.SpellChecker.Check(undefined, true);
+		}
+	};
+	/**
+	 * Checks the paragraph at once, also the word at the cursor. The background check leaves the word at the cursor
+	 * for later because it may still be typed, and keeps the paragraph pending until the cursor leaves the word.
+	 * The spellcheck panel needs this when it finds no more words: the word it has just changed has the cursor, so
+	 * otherwise the check never completes.
+	 * @param {AscWord.Paragraph} paragraph
+	 */
+	CDocumentSpellChecker.prototype.CheckCurrentWord = function(paragraph)
+	{
+		if (!this.IsOn() || !paragraph)
+			return;
+
+		let id = paragraph.GetId();
+		if (this.CheckPara[id])
+		{
+			delete this.CheckPara[id];
+			paragraph.ContinueSpellCheck(true);
+		}
+
+		if (this.CurPara[id])
+		{
+			delete this.CurPara[id];
+			paragraph.SpellChecker.ResetElementsWithCurrentState();
+			paragraph.SpellChecker.Check(undefined, true);
 		}
 	};
 	CDocumentSpellChecker.prototype.AddWaitingParagraph = function(oParagraph, RecalcId, Words, Langs)
