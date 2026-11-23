@@ -268,7 +268,10 @@
 
 
 			// pdf forms
-			PDFFormsLocked: -1200
+			PDFFormsLocked: -1200,
+
+			// Euro-Office additions, numbered clear of the upstream sequence
+			PasteSizeLimitError: -10001
 		}
 	};
 
@@ -335,6 +338,7 @@
 	prot['PasteSlicerError']                 = prot.PasteSlicerError;
 	prot['MoveSlicerError']                  = prot.MoveSlicerError;
 	prot['PasteMultiSelectError']            = prot.PasteMultiSelectError;
+	prot['PasteSizeLimitError']              = prot.PasteSizeLimitError;
 	prot['CopyDisabled']                     = prot.CopyDisabled;
 	prot['CanNotPasteImage']                 = prot.CanNotPasteImage;
 	prot['DataRangeError']                   = prot.DataRangeError;

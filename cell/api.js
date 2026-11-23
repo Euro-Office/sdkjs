@@ -104,6 +104,9 @@ var editor;
 
     this.collaborativeEditing = null;
 
+    // Declines the large paste waiting for its confirm, so a newer paste can replace it
+    this.declinePendingPaste = null;
+
     // AutoSave
     this.autoSaveGapRealTime = 30;	  // Интервал быстрого автосохранения (когда выставлен флаг realtime) - 30 мс.
 
@@ -1008,9 +1011,83 @@ var editor;
   };
 
   spreadsheet_api.prototype.asc_PasteData = function (_format, data1, data2, text_data, doNotShowButton, callback) {
-    if (this.canEdit()) {
-      this.wb.pasteData(_format, data1, data2, text_data, doNotShowButton, callback);
-      //this.asc_EndMoveSheet2(data1, 1, "test2");
+    if (!this.canEdit()) {
+      return;
+    }
+    // A paste still waiting for its confirm would land wherever this one leaves the selection, and an HTML paste's
+    // iframe may already hold this one's content, so it is declined. Its dialog may stay open; answering it does nothing.
+    if (this.declinePendingPaste) {
+      this.declinePendingPaste();
+    }
+    var t = this;
+    var paste = function () {
+      t.wb.pasteData(_format, data1, data2, text_data, doNotShowButton, callback);
+    };
+    if (this.wb.getCellEditMode()) {
+      paste();
+      return;
+    }
+    var cellCount = AscCommonExcel.getPasteCellCount(_format, data1, text_data);
+    // A cut pasted back into this document becomes a move in the paste engine, which sends almost no changes. The
+    // move is only recognised once the clipboard binary has been read, so an internal paste with a cut pending is let
+    // through if it counts no more cells than the cut's own text copy did when it was cut. Both are counted the same
+    // way, so the cut always matches whatever its cells hold, and anything larger can't be the cut. Deleting the cut's
+    // sheet leaves the cut set, so the sheet must still exist.
+    if (AscCommon.c_oAscClipboardDataFormat.Internal === _format && null !== this.wb.cutIdSheet &&
+      cellCount <= this.wb.cutCellCount && this.wbModel.getWorksheetById(this.wb.cutIdSheet)) {
+      paste();
+      return;
+    }
+
+    var getChangesSize = function () {
+      return AscCommon.History.GetLocalChangesSize() + t.CoAuthoringApi.get_serverChangesSize();
+    };
+    switch (AscCommonExcel.getPasteSizeAction(_format, cellCount, this.maxChangesSize, getChangesSize)) {
+      case AscCommonExcel.c_oAscPasteSizeAction.Refuse:
+        this.sendEvent("asc_onError", c_oAscError.ID.PasteSizeLimitError, c_oAscError.Level.NoCritical);
+        callback && callback(false);
+        break;
+      case AscCommonExcel.c_oAscPasteSizeAction.Confirm:
+        // A UI without this dialog never answers, so it gets today's behaviour
+        if (!this.asc_checkNeedCallback("asc_onConfirmLargePaste")) {
+          paste();
+          break;
+        }
+        // The confirm runs after the paste event has returned; special paste relies on data1 surviving that too
+        var answered = false;
+        var answer = function (can) {
+          // Every registered listener gets this callback; only the first answer counts
+          if (answered) {
+            return;
+          }
+          answered = true;
+          if (t.declinePendingPaste === decline) {
+            t.declinePendingPaste = null;
+          }
+          if (can && t.canEdit()) {
+            // An HTML paste reads styles from the iframe it was parsed into, which was hidden when the paste event
+            // returned; Firefox computes no styles in a hidden frame
+            var clipboard = AscCommon.g_clipboardBase;
+            var isOwnFrame = !!data2 && data2 === clipboard.CommonIframe;
+            isOwnFrame && clipboard.CommonIframe_PasteShow();
+            try {
+              paste();
+            } finally {
+              isOwnFrame && clipboard.CommonIframe_PasteHide();
+            }
+          } else if (callback) {
+            callback(false);
+          }
+        };
+        var decline = function () {
+          answer(false);
+        };
+        this.declinePendingPaste = decline;
+        this.sendEvent("asc_onConfirmLargePaste", cellCount, AscCommonExcel.getPasteMinSeconds(_format, cellCount), answer);
+        break;
+      default:
+        paste();
+        break;
     }
   };
 
