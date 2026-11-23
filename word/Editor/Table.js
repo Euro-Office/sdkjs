@@ -5218,6 +5218,8 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 
 				if (true === this.Selection.Data2.bCol)
 				{
+					this.private_SetTopTableLayoutFixed();
+
 					// Найдем колонку в TableGrid, с которой мы работаем
 					var Index  = this.Selection.Data2.Index;
 					var CurRow = this.Selection.Data2.Pos.Row;
@@ -5370,6 +5372,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								Rows_info[nCurRow].push({W : WBefore, Type : -1, GridSpan : 1});
 
 							var TempDx = Dx;
+							var nShrinkRest = 0;
 							var isFindLeft = true, isFindRight = false;
 							for (var nCurCell = 0, nCellsCount = oRow.GetCellsCount(); nCurCell < nCellsCount; ++nCurCell)
 							{
@@ -5379,6 +5382,8 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								var nCellGridEnd    = nCellGridStart + oCell.GetGridSpan() - 1;
 
 								var nCellW = 0;
+								// true for the cells right of the moved border: they give up the width the border took
+								var isRightPart = false;
 
 								if (isFindLeft)
 								{
@@ -5386,6 +5391,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 									{
 										isFindLeft  = false;
 										isFindRight = false;
+										isRightPart = true;
 										nCellW      = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - Dx;
 									}
 									else
@@ -5413,14 +5419,22 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								else if (isFindRight)
 								{
 									isFindRight = false;
+									isRightPart = true;
 									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - TempDx;
 								}
 								else
 								{
-									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1];
+									isRightPart = !isFindLeft;
+									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1] - nShrinkRest;
 								}
 
-								nCellW = Math.max(1, Math.max(nCellW, oCellMargins.Left.W + oCellMargins.Right.W));
+								var nMinCellW = Math.max(1, oCellMargins.Left.W + oCellMargins.Right.W);
+								// Like Word: if the right neighbour can't give up all the width, the next cells of this row give up the
+								// rest, so that the row (and the table) keeps its width
+								if (isRightPart)
+									nShrinkRest = Math.max(0, nMinCellW - nCellW);
+
+								nCellW = Math.max(nCellW, nMinCellW);
 
 								Rows_info[nCurRow].push({W : nCellW, Type : 0, GridSpan : 1});
 							}
@@ -5534,6 +5548,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								Rows_info[nCurRow].push({W : WBefore, Type : -1, GridSpan : 1});
 
 							var TempDx     = Dx;
+							var nShrinkRest = 0;
 							var isFindLeft = true, isFindRight = false;
 							for (var nCurCell = 0, nCellsCount = oRow.GetCellsCount(); nCurCell < nCellsCount; ++nCurCell)
 							{
@@ -5543,6 +5558,8 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								var nCellGridEnd    = nCellGridStart + oCell.GetGridSpan() - 1;
 
 								var nCellW = 0;
+								// true for the cells right of the moved border: they give up the width the border took
+								var isRightPart = false;
 
 								if (isFindLeft)
 								{
@@ -5550,6 +5567,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 									{
 										isFindLeft  = false;
 										isFindRight = false;
+										isRightPart = true;
 										nCellW      = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - Dx;
 									}
 									else
@@ -5576,14 +5594,22 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								else if (isFindRight)
 								{
 									isFindRight = false;
+									isRightPart = true;
 									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - TempDx;
 								}
 								else
 								{
-									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1];
+									isRightPart = !isFindLeft;
+									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1] - nShrinkRest;
 								}
 
-								nCellW = Math.max(1, Math.max(nCellW, oCellMargins.Left.W + oCellMargins.Right.W));
+								var nMinCellW = Math.max(1, oCellMargins.Left.W + oCellMargins.Right.W);
+								// Like Word: if the right neighbour can't give up all the width, the next cells of this row give up the
+								// rest, so that the row (and the table) keeps its width
+								if (isRightPart)
+									nShrinkRest = Math.max(0, nMinCellW - nCellW);
+
+								nCellW = Math.max(nCellW, nMinCellW);
 
 								Rows_info[nCurRow].push({W : nCellW, Type : 0, GridSpan : 1});
 							}
@@ -14126,6 +14152,8 @@ CTable.prototype.Update_TableMarkupFromRuler = function(NewMarkup, bCol, Index)
 		if (0 === Dx)
 			return;
 
+		this.private_SetTopTableLayoutFixed();
+
 		if (0 === Col)
 		{
 			Dx = this.Markup.X - NewMarkup.X;
@@ -17758,6 +17786,29 @@ CTable.prototype.private_SetTableLayoutFixedAndUpdateCellsWidth = function(nExce
 				this.Internal_UpdateCellW(nColIndex);
 		}
 	}
+};
+/**
+ * A nested table is laid out like its top table (see private_RecalculateGrid): if the top table fits its contents,
+ * the columns of the nested table are calculated from the contents again and a moved border goes back to where it
+ * was. So, as for a table on its own, the top table gets fixed column widths, and every table in it keeps the
+ * widths it has now.
+ */
+CTable.prototype.private_SetTopTableLayoutFixed = function()
+{
+	var oTopTable = this.Parent ? this.Parent.IsInTable(true) : null;
+	if (!oTopTable || tbllayout_AutoFit !== oTopTable.Get_CompiledPr(false).TablePr.TableLayout)
+		return;
+
+	var arrTables = oTopTable.GetAllTables();
+	for (var nIndex = 0, nCount = arrTables.length; nIndex < nCount; ++nIndex)
+	{
+		var oTable = arrTables[nIndex];
+		oTable.SetTableGrid(oTable.private_CopyTableGridCalc());
+		for (var nCol = 0, nColsCount = oTable.TableGridCalc.length; nCol < nColsCount; ++nCol)
+			oTable.Internal_UpdateCellW(nCol);
+	}
+
+	oTopTable.SetTableLayout(tbllayout_Fixed);
 };
 CTable.prototype.GotoFootnoteRef = function(isNext, isCurrent, isStepFootnote, isStepEndnote)
 {
