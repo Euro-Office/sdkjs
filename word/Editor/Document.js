@@ -7116,10 +7116,20 @@ CDocument.prototype.SetDocumentMargin = function(oMargins, isFromRuler)
 };
 CDocument.prototype.Set_DocumentPageSize = function(W, H, bNoRecalc)
 {
-	// TODO: Document.Set_DocumentOrientation Сделать в зависимости от выделения
+	// Like Word: all sections touched by the selection get the new size, every one keeps its own orientation
+	let sectPrs = this.GetSectPrsForPageSetup();
+	if (!sectPrs.length)
+		return;
 	
-	let sectPr = this.GetCurrentSectPr();
-	sectPr.SetPageSize(W, H);
+	let orientation = sectPrs[0].GetOrientation();
+	sectPrs[0].SetPageSize(W, H);
+	for (let index = 1; index < sectPrs.length; ++index)
+	{
+		if (sectPrs[index].GetOrientation() === orientation)
+			sectPrs[index].SetPageSize(W, H);
+		else
+			sectPrs[index].SetPageSize(H, W);
+	}
 
 	this.DrawingObjects.CheckAutoFit();
 	if (true != bNoRecalc)
@@ -7141,9 +7151,12 @@ CDocument.prototype.Get_DocumentPageSize = function()
 };
 CDocument.prototype.Set_DocumentOrientation = function(Orientation, bNoRecalc)
 {
-	// TODO: Document.Set_DocumentOrientation Сделать в зависимости от выделения
-	let sectPr = this.GetCurrentSectPr();
-	sectPr.SetOrientation(Orientation, true);
+	// Like Word: all sections touched by the selection get the new orientation
+	let sectPrs = this.GetSectPrsForPageSetup();
+	for (let index = 0; index < sectPrs.length; ++index)
+	{
+		sectPrs[index].SetOrientation(Orientation, true);
+	}
 
 	this.DrawingObjects.CheckAutoFit();
 	if (true != bNoRecalc)
@@ -14740,6 +14753,51 @@ CDocument.prototype.GetCurrentSectPr = function()
 {
 	return this.SectionsInfo.GetSectPrByElement(this.GetCurrentParagraph());
 };
+/**
+ * The sections a page setup command (margins, orientation, page size) changes. Like Word ("Apply to: Selected
+ * sections"): with a selection in the main text all sections touched by the selection (select all = the whole
+ * document), otherwise only the current section.
+ * @returns {AscWord.SectPr[]} the current section always comes first
+ */
+CDocument.prototype.GetSectPrsForPageSetup = function()
+{
+	let currentSectPr = this.GetCurrentSectPr();
+	if (!currentSectPr)
+		return [];
+	
+	let result = [currentSectPr];
+	if (docpostype_Content !== this.GetDocPosType() || !this.IsSelectionUse() || this.IsSelectionEmpty())
+		return result;
+	
+	let startParagraph = this.GetFirstParagraphInSelection();
+	let endParagraph   = this.GetLastParagraphInSelection();
+	if (!startParagraph
+		|| !endParagraph
+		|| startParagraph.GetTopDocumentContent() !== this
+		|| endParagraph.GetTopDocumentContent() !== this)
+		return result;
+	
+	let startIndex = this.SectionsInfo.Find(this.SectionsInfo.GetSectPrByElement(startParagraph));
+	let endIndex   = this.SectionsInfo.Find(this.SectionsInfo.GetSectPrByElement(endParagraph));
+	if (-1 === startIndex || -1 === endIndex)
+		return result;
+	
+	if (startIndex > endIndex)
+	{
+		let temp   = startIndex;
+		startIndex = endIndex;
+		endIndex   = temp;
+	}
+	
+	for (let index = startIndex; index <= endIndex; ++index)
+	{
+		let sectPr = this.SectionsInfo.GetSectPrByIndex(index);
+		if (sectPr !== currentSectPr)
+			result.push(sectPr);
+	}
+	
+	return result;
+};
 CDocument.prototype.GetSectionsCount = function()
 {
 	return this.SectionsInfo.GetSectionsCount();
@@ -16777,10 +16835,24 @@ CDocument.prototype.GetTopDocumentContent = function(isOneLevel)
 };
 CDocument.prototype.Set_SectionProps = function(Props)
 {
-	let SectPr = this.GetCurrentSectPr();
+	// Like Word ("Apply to: Selected sections"): all sections touched by the selection, the current one first
+	let sectPrs = this.GetSectPrsForPageSetup();
+	let SectPr  = sectPrs[0];
 	if (SectPr && false === this.Document_Is_SelectionLocked(AscCommon.changestype_Document_SectPr))
 	{
 		this.StartAction(AscDFH.historydescription_Document_SetSectionProps);
+
+		// The dialogs send all values of the current section. The margins (what the user sets) go to all selected
+		// sections, everything else only if it differs from the current section, so that e.g. a landscape section
+		// stays landscape when only the margins of the whole document are changed.
+		if (sectPrs.length > 1)
+		{
+			let changes = this.private_GetPageSetupChanges(SectPr, Props);
+			for (let index = 1; index < sectPrs.length; ++index)
+			{
+				this.private_SetOtherSectionProps(sectPrs[index], Props, changes);
+			}
+		}
 
 		if (undefined !== Props.get_W() || undefined !== Props.get_H())
 		{
@@ -16826,6 +16898,93 @@ CDocument.prototype.Set_SectionProps = function(Props)
 		this.UpdateRulers();
 		this.FinalizeAction();
 	}
+};
+/**
+ * What a page setup (Asc.CDocumentSectionProps) changes compared with the current section
+ * @param sectPr {AscWord.SectPr} the current section, before the change
+ * @param props {Asc.CDocumentSectionProps}
+ * @returns {{Size : ?{W : number, H : number}, Orientation : ?number, Gutter : ?number, GutterRTL : ?boolean, Header : ?number, Footer : ?number}}
+ * @private
+ */
+CDocument.prototype.private_GetPageSetupChanges = function(sectPr, props)
+{
+	function isDifferent(newValue, oldValue)
+	{
+		return (undefined !== newValue && null !== newValue && Math.abs(newValue - oldValue) > 0.01);
+	}
+
+	let changes = {Size : null, Orientation : null, Gutter : null, GutterRTL : null, Header : null, Footer : null};
+
+	let oldW = sectPr.GetPageWidth();
+	let oldH = sectPr.GetPageHeight();
+	let newW = undefined !== props.get_W() ? props.get_W() : oldW;
+	let newH = undefined !== props.get_H() ? props.get_H() : oldH;
+
+	// Only a really new size counts here, the turned size of a new orientation is handled by the orientation
+	if (isDifferent(Math.min(newW, newH), Math.min(oldW, oldH)) || isDifferent(Math.max(newW, newH), Math.max(oldW, oldH)))
+		changes.Size = {W : newW, H : newH};
+
+	let orientation = props.get_Orientation();
+	if (undefined === orientation && changes.Size)
+		orientation = newW > newH ? Asc.c_oAscPageOrientation.PageLandscape : Asc.c_oAscPageOrientation.PagePortrait;
+
+	if (undefined !== orientation && null !== orientation && (orientation !== sectPr.GetOrientation() || changes.Size))
+		changes.Orientation = orientation;
+
+	if (isDifferent(props.get_Gutter(), sectPr.GetGutter()))
+		changes.Gutter = props.get_Gutter();
+
+	if (undefined !== props.get_GutterRTL() && props.get_GutterRTL() !== sectPr.IsGutterRTL())
+		changes.GutterRTL = props.get_GutterRTL();
+
+	if (isDifferent(props.get_HeaderDistance(), sectPr.GetPageMarginHeader()))
+		changes.Header = props.get_HeaderDistance();
+
+	if (isDifferent(props.get_FooterDistance(), sectPr.GetPageMarginFooter()))
+		changes.Footer = props.get_FooterDistance();
+
+	return changes;
+};
+/**
+ * Page setup of a further selected section (see Set_SectionProps)
+ * @param sectPr {AscWord.SectPr}
+ * @param props {Asc.CDocumentSectionProps}
+ * @param changes {object} the result of private_GetPageSetupChanges
+ * @private
+ */
+CDocument.prototype.private_SetOtherSectionProps = function(sectPr, props, changes)
+{
+	if (changes.Size)
+	{
+		let W = changes.Size.W;
+		let H = changes.Size.H;
+		if ((Asc.c_oAscPageOrientation.PageLandscape === changes.Orientation) !== (W > H))
+			sectPr.SetPageSize(H, W);
+		else
+			sectPr.SetPageSize(W, H);
+
+		sectPr.SetOrientation(changes.Orientation, false);
+	}
+	else if (null !== changes.Orientation)
+	{
+		// Turn the page of this section, its own size stays
+		sectPr.SetOrientation(changes.Orientation, true);
+	}
+
+	if (undefined !== props.get_LeftMargin() || undefined !== props.get_TopMargin() || undefined !== props.get_RightMargin() || undefined !== props.get_BottomMargin())
+		sectPr.SetPageMargins(props.get_LeftMargin(), props.get_TopMargin(), props.get_RightMargin(), props.get_BottomMargin());
+
+	if (null !== changes.Header)
+		sectPr.SetPageMarginHeader(changes.Header);
+
+	if (null !== changes.Footer)
+		sectPr.SetPageMarginFooter(changes.Footer);
+
+	if (null !== changes.Gutter)
+		sectPr.SetGutter(changes.Gutter);
+
+	if (null !== changes.GutterRTL)
+		sectPr.SetGutterRTL(changes.GutterRTL);
 };
 CDocument.prototype.Get_SectionProps = function()
 {
