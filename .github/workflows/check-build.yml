@@ -11,7 +11,7 @@ on:
       - develop
       - 'release/**'
       - 'hotfix/**'
-      - 'private-*'
+      - 'private-**'
   pull_request:
     branches:
       - main
@@ -19,7 +19,9 @@ on:
       - develop
       - 'release/**'
       - 'hotfix/**'
-      - 'private-*'
+      - 'private-**'
+      # stacked fix branches in a private copy
+      - 'ghsa-**'
 
 # A new push to a pull request cancels its previous run. Other runs get their
 # own group (run id), so they neither wait nor get cancelled.
