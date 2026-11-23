@@ -122,6 +122,7 @@
 
 			"Symbol"        : 1,
 			"Wingdings"     : 1,
+			"StarSymbol"    : 1,
 
 			"Arial"             : 2,
 			"Liberation Sans"   : 2,
