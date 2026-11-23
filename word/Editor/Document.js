@@ -3129,6 +3129,12 @@ CDocument.prototype.private_Recalculate = function(_RecalcData, isForceStrictRec
 	this.FullRecalc.ResetSectionStart = false;
 	this.FullRecalc.SectPr            = this.private_RecalculateGetStartSectPr(StartPage);
 	this.FullRecalc.Endnotes          = this.Endnotes.IsContinueRecalculateFromPrevPage(StartPage);
+	// While a header/footer is edited, calculate without the timer up to the page where it is edited, so that the
+	// cursor and the view go back to that page right away
+	let hdrFtrEditedPage = this.HdrFtr.GetRequestedPage();
+	if (-1 !== hdrFtrEditedPage && (undefined === nNoTimerPageIndex || nNoTimerPageIndex < hdrFtrEditedPage + 1))
+		nNoTimerPageIndex = hdrFtrEditedPage + 1;
+
 	this.FullRecalc.StartPagesCount   = undefined !== nNoTimerPageIndex ? Math.min(100, Math.max(nNoTimerPageIndex - StartPage, 2)) : 2;
 	this.FullRecalc.StartTime         = performance.now();
 	this.FullRecalc.TimerStartTime    = this.FullRecalc.StartTime;

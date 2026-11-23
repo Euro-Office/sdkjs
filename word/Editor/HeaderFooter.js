@@ -1243,13 +1243,21 @@ CHeaderFooter.prototype =
 
     Refresh_RecalcData2 : function()
     {
+		// The header/footer is shared by several pages. While the user edits it on one page, that page has to stay
+		// the current one after the recalculation (otherwise the cursor and the view jump to the first page where
+		// this header/footer is used)
+		// (one action can bring several changes, so keep a page that is already waiting)
+		let editedPage = -1;
+		if (this.IsThisElementCurrent())
+			editedPage = (-1 !== this.RecalcInfo.CurPage ? this.RecalcInfo.CurPage : this.RecalcInfo.RequestedPage);
+
         // Сохраняем пересчитаные страницы в старый пересчет, а текущий обнуляем
         this.RecalcInfo.PageNumInfo   = {};
         this.RecalcInfo.SectPr        = {};
         this.RecalcInfo.CurPage       = -1;
 		this.RecalcInfo.NeedRecalc    = {};
 		this.RecalcInfo.LastPage      = -1;
-		this.RecalcInfo.RequestedPage = -1;
+		this.RecalcInfo.RequestedPage = editedPage;
         
         History.RecalcData_Add( { Type : AscDFH.historyitem_recalctype_HdrFtr, Data : this } );
     },
@@ -2838,6 +2846,17 @@ CHeaderFooterController.prototype =
 	}
 };
 CHeaderFooterController.prototype.constructor = CHeaderFooterController;
+/**
+ * The page of the header/footer which the user edits and which waits for its recalculation
+ * @returns {number} -1 if there is no such page
+ */
+CHeaderFooterController.prototype.GetRequestedPage = function()
+{
+	if (!this.CurHdrFtr || docpostype_HdrFtr !== this.LogicDocument.GetDocPosType())
+		return -1;
+
+	return this.CurHdrFtr.RecalcInfo.RequestedPage;
+};
 CHeaderFooterController.prototype.GetStyleFromFormatting = function()
 {
     if (null != this.CurHdrFtr)
