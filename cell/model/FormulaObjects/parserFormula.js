@@ -5234,8 +5234,7 @@ parserHelp.setDigitSeparator(AscCommon.g_oDefaultCultureInfo.NumberDecimalSepara
 				ref = ref.slice(0, -1);
 			}
 
-			// split only at commas outside quotes: a sheet name may hold a comma ('' keeps the quote count even)
-			var arrRefs = ref.split(/,(?=(?:[^']*'[^']*')*[^']*$)/);
+			var arrRefs = parserHelp.splitRefs(ref);
 			arrRefs.forEach(function (refItem) {
 				// ToDo in parser formula
 				var currentWorkbook = '[0]!';

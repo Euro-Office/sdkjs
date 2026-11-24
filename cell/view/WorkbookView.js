@@ -3611,7 +3611,7 @@
               if(sRef.charAt(0) === '=') {
                   sRef = sRef.slice(1);
               }
-              var aRefs = sRef.split(',');
+              var aRefs = AscCommon.parserHelp.splitRefs(sRef);
               var aSelectRanges = [];
               var oRange, oAscRange;
               var sWSName = null;
