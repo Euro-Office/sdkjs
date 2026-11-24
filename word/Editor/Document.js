@@ -11513,6 +11513,8 @@ CDocument.prototype.Document_SetHdrFtrLink = function(bLinkToPrevious)
 
 		this.HdrFtr.Set_CurHdrFtr(CurHdrFtr);
 		this.HdrFtr.CurHdrFtr.MoveCursorToStartPos(false);
+		// This header/footer was calculated for the pages of another section, stay on the page where it was linked
+		this.HdrFtr.CurHdrFtr.RequestPage(PageIndex);
 	}
 	else
 	{
@@ -11524,6 +11526,9 @@ CDocument.prototype.Document_SetHdrFtrLink = function(bLinkToPrevious)
 		SectPr.Set_HdrFtr(bHeader, bFirst, bEven, NewHdrFtr);
 		this.HdrFtr.Set_CurHdrFtr(NewHdrFtr);
 		this.HdrFtr.CurHdrFtr.MoveCursorToStartPos(false);
+		// The new header/footer is not calculated yet, stay on the page where it was unlinked (and not on the first
+		// page of the section)
+		this.HdrFtr.CurHdrFtr.RequestPage(PageIndex);
 	}
 
 	this.Recalculate();
