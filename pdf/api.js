@@ -4445,9 +4445,10 @@
 			return oComment.GetId()
 		}
 	};
-	PDFEditorApi.prototype.asc_showComments = function()
+	PDFEditorApi.prototype.asc_showComments = function(isShowSolved)
 	{
 		let oDoc = this.getPDFDoc();
+		oDoc.SetShowResolvedComments(false !== isShowSolved);
 		oDoc.HideShowAnnots(false);
 	};
 

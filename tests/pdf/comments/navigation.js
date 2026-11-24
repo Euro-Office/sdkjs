@@ -62,6 +62,7 @@ $(function ()
 		});
 		pdfDoc.mouseDownAnnot = null;
 		pdfDoc.annotsHidden = false;
+		pdfDoc.SetShowResolvedComments(true);
 		viewer.currentPage = 0;
 	}
 
@@ -169,6 +170,75 @@ $(function ()
 
 		pdfDoc.annotsHidden = false;
 		assert.strictEqual(goTo(true), "page 1 top left", "Shown again, next finds the first comment");
+	});
+
+	QUnit.test("Resolved comments are skipped while resolved comments are not shown", function (assert)
+	{
+		setupDocument();
+		let resolved = addAnnot(0, 200, 200, "resolved");
+		resolved.SetState(AscPDF.TEXT_ANNOT_STATE.Accepted);
+		assert.strictEqual(resolved.GetAscCommentData().asc_getSolved(), true, "the note is resolved");
+
+		assert.strictEqual(goTo(true), "page 1 top left", "First comment");
+		assert.strictEqual(goTo(true), "page 1 top right", "Second comment");
+		assert.strictEqual(goTo(true), "resolved", "Resolved comments shown: the resolved note is visited");
+
+		// what the interface does when "Show resolved comments" is switched off
+		let hideShowAnnots = pdfDoc.HideShowAnnots;
+		pdfDoc.HideShowAnnots = function () {};
+		try
+		{
+			AscCommon.PDFEditorApi.prototype.asc_showComments.call(AscTest.Editor, false);
+		}
+		finally
+		{
+			pdfDoc.HideShowAnnots = hideShowAnnots;
+		}
+		assert.strictEqual(pdfDoc.IsShowResolvedComments(), false, "asc_showComments(false) switches resolved comments off");
+
+		pdfDoc.mouseDownAnnot = null;
+		assert.strictEqual(goTo(true), "page 1 top left", "First comment");
+		assert.strictEqual(goTo(true), "page 1 top right", "Second comment");
+		assert.strictEqual(goTo(true), "page 1 bottom", "The resolved note is skipped");
+		assert.strictEqual(goTo(false), "page 1 top right", "Also going back");
+
+		pdfDoc.SetShowResolvedComments(true);
+		pdfDoc.mouseDownAnnot = null;
+		goTo(true);
+		goTo(true);
+		assert.strictEqual(goTo(true), "resolved", "Shown again, the resolved note is visited again");
+	});
+
+	QUnit.test("Notes a few points apart count as one line", function (assert)
+	{
+		clearDocument();
+		addAnnot(0, 300, 100, "right, 1 pt higher");
+		addAnnot(0, 100, 101, "left");
+		addAnnot(0, 200, 105, "middle, 5 pt lower");
+		addAnnot(0, 50, 120, "next line");
+
+		assert.strictEqual(goTo(true), "left", "Notes up to 6 pt apart are one line: left to right");
+		assert.strictEqual(goTo(true), "middle, 5 pt lower", "Then the middle one");
+		assert.strictEqual(goTo(true), "right, 1 pt higher", "Then the right one, although it is 1 pt higher");
+		assert.strictEqual(goTo(true), "next line", "A note 20 pt lower is on the next line, although it is further left");
+
+		clearDocument();
+		addAnnot(0, 300, 100, "first line, right");
+		addAnnot(0, 200, 104, "first line, left");
+		addAnnot(0, 100, 108, "8 pt below the start of the line");
+		assert.strictEqual(goTo(true), "first line, left", "Within 6 pt of the line's first note: same line");
+		assert.strictEqual(goTo(true), "first line, right", "Left to right on that line");
+		assert.strictEqual(goTo(true), "8 pt below the start of the line", "More than 6 pt below the line's first note: a new line");
+
+		// a selected shape without a comment on the same line: next is the note to its right
+		clearDocument();
+		addAnnot(0, 100, 100, "left note");
+		addAnnot(0, 300, 102, "right note");
+		let square = addAnnot(0, 200, 99, null, "Reviewer", AscPDF.ANNOTATIONS_TYPES.Square);
+		pdfDoc.mouseDownAnnot = square;
+		assert.strictEqual(goTo(true), "right note", "From a shape on the same line, next is the note to its right");
+		pdfDoc.mouseDownAnnot = square;
+		assert.strictEqual(goTo(false), "left note", "And previous the note to its left");
 	});
 
 	QUnit.test("A document without comments returns nothing", function (assert)
