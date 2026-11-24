@@ -11,6 +11,7 @@ on:
       - develop
       - 'release/**'
       - 'hotfix/**'
+      - 'private-**'
   pull_request:
   workflow_dispatch:
 
@@ -25,7 +26,7 @@ env:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.repository.private && 'self-hosted' || 'ubuntu-latest' }}
     permissions:
       contents: read
     steps:
@@ -126,6 +127,9 @@ jobs:
 
       - name: Upload Playwright report
         if: always()
+        # A private copy has a small artifact quota; a failed upload must not
+        # turn a passing e2e run red there.
+        continue-on-error: ${{ github.event.repository.private }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-report-${{ github.sha }}
