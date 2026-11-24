@@ -4749,6 +4749,41 @@
 			})
 		}, AscDFH.historydescription_Pdf_ContextMenuRemove);
 	};
+	/**
+	 * Changes the author name of comments, as one undo step, only with asc_setAuthorOverride(true). The user ids stay,
+	 * so the comments can still be edited by their writer.
+	 * @param {string} sName the new name
+	 * @param {string[]} [arrIds] the comments to change, only their own author; without ids every comment and reply
+	 */
+	PDFEditorApi.prototype.asc_ChangeCommentAuthor = function(sName, arrIds) {
+		let oDoc = this.getPDFDoc();
+		if (!this.isAuthorOverride || !oDoc || !sName)
+			return;
+
+		let isAll = !arrIds;
+		let aRoots = isAll ? oDoc.annots.slice() : arrIds.map(function(sId) {return oDoc.GetAnnotById(sId);}).filter(Boolean);
+		let aChange = [];
+		aRoots.forEach(function collect(oAnnot) {
+			aChange.push(oAnnot);
+			isAll && (oAnnot.GetReplies && oAnnot.GetReplies() || []).forEach(collect);
+		});
+		if (!aChange.length)
+			return;
+
+		oDoc.DoAction(function() {
+			aChange.forEach(function(oAnnot) {oAnnot.SetAuthor(sName);});
+		}, AscDFH.historydescription_Document_ChangeComment, this, aRoots.map(function(oAnnot) {return oAnnot.GetId();}));
+
+		let t = this;
+		aRoots.forEach(function(oAnnot) {
+			let oAscData = oAnnot.GetAscCommentData && oAnnot.GetAscCommentData();
+			if (!oAscData)
+				return;
+			let oData = new AscCommon.CCommentData();
+			oData.Read_FromAscCommentData(oAscData);
+			t.sync_ChangeCommentData(oAnnot.GetId(), oData);
+		});
+	};
 	PDFEditorApi.prototype.asc_changeComment = function(Id, AscCommentData)
 	{
 		var oDoc = this.getDocumentRenderer().getPDFDoc();
@@ -5301,6 +5336,7 @@
 	PDFEditorApi.prototype['asc_remove']            	   = PDFEditorApi.prototype.asc_remove;
 	PDFEditorApi.prototype['asc_removeAnnots']             = PDFEditorApi.prototype.asc_removeAnnots;
 	PDFEditorApi.prototype['asc_changeComment']            = PDFEditorApi.prototype.asc_changeComment;
+	PDFEditorApi.prototype['asc_ChangeCommentAuthor']		= PDFEditorApi.prototype.asc_ChangeCommentAuthor;
 	PDFEditorApi.prototype['asc_selectComment']            = PDFEditorApi.prototype.asc_selectComment;
 	PDFEditorApi.prototype['asc_EditPage']                 = PDFEditorApi.prototype.asc_EditPage;
 	PDFEditorApi.prototype['asc_AddPage']                  = PDFEditorApi.prototype.asc_AddPage;

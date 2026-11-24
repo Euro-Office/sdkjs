@@ -5141,6 +5141,59 @@ var editor;
 		oPlace && oPlace.cellCommentator.addComment(oComment);
 	};
 
+	/**
+	 * Changes the author name of comments, as one undo step, only with asc_setAuthorOverride(true). The user ids stay,
+	 * so the comments can still be edited by their writer.
+	 * @param {string} sName the new name
+	 * @param {string[]} [arrIds] the comments to change, only their own author; without ids every comment and reply
+	 */
+	spreadsheet_api.prototype.asc_ChangeCommentAuthor = function (sName, arrIds) {
+		if (!this.isAuthorOverride || !this.wb || !this.wbModel || !sName || !this.canEdit() || this.collaborativeEditing.getGlobalLock()) {
+			return;
+		}
+		let t = this;
+		let isAll = !arrIds;
+		let aChanges = [];
+		let aLockInfo = [];
+		let aCommentators = [this.wb.cellCommentator];
+		for (let nIndex = 0, nCount = this.wbModel.getWorksheetCount(); nIndex < nCount; ++nIndex) {
+			let oWsView = this.wb.getWorksheet(nIndex);
+			oWsView && aCommentators.push(oWsView.cellCommentator);
+		}
+		aCommentators.forEach(function (oCommentator) {
+			oCommentator.model.aComments.forEach(function (oComment) {
+				if (isAll || arrIds.indexOf(oComment.asc_getId()) !== -1) {
+					aChanges.push([oCommentator, oComment]);
+					let sId = AscCommonExcel.CCellCommentator.sStartCommentId + (oComment.bDocument ? "" : oCommentator.model.getId());
+					aLockInfo.push(t.collaborativeEditing.getLockInfo(AscCommonExcel.c_oAscLockTypeElem.Object, null, sId, oComment.asc_getId()));
+				}
+			});
+		});
+		if (!aChanges.length) {
+			return;
+		}
+
+		function rename(oData) {
+			oData.sUserName = sName;
+			isAll && oData.aReplies.forEach(rename);
+		}
+
+		this.collaborativeEditing.lock(aLockInfo, function (bFree) {
+			if (false === bFree) {
+				return;
+			}
+			AscCommon.History.Create_NewPoint();
+			AscCommon.History.StartTransaction();
+			aChanges.forEach(function (oItem) {
+				let oData = oItem[1].clone();
+				rename(oData);
+				oItem[0].changeComment(oItem[1].asc_getId(), oData, false, false, true, true);
+			});
+			AscCommon.History.EndTransaction();
+			let oWsView = t.wb.getWorksheet();
+			oWsView && oWsView.draw();
+		});
+	};
 	spreadsheet_api.prototype.asc_changeComment = function (id, oComment) {
 		if (this.wb) {
 			if (oComment.bDocument) {
@@ -10338,6 +10391,7 @@ var editor;
   // Cell comment interface
   prot["asc_addComment"] = prot.asc_addComment;
   prot["asc_changeComment"] = prot.asc_changeComment;
+  prot["asc_ChangeCommentAuthor"] = prot.asc_ChangeCommentAuthor;
   prot["asc_findComment"] = prot.asc_findComment;
   prot["asc_removeComment"] = prot.asc_removeComment;
   prot["asc_RemoveAllComments"] = prot.asc_RemoveAllComments;
