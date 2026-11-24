@@ -2624,6 +2624,53 @@ CGraphicObjects.prototype =
         return graphic_page? graphic_page.behindDocObjects.concat(graphic_page.inlineObjects.concat(graphic_page.beforeTextObjects)) : [];
     },
 
+	/**
+	 * Returns the drawing objects shown on the given page, from the front to the back
+	 * @param {number} nPageIndex
+	 * @returns {{Drawing: AscCommonWord.ParaDrawing, Layer: string, HdrFtr: boolean}[]}
+	 */
+	getPageDrawingObjects: function(nPageIndex)
+	{
+		let oPage = this.graphicPages[nPageIndex];
+		if (!oPage)
+			return [];
+
+		let arrResult = [];
+		let oUsed     = new Set();
+
+		function add(arrObjects, sLayer, isHdrFtr)
+		{
+			if (!arrObjects)
+				return;
+
+			// the arrays are in drawing order, so the last object is in front
+			for (let nIndex = arrObjects.length - 1; nIndex >= 0; --nIndex)
+			{
+				let oDrawing = arrObjects[nIndex] ? arrObjects[nIndex].parent : null;
+				// objects inside a text box or a shape belong to that shape, not to the page
+				if (!(oDrawing instanceof AscCommonWord.ParaDrawing) || oUsed.has(oDrawing) || !oDrawing.IsUseInDocument() || oDrawing.isShapeChild())
+					continue;
+
+				oUsed.add(oDrawing);
+				arrResult.push({Drawing : oDrawing, Layer : sLayer, HdrFtr : isHdrFtr});
+			}
+		}
+
+		// headers and footers are drawn before the main text and its objects
+		let oHdrFtrPage = this.getHdrFtrObjectsByPageIndex(nPageIndex);
+		add(oPage.beforeTextObjects, "front", false);
+		add(oPage.inlineObjects, "inline", false);
+		add(oPage.behindDocObjects, "behind", false);
+		if (oHdrFtrPage)
+		{
+			add(oHdrFtrPage.beforeTextObjects, "front", true);
+			add(oHdrFtrPage.inlineObjects, "inline", true);
+			add(oHdrFtrPage.behindDocObjects, "behind", true);
+		}
+
+		return arrResult;
+	},
+
     selectNextObject: DrawingObjectsController.prototype.selectNextObject,
 
 
