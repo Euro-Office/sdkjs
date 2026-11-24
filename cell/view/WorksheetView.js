@@ -3133,11 +3133,15 @@ function isAllowPasteLink(pastedWb) {
     };
 
     // ----- Drawing for print -----
-    WorksheetView.prototype._calcPagesPrint = function(range, pageOptions, indexWorksheet, arrPages, printScale, adjustPrint, bPrintArea, opt_prepareTextMetrics) {
+    WorksheetView.prototype._calcPagesPrint = function(range, pageOptions, indexWorksheet, arrPages, printScale, adjustPrint, bPrintArea, opt_prepareTextMetrics, skipEmptyPages) {
         if (0 > range.r2 || 0 > range.c2) {
 			// Ничего нет
             return;
         }
+		if (skipEmptyPages) {
+			// Text extents measured for the empty page check hold for this layout pass only
+			skipEmptyPages.textEnds = null;
+		}
 
 		if (window["NATIVE_EDITOR_ENJINE"]) {
 			if (!this.rows.length) {
@@ -3390,6 +3394,9 @@ function isAllowPasteLink(pastedWb) {
 			if(isOnlyFirstPage && nCountPages > 0) {
 				break;
 			}
+			if (skipEmptyPages && skipEmptyPages.limitReached) {
+				break;
+			}
 
 			let newPagePrint = new asc_CPagePrint();
 
@@ -3567,8 +3574,9 @@ function isAllowPasteLink(pastedWb) {
 				newPagePrint.scale = scale;
 			}
 			recalculatePageMargins(newPagePrint);
-			arrPages.push(newPagePrint);
-			nCountPages++;
+			if (this._addPrintPage(arrPages, newPagePrint, skipEmptyPages)) {
+				nCountPages++;
+			}
 
 			if (bIsAddOffset) {
 				// Мы еще не дорисовали колонку
@@ -3605,6 +3613,174 @@ function isAllowPasteLink(pastedWb) {
 			}
 		}
     };
+
+	// Spreadsheets from OpenDocument files are printed the way LibreOffice Calc prints them: a page
+	// without content is left out (ScDocument::IsPrintEmpty). Excel prints such pages, so the print path
+	// passes skipEmptyPages (see WorkbookView.getSkipEmptyPrintPages) only for workbooks converted from
+	// ODS; page break preview and the page lines always get every page, as in LibreOffice.
+	// Left out pages do not count toward c_kMaxPrintPages; at most c_kMaxPrintPages of them are checked.
+	// Returns true when the page was added.
+	WorksheetView.prototype._addPrintPage = function (arrPages, page, skipEmptyPages) {
+		if (skipEmptyPages && this._isPrintPageEmpty(page.pageRange, skipEmptyPages)) {
+			if (!skipEmptyPages.firstEmptyPage) {
+				skipEmptyPages.firstEmptyPage = page;
+			}
+			if (++skipEmptyPages.skippedCount >= AscCommonExcel.c_kMaxPrintPages) {
+				skipEmptyPages.limitReached = true;
+			}
+			return false;
+		}
+		arrPages.push(page);
+		return true;
+	};
+
+	// A page is empty when its range has no cell with a value or formula (also one with an empty
+	// result), no comment, no sparkline, no border, no drawing object and no text running in from a cell
+	// on its left.
+	// A fill alone does not count, as in LibreOffice.
+	// opt_skipEmptyPages keeps the measured text extents, so that a cell is measured once per layout pass and
+	// not again for every page to its right.
+	WorksheetView.prototype._isPrintPageEmpty = function (range, opt_skipEmptyPages) {
+		let t = this;
+		let ws = this.model;
+		// Only left, right, top and bottom lines count (LibreOffice HasAttrFlags::Lines), no diagonals
+		let hasBorder = function (style) {
+			let border = style && style.border;
+			return !!(border && ((border.l && !border.l.isEmpty()) || (border.r && !border.r.isEmpty()) ||
+				(border.t && !border.t.isEmpty()) || (border.b && !border.b.isEmpty())));
+		};
+
+		let hasContent = ws.getRange3(range.r1, range.c1, range.r2, range.c2)._foreachNoEmpty(function (cell) {
+			if (!cell.isNullText() || hasBorder(cell.getStyle())) {
+				return true;
+			}
+		});
+		if (hasContent) {
+			return false;
+		}
+
+		let c, r, rowHasBorder = false;
+		for (c = range.c1; c <= range.c2; ++c) {
+			let col = ws._getColNoEmpty(c);
+			if (col && hasBorder(col.getStyle())) {
+				return false;
+			}
+		}
+		for (r = range.r1; r <= range.r2 && !rowHasBorder; ++r) {
+			ws._getRowNoEmpty(r, function (row) {
+				rowHasBorder = !!(row && hasBorder(row.getStyle()));
+			});
+		}
+		if (rowHasBorder) {
+			return false;
+		}
+
+		// A merged cell whose value sits outside the page (LibreOffice only looks at merges that start left
+		// of the page and counts them even without a value)
+		let merged = ws.getMergedByRange(range);
+		if (merged && merged.all) {
+			let mergedValue = false;
+			for (let i = 0; i < merged.all.length && !mergedValue; ++i) {
+				let bbox = merged.all[i].bbox;
+				if (bbox) {
+					ws._getCellNoEmpty(bbox.r1, bbox.c1, function (cell) {
+						mergedValue = !!(cell && !cell.isNullText());
+					});
+				}
+			}
+			if (mergedValue) {
+				return false;
+			}
+		}
+
+		let comments = ws.aComments;
+		if (comments) {
+			for (let i = 0; i < comments.length; ++i) {
+				if (null != comments[i].nRow && range.contains(comments[i].nCol, comments[i].nRow)) {
+					return false;
+				}
+			}
+		}
+
+		let sparklineGroups = ws.aSparklineGroups;
+		if (sparklineGroups) {
+			for (let i = 0; i < sparklineGroups.length; ++i) {
+				let sparklines = sparklineGroups[i].arrSparklines;
+				for (let j = 0; sparklines && j < sparklines.length; ++j) {
+					if (sparklines[j].sqRef && range.isIntersect(sparklines[j].sqRef)) {
+						return false;
+					}
+				}
+			}
+		}
+
+		let drawings = ws.Drawings;
+		if (drawings) {
+			for (let i = 0; i < drawings.length; ++i) {
+				let drawing = drawings[i];
+				let from = drawing.from, to = drawing.to;
+				if (drawing.Type !== AscCommon.c_oAscCellAnchorType.cellanchorTwoCell && drawing.boundsFromTo) {
+					from = drawing.boundsFromTo.from;
+					to = drawing.boundsFromTo.to;
+				}
+				if (!from || !to || to.col < from.col || to.row < from.row) {
+					// Unknown extent: keep the page
+					return false;
+				}
+				if (from.col <= range.c2 && to.col >= range.c1 && from.row <= range.r2 && to.row >= range.r1) {
+					return false;
+				}
+			}
+		}
+
+		// Unwrapped text of the last filled cell left of the page may run into it
+		if (range.c1 > 0) {
+			let lastCol = -1, curRow = -1, textFromLeft = false;
+			let textEnds = null;
+			if (opt_skipEmptyPages) {
+				textEnds = opt_skipEmptyPages.textEnds || (opt_skipEmptyPages.textEnds = new Map());
+			}
+			// The last column the unwrapped text of the cell runs into, -1 for none
+			let textEnd = function (col, row) {
+				let key = row * AscCommon.gc_nMaxCol + col;
+				let end = textEnds ? textEnds.get(key) : undefined;
+				if (undefined === end) {
+					let ct = t._addCellTextToCache(col, row, true);
+					end = ct && ct.flags && !ct.flags.isMerged() && !ct.flags.wrapText ? col + ct.sideR : -1;
+					if (textEnds) {
+						textEnds.set(key, end);
+					}
+				}
+				return end;
+			};
+			let checkRow = function () {
+				if (-1 !== lastCol && 0 !== t._getRowHeight(curRow) && textEnd(lastCol, curRow) >= range.c1) {
+					textFromLeft = true;
+				}
+			};
+			ws.getRange3(range.r1, 0, range.r2, range.c1 - 1)._foreachNoEmpty(function (cell) {
+				if (cell.nRow !== curRow) {
+					checkRow();
+					if (textFromLeft) {
+						return true;
+					}
+					curRow = cell.nRow;
+					lastCol = -1;
+				}
+				if (!cell.isEmptyTextString()) {
+					lastCol = cell.nCol;
+				}
+			});
+			if (!textFromLeft) {
+				checkRow();
+			}
+			if (textFromLeft) {
+				return false;
+			}
+		}
+
+		return true;
+	};
 
 	WorksheetView.prototype._checkPrintRange = function (range, doNotRecalc/*, _checkLargeRange*/) {
 		let t = this;
@@ -3782,7 +3958,7 @@ function isAllowPasteLink(pastedWb) {
 		return new AscCommon.CellBase(maxRow, maxCol);
 	};
 
-    WorksheetView.prototype.calcPagesPrint = function (pageOptions, printOnlySelection, indexWorksheet, arrPages, arrRanges, adjustPrint, doNotRecalc) {
+    WorksheetView.prototype.calcPagesPrint = function (pageOptions, printOnlySelection, indexWorksheet, arrPages, arrRanges, adjustPrint, doNotRecalc, skipEmptyPages) {
 		var range, maxCell, t = this;
 		//в опциях может прийти другая область печати. сделано на случай, когда при совместке меняется область в модели
 		var _printArea;
@@ -3875,7 +4051,7 @@ function isAllowPasteLink(pastedWb) {
 					range = new asc_Range(range.c1, range.r1, maxCell.col, maxCell.row);
 				}
 
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint);
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null, null, skipEmptyPages);
 			}
 		} else if(printArea && printAreaRanges) {
 
@@ -3901,7 +4077,7 @@ function isAllowPasteLink(pastedWb) {
 				}
 
 				let _startPages = arrPages.length;
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, true);
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, true, null, skipEmptyPages);
 
 				if(arrRanges) {
 					arrRanges.push({range: range, start: _startPages, end: arrPages.length});
@@ -3919,7 +4095,7 @@ function isAllowPasteLink(pastedWb) {
 					tempPrintScale = checkCustomScaleProps();
 				}
 
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null, true);
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null, true, skipEmptyPages);
 			} else {
 				range = new asc_Range(0, 0, _maxRowCol.col, _maxRowCol.row);
 
@@ -3930,7 +4106,10 @@ function isAllowPasteLink(pastedWb) {
 					tempPrintScale = checkCustomScaleProps();
 				}
 
-				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint);
+				// Measure the rows while laying out the pages: a row with an automatic height (wrapped text) gets its
+				// height only when its text is measured, and the data range above is found without measuring.
+				this._calcPagesPrint(range, pageOptions, indexWorksheet, arrPages, tempPrintScale, adjustPrint, null,
+					!doNotRecalc, skipEmptyPages);
 			}
 		}
 
@@ -6674,6 +6853,10 @@ function isAllowPasteLink(pastedWb) {
 			if (clipUse) {
 				this._RemoveClipRect(ctx);
 			}
+		} else if (this._isCheckboxCell(c)) {
+			this._AddClipRect(ctx, x1, y1, w, h);
+			this._drawCellCheckbox(ctx, c, col, row, offsetX, offsetY);
+			this._RemoveClipRect(ctx);
 		} else {
 			this._AddClipRect(ctx, x1, y1, w, h);
 			if (this._getCellCF(cfIterator, c, row, col, Asc.ECfType.iconSet) /*&& AscCommon.align_Left === ct.cellHA*/) {
@@ -6730,6 +6913,162 @@ function isAllowPasteLink(pastedWb) {
 		}
 
 		return null;
+	};
+
+	WorksheetView.prototype._isCheckboxCell = function (c) {
+		// c comes from _getVisibleCell (getCell3 -> getRange3), i.e. a Range, not a Cell:
+		// use the Range compiled-style accessor (getXfs(true)), not Cell.getCompiledStyle.
+		if (!c || CellValueType.Bool !== c.getType()) {
+			return false;
+		}
+		var xfs = c.getXfs(true);
+		return !!(xfs && xfs.checkbox);
+	};
+
+	WorksheetView.prototype._getCheckboxRect = function (col, row, offsetX, offsetY) {
+		var ct = this._getCellTextCache(col, row);
+		if (!ct || ct.angle) {
+			return null;
+		}
+
+		var isMerged = ct.flags.isMerged(), range;
+		var rowB = row, colR = col;
+		if (isMerged) {
+			range = ct.flags.merged;
+			if (col !== range.c1 || row !== range.r1) {
+				return null;
+			}
+			colR = Math.min(range.c2, this.nColsCount - 1);
+			rowB = Math.min(range.r2, this.nRowsCount - 1);
+		}
+
+		var y1 = this._getRowTop(row) - offsetY;
+		var h = this._getRowTop(rowB + 1) - offsetY - y1;
+		var bl = y1 + h - Asc.round(
+			(isMerged ? (ct.metrics.height - ct.metrics.baseline) : this._getRowDescender(rowB)) * this.getZoom());
+		var x1ct = this._getColLeft(col) - offsetX;
+		var x2ct = isMerged ? (this._getColLeft(colR + 1) - offsetX - gridlineSize) :
+			(x1ct + this._getColumnWidth(col) - gridlineSize);
+
+		var textH = ct.metrics.height * this.getZoom();
+		var side = Math.max(5, Math.min(Asc.round(textH * 0.7), h - 2));
+		var bx;
+		if (AscCommon.align_Center === ct.cellHA || AscCommon.align_Distributed === ct.cellHA) {
+			// x2ct is the right gridline, so the cell interior is x1ct..x2ct-1;
+			// _calcTextHorizPos counts the gridline and ends up 1px to the right.
+			bx = x1ct + Math.floor((x2ct - x1ct - side) / 2);
+		} else {
+			bx = this._calcTextHorizPos(x1ct, x2ct, {width: side}, ct.cellHA, true);
+		}
+		var by;
+		if (Asc.c_oAscVAlign.Top === ct.cellVA) {
+			by = this._calcTextVertPos(y1, h, bl, ct.metrics, ct.cellVA) + Asc.round((textH - side) / 2);
+		} else {
+			// Bottom is the default vertical alignment, so a checkbox would sit on the
+			// bottom edge of any taller row; center it in the cell instead.
+			by = y1 + Asc.round((h - gridlineSize - side) / 2);
+		}
+
+		return {x: bx, y: by, side: side};
+	};
+
+	var kCheckboxCheckedFill = new CColor(33, 115, 70);
+	var kCheckboxCheckMark = new CColor(255, 255, 255);
+
+	WorksheetView.prototype._drawCellCheckbox = function (ctx, c, col, row, offsetX, offsetY) {
+		var rect = this._getCheckboxRect(col, row, offsetX, offsetY);
+		if (!rect) {
+			return;
+		}
+
+		var checked = 1 === c.getNumberValue();
+		var lineW = Math.max(1, Asc.round(rect.side / 9));
+
+		if (checked) {
+			ctx.setFillStyle(kCheckboxCheckedFill);
+			this._fillRect(ctx, rect.x, rect.y, rect.side, rect.side);
+
+			ctx.beginPath();
+			ctx.setLineWidth(lineW);
+			ctx.setStrokeStyle(kCheckboxCheckMark);
+			this._moveTo(ctx, rect.x + 0.22 * rect.side, rect.y + 0.55 * rect.side);
+			this._lineTo(ctx, rect.x + 0.42 * rect.side, rect.y + 0.74 * rect.side);
+			this._lineTo(ctx, rect.x + 0.78 * rect.side, rect.y + 0.3 * rect.side);
+			ctx.stroke();
+		} else {
+			// Draw the border as four filled bars inside the box so it covers exactly
+			// the same pixels as the checked state; a stroked rect is shifted by the
+			// half-pixel alignment in DrawingContext.strokeRect.
+			ctx.setFillStyle(this.settings.cells.defaultState.border);
+			this._fillRect(ctx, rect.x, rect.y, rect.side, lineW);
+			this._fillRect(ctx, rect.x, rect.y + rect.side - lineW, rect.side, lineW);
+			this._fillRect(ctx, rect.x, rect.y, lineW, rect.side);
+			this._fillRect(ctx, rect.x + rect.side - lineW, rect.y, lineW, rect.side);
+		}
+	};
+
+	WorksheetView.prototype._hitCheckboxCell = function (x, y, col, row) {
+		var merged = this.model.getMergedByCell(row, col);
+		if (merged) {
+			col = merged.c1;
+			row = merged.r1;
+		}
+		var c = this._getVisibleCell(col, row);
+		if (!this._isCheckboxCell(c) || c.isFormula()) {
+			return false;
+		}
+		var rect = this._getCheckboxRect(col, row, 0, 0);
+		return !!rect && x >= rect.x && x <= rect.x + rect.side && y >= rect.y && y <= rect.y + rect.side;
+	};
+
+	WorksheetView.prototype.toggleCheckbox = function (col, row) {
+		var t = this;
+		if (!this.workbook.canEdit()) {
+			return false;
+		}
+		var merged = this.model.getMergedByCell(row, col);
+		if (merged) {
+			col = merged.c1;
+			row = merged.r1;
+		}
+		var c = this._getVisibleCell(col, row);
+		if (!this._isCheckboxCell(c) || c.isFormula()) {
+			return false;
+		}
+		var checked = 1 === c.getNumberValue();
+		var range = merged || new asc_Range(col, row, col, row);
+		if (this.model.isIntersectionOtherUserProtectedRanges(range)) {
+			this.model.workbook.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
+			return true;
+		}
+		this.checkProtectRangeOnEdit([range], function (isSuccess) {
+			if (isSuccess) {
+				t._isLockedCells(range, null, doToggle);
+			}
+		});
+		return true;
+
+		function doToggle(success) {
+			if (!success) {
+				return;
+			}
+			var oCellValue = new AscCommonExcel.CCellValue();
+			oCellValue.type = CellValueType.Bool;
+			oCellValue.number = checked ? 0 : 1;
+			t.model.getRange3(row, col, row, col).setValueData(
+				new AscCommonExcel.UndoRedoData_CellValueData(null, oCellValue));
+			t._updateRange(range);
+			t.draw();
+		}
+	};
+
+	WorksheetView.prototype.toggleActiveCellCheckbox = function () {
+		var activeCell = this.model.getSelection().activeCell;
+		var c = this._getVisibleCell(activeCell.col, activeCell.row);
+		if (!this._isCheckboxCell(c) || c.isFormula()) {
+			return false;
+		}
+		return this.toggleCheckbox(activeCell.col, activeCell.row);
 	};
 
 	WorksheetView.prototype._drawPageBreakPreviewLines = function () {
@@ -12412,6 +12751,10 @@ function isAllowPasteLink(pastedWb) {
 					if (_vr.contains(c.col, r.row)) {
 						_offsetX += x;
 						_offsetY += y;
+						if (this._hitCheckboxCell(_offsetX, _offsetY, c.col, r.row)) {
+							res = {cursor: kCurHyperlink, target: c_oTargetType.FilterObject, col: c.col, row: r.row, isCheckbox: true};
+							return false;
+						}
 						if (isDataValidation) {
 							var merged = this.model.getMergedByCell(row, col);
 							if (merged) {
@@ -13664,6 +14007,8 @@ function isAllowPasteLink(pastedWb) {
 
         var cell_info = new asc_CCellInfo();
         cell_info.xfs = c.getXfs(false).clone();
+        var checkboxXfs = c.getXfs(true);
+        cell_info.checkbox = !!(checkboxXfs && checkboxXfs.checkbox);
 
 		AscCommonExcel.g_ActiveCell = new Asc.Range(c1, r1, c1, r1);
         cell_info.text = c.getValueForEdit(true);
@@ -16495,6 +16840,36 @@ function isAllowPasteLink(pastedWb) {
 					case "hiddenFormulas":
 						range.setHiddenFormulas(val);
 						break;
+					case "checkbox":
+						range.setCheckbox(val);
+						if (val) {
+							//like Excel: blank cells in the selection become unchecked checkboxes
+							var emptyValue = new AscCommonExcel.CCellValue();
+							emptyValue.type = CellValueType.Bool;
+							emptyValue.number = 0;
+							var emptyData = new AscCommonExcel.UndoRedoData_CellValueData(null, emptyValue);
+							//clamp huge (full row/col) selections to the used area
+							var fillR2 = range.bbox.r2, fillC2 = range.bbox.c2;
+							if (isLargeRange) {
+								fillR2 = Math.min(fillR2, t.model.getRowsCount() - 1);
+								fillC2 = Math.min(fillC2, t.model.getColsCount() - 1);
+							}
+							for (var checkboxRow = range.bbox.r1; checkboxRow <= fillR2; ++checkboxRow) {
+								for (var checkboxCol = range.bbox.c1; checkboxCol <= fillC2; ++checkboxCol) {
+									t.model._getCell(checkboxRow, checkboxCol, function (checkboxCell) {
+										if (checkboxCell.isNullTextString() && !checkboxCell.isFormula()) {
+											checkboxCell.setValueData(emptyData);
+										}
+									});
+								}
+							}
+						}
+						break;
+					case "removeCheckbox":
+						// Only the checkbox format is removed; the TRUE/FALSE value stays
+						// in the cell, like Excel's "Clear Formats".
+						range.setCheckbox(null);
+						break;
                     case "rh":
                         range.removeHyperlink(null, true);
                         break;
@@ -16884,7 +17259,7 @@ function isAllowPasteLink(pastedWb) {
 		}
 
 		if (("merge" === prop || "sort" === prop || "hyperlink" === prop || "rh" === prop ||
-			"customSort" === prop) && this.model.inPivotTable(checkRange)) {
+			"customSort" === prop || "checkbox" === prop) && this.model.inPivotTable(checkRange)) {
 			this.model.workbook.handlers.trigger("asc_onError", c_oAscError.ID.LockedCellPivot,
 				c_oAscError.Level.NoCritical);
 			return;
@@ -18454,8 +18829,28 @@ function isAllowPasteLink(pastedWb) {
 		}
     };
 
-    WorksheetView.prototype.autoFitRowHeight = function (r1, r2) {
-		if (this.model.isUserProtectedRangesIntersection(new Asc.Range(0, r1, gc_nMaxCol0, r2))) {
+    WorksheetView.prototype.autoFitRowHeight = function (r1, r2, checkSelection) {
+		if (null === r1) {
+			var lastSelection = this.model.selectionRange.getLast();
+			r1 = lastSelection.r1;
+			r2 = lastSelection.r2;
+		}
+		var ranges = [new Asc.Range(0, r1, gc_nMaxCol0, r2)];
+		if (checkSelection) {
+			//if row contains into selected whole rows, fit all of them
+			let selectionRanges = this.model.selectionRange.ranges;
+			let isRowsSelection = selectionRanges.every(function (range) {
+				return range.getType() === c_oAscSelectionType.RangeMax || range.getType() === c_oAscSelectionType.RangeRow;
+			});
+			if (isRowsSelection && this.model.selectionRange.containsRow(r1)) {
+				ranges = selectionRanges.map(function (range) {
+					return new Asc.Range(0, range.r1, gc_nMaxCol0, range.r2);
+				});
+			}
+		}
+		if (ranges.some(function (range) {
+			return this.model.isUserProtectedRangesIntersection(range);
+		}, this)) {
 			this.model.workbook.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 			return false;
 		}
@@ -18464,25 +18859,24 @@ function isAllowPasteLink(pastedWb) {
 		}
     	var viewMode = this.handlers.trigger('getViewMode');
         var t = this;
-		if (null === r1) {
-			var lastSelection = this.model.selectionRange.getLast();
-			r1 = lastSelection.r1;
-			r2 = lastSelection.r2;
-		}
 
         var onChangeCallback = function (isSuccess) {
             if (false === isSuccess) {
                 return;
             }
 
-            var r;
-            for (r = r1; r <= r2; ++r) {
-				if (t.model.getRowCustomHeight(r)) {
-					break;
+            var hasCustomHeight = ranges.some(function (range) {
+				for (var r = range.r1; r <= range.r2; ++r) {
+					if (t.model.getRowCustomHeight(r)) {
+						return true;
+					}
 				}
-			}
-            if (r2 < r) {
-                t._updateRange(new Asc.Range(0, r1, gc_nMaxCol0, r2));
+				return false;
+			});
+            if (!hasCustomHeight) {
+				ranges.forEach(function (range) {
+					t._updateRange(range);
+				});
                 t.draw();
             	return;
 			}
@@ -18493,15 +18887,18 @@ function isAllowPasteLink(pastedWb) {
             History.Create_NewPoint();
             var oSelection = History.GetSelection();
             if (null != oSelection) {
+                // ToDo multi-select
                 oSelection = oSelection.clone();
-                oSelection.assign(0, r1, gc_nMaxCol0, r2);
+                oSelection.assign(0, ranges[0].r1, gc_nMaxCol0, ranges[0].r2);
                 History.SetSelection(oSelection);
                 History.SetSelectionRedo(oSelection);
             }
             History.StartTransaction();
 
-			t.model.setRowBestFit(true, AscCommonExcel.oDefaultMetrics.RowHeight, r1, r2);
-			t._updateRange(new Asc.Range(0, r1, gc_nMaxCol0, r2));
+			ranges.forEach(function (range) {
+				t.model.setRowBestFit(true, AscCommonExcel.oDefaultMetrics.RowHeight, range.r1, range.r2);
+				t._updateRange(range);
+			});
 			t.draw();
             History.EndTransaction();
 			if (viewMode) {

@@ -138,27 +138,6 @@ module.exports = function sdkConcatLoader() {
     // processes × 2 chunks each in the full pipeline.
     const needSourceMap = !!(this.sourceMap && SourceMapGenerator);
 
-    // Runtime API polyfills (Promise, Map, WeakMap, Array.prototype.includes,
-    // etc.) for whatever ES6+ built-ins the source actually uses — orthogonal to
-    // syntax (let/const/arrow/classes), which ships as-authored now that no
-    // downlevel target is applied. Consumers that load only sdk-all-min.js
-    // (e.g. embed pages, which do not load sdkjs/vendor/polyfill.js nearby)
-    // still need these built-ins on older browsers, so prepend the same
-    // polyfill file the old dev-mode writeScripts() path already loads ahead
-    // of sdk-all-min.js, keeping the 'min' chunk self-contained.
-    let polyfillContent = '';
-    if (opts.chunk === 'min') {
-        const polyfillPath = path.join(srcRoot, 'vendor', 'polyfill.js');
-        this.addDependency(polyfillPath);
-        try {
-            polyfillContent = fs.readFileSync(polyfillPath, 'utf8');
-        } catch (err) {
-            callback(new Error(`sdk-concat-loader: cannot read required polyfill file ${polyfillPath}: ${err.message}`));
-            return;
-        }
-        if (!polyfillContent.endsWith('\n')) polyfillContent += '\n';
-    }
-
     // Read all source files in parallel. A missing/unreadable file must fail
     // the build outright: silently substituting '' would concatenate a chunk
     // with a piece of its bare-var scope missing, producing a build that looks
@@ -176,11 +155,9 @@ module.exports = function sdkConcatLoader() {
         const bundleName = opts.chunk === 'min' ? 'sdk-all-min.js' : 'sdk-all.js';
         const gen = needSourceMap ? new SourceMapGenerator({ file: bundleName }) : null;
 
-        let result  = prefix + polyfillContent;
+        let result  = prefix;
         // Generated line cursor: prefix occupies line 1 (the wrapper open), content starts at line 2.
-        // polyfillContent (min chunk only) is opaque vendor code — not remapped — so it
-        // just shifts where the first real source file's mappings begin.
-        let genLine = (isAll ? 2 : 1) + (polyfillContent.match(/\n/g) || []).length;
+        let genLine = isAll ? 2 : 1;
 
         for (let i = 0; i < files.length; i++) {
             const content  = contents[i];

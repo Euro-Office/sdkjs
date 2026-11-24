@@ -334,6 +334,60 @@ $(function () {
 		});
 	});
 
+	function pasteHtml(html, range, callback) {
+		const htmlElement = document.createElement("div");
+		htmlElement.innerHTML = html;
+		ws.selectionRange.ranges = [range];
+		api.asc_PasteData(AscCommon.c_oAscClipboardDataFormat.HtmlElement, htmlElement, undefined, undefined, undefined, callback);
+	}
+
+	function getMergesInRange(range) {
+		return ws.mergeManager.get(range).all.map(function (merge) {
+			return merge.bbox.getName();
+		}).sort();
+	}
+
+	QUnit.test("Test: paste HTML table with consecutive vertical merges", function (assert) {
+		const done = assert.async();
+		const html = "<table>" +
+			"<tr><td rowspan='2'>a</td><td>1</td><td rowspan='5'>c</td></tr>" +
+			"<tr><td>2</td></tr>" +
+			"<tr><td rowspan='3'>b</td><td>3</td></tr>" +
+			"<tr><td>4</td></tr>" +
+			"<tr><td>5</td></tr>" +
+			"</table>";
+		pasteHtml(html, getRange(7, 99, 7, 99), function (success) {
+			assert.ok(success);
+			assert.deepEqual(getMergesInRange(getRange(7, 99, 9, 103)), ["H100:H101", "H102:H104", "J100:J104"]);
+			assert.strictEqual(ws.getRange2("H102").getValue(), "b");
+			assert.strictEqual(ws.getRange2("I104").getValue(), "5");
+			done();
+		});
+	});
+
+	QUnit.test("Test: paste HTML table with a tall vertical merge is linear in its height", function (assert) {
+		const done = assert.async();
+		const rows = 400;
+		let html = "<table><tr><td rowspan='" + rows + "'>a</td><td>0</td></tr>";
+		for (let i = 1; i < rows; i++) {
+			html += "<tr><td>" + i + "</td></tr>";
+		}
+		html += "</table>";
+		const getVMerge = AscWord.CTableCell.prototype.GetVMerge;
+		let calls = 0;
+		AscWord.CTableCell.prototype.GetVMerge = function () {
+			calls++;
+			return getVMerge.apply(this, arguments);
+		};
+		pasteHtml(html, getRange(11, 99, 11, 99), function (success) {
+			AscWord.CTableCell.prototype.GetVMerge = getVMerge;
+			assert.ok(success);
+			assert.deepEqual(getMergesInRange(getRange(11, 99, 12, 99 + rows - 1)), ["L100:L" + (100 + rows - 1)]);
+			assert.ok(calls < 20 * rows, "GetVMerge calls: " + calls);
+			done();
+		});
+	});
+
 	QUnit.test("Test: \"callback tests paste Binary\"", function (assert) {
 		let done = assert.async();
 		let binaryData = AscCommonExcel.g_clipboardExcel.copyProcessor.getBinaryForCopy(ws, wsView.objectRender);

@@ -3902,7 +3902,11 @@
 						return;
 					}
 					else if (oOptionObject.isStamp) {
-						oDoc.AddStampAnnot(AscPDF.STAMP_TYPES.Image, oDoc.Viewer.currentPage, oImage);
+						// an image stamp, e.g. a saved signature: one undo step
+						oDoc.BlurActiveObject();
+						oDoc.DoAction(function() {
+							oDoc.AddStampAnnot(AscPDF.STAMP_TYPES.Image, oDoc.Viewer.currentPage, oImage);
+						}, AscDFH.historydescription_Pdf_AddAnnot, oApi);
 						return;
 					}
 				}

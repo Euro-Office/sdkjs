@@ -108,9 +108,9 @@
 		this.FD_Ascii_Font_Like_Names = [
 			["Cambria Math", "Asana Math", "XITS Math", "Latin Modern"],
 			["OpenSymbol"],
-			["Arial", "Liberation Sans", "Helvetica", "Nimbus Sans L"],
-			["Times New Roman", "Liberation Serif"],
-			["Courier New", "Liberation Mono"],
+			["Arial", "Liberation Sans", "Helvetica", "Nimbus Sans L", "Arimo", "Nimbus Sans"],
+			["Times New Roman", "Liberation Serif", "Tinos", "Nimbus Roman", "Nimbus Roman No9 L"],
+			["Courier New", "Liberation Mono", "Cousine", "Nimbus Mono PS", "Nimbus Mono", "Nimbus Mono L"],
 			["Segoe", "Segoe UI"],
 			["Cambria", "Caladea"]
 		];
@@ -127,12 +127,30 @@
 			"Liberation Sans"   : 2,
 			"Helvetica"         : 2,
 			"Nimbus Sans L"     : 2,
+			// metric twins under other names (StarOffice, ChromeOS, URW), as LibreOffice and fontconfig alias them
+			"Albany"            : 2,
+			"Albany AMT"        : 2,
+			"Arimo"             : 2,
+			"Nimbus Sans"       : 2,
 
 			"Times New Roman"   : 3,
 			"Liberation Serif"  : 3,
+			"Times"             : 3,
+			"Thorndale"         : 3,
+			"Thorndale AMT"     : 3,
+			"Tinos"             : 3,
+			"Nimbus Roman"      : 3,
+			"Nimbus Roman No9 L": 3,
 
 			"Courier New"       : 4,
 			"Liberation Mono"   : 4,
+			"Courier"           : 4,
+			"Cumberland"        : 4,
+			"Cumberland AMT"    : 4,
+			"Cousine"           : 4,
+			"Nimbus Mono PS"    : 4,
+			"Nimbus Mono"       : 4,
+			"Nimbus Mono L"     : 4,
 
 			"Segoe"             : 5,
 			"Segoe UI"          : 5,

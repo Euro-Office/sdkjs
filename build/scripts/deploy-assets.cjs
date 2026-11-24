@@ -13,7 +13,7 @@
 //   - JS files: run through terser (WHITESPACE_ONLY equivalent) + license header
 //
 // JS files ignored (same ignoreFiles list as Gruntfile.js):
-//   jquery_native, fonts_ie, spell_ie, engine_ie, zlib_ie, drawingfile_ie, themes
+//   fonts_ie, spell_ie, engine_ie, zlib_ie, drawingfile_ie, themes
 
 const path  = require('path');
 const fs    = require('fs');
@@ -26,21 +26,16 @@ const SRC_ROOT  = path.resolve(BUILD_DIR, '..');
 
 const BUILD_ROOT = resolveBuildRoot(BUILD_DIR);
 
-const licenseText = buildLicenseHeader(BUILD_DIR, { stripSentinel: true });
+const licenseText = buildLicenseHeader(BUILD_DIR);
 
 // JS files skipped from individual minification (same as ignoreFiles in Gruntfile.js)
 const IGNORE_NAMES = new Set([
-    'jquery_native', 'fonts_ie', 'spell_ie', 'engine_ie',
+    'fonts_ie', 'spell_ie', 'engine_ie',
     'zlib_ie', 'drawingfile_ie', 'themes',
 ]);
 
 // Mirrors the otherFiles array in Gruntfile.js
 const OTHER_FILES = [
-    {
-        cwd:  path.join(SRC_ROOT, 'vendor'),
-        src:  ['polyfill.js'],
-        dest: path.join(BUILD_ROOT, 'vendor'),
-    },
     {
         cwd:  path.join(SRC_ROOT, 'common'),
         src:  [

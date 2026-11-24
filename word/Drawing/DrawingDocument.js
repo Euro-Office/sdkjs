@@ -1090,6 +1090,9 @@ CPage.prototype.Draw = function (context, xDst, yDst, wDst, hDst, api)
 		strokeColor = api.getPageStrokeColor();
 	}
 
+	if (api && api.WordControl && api.WordControl.isPagelessMode)
+		strokeColor = undefined;
+
 	if (strokeColor)
 	{
 		let lineW = Math.round(AscCommon.AscBrowser.retinaPixelRatio);
@@ -4395,7 +4398,7 @@ function CDrawingDocument()
 	{
 		var pixHeigth = this.m_oWordControl.m_oEditor.HtmlElement.height;
 		pixHeigth /= AscCommon.AscBrowser.retinaPixelRatio;
-		var pixBetweenPages = 20 * (this.m_lDrawingEnd - this.m_lDrawingFirst);
+		var pixBetweenPages = this.m_oWordControl.getPageGapVer() * (this.m_lDrawingEnd - this.m_lDrawingFirst);
 
 		return (pixHeigth - pixBetweenPages) * g_dKoef_pix_to_mm * 100 / this.m_oWordControl.m_nZoomValue;
 	};
@@ -6182,6 +6185,9 @@ function CDrawingDocument()
 	this.Update_ParaTab = function (Default_Tab, ParaTabs)
 	{
 		var hor_ruler = this.m_oWordControl.m_oHorRuler;
+		// a tab stop is being dragged with a live preview: the ruler keeps its own values until mouse up
+		if (hor_ruler.m_bIsMouseDown && hor_ruler.m_bLivePreviewActive)
+			return;
 
 		var __tabs = ParaTabs.Tabs;
 		if (undefined === __tabs)

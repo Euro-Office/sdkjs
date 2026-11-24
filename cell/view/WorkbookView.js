@@ -493,6 +493,10 @@
 				  self._onPivotFiltersClick.apply(self, arguments);
 			  }, "pivotCollapseClick": function () {
 				  self._onPivotCollapseClick.apply(self, arguments);
+			  }, "checkboxClick": function () {
+				  self._onCheckboxClick.apply(self, arguments);
+			  }, "toggleActiveCellCheckbox": function () {
+				  return self.getWorksheet().toggleActiveCellCheckbox();
 			  }, "refreshConnections": function () {
 				  return self._onRefreshConnections.apply(self, arguments);
 			  }, "commentCellClick": function () {
@@ -2003,6 +2007,13 @@
     pivotTable.setVisibleFieldItem(this.Api, !idPivotCollapse.sd, idPivotCollapse.fld, idPivotCollapse.index);
   };
 
+  WorkbookView.prototype._onCheckboxClick = function(col, row) {
+    var ws = this.getWorksheet();
+    if (ws) {
+      ws.toggleCheckbox(col, row);
+    }
+  };
+
   WorkbookView.prototype._onRefreshConnections = function(isAll) {
     //todo all connections
     if (isAll) {
@@ -2158,7 +2169,7 @@
       if (ct.target === c_oTargetType.ColumnResize) {
       	ws.autoFitColumnsWidth(ct.col);
       } else {
-      	ws.autoFitRowHeight(ct.row, ct.row);
+      	ws.autoFitRowHeight(ct.row, ct.row, true);
       }
       asc_applyFunction(callback);
     } else {
@@ -4133,13 +4144,21 @@
 		}
 	};
 
-  WorkbookView.prototype._calcPagesPrintSheet = function (index, printPagesData, onlySelection, adjustPrint) {
+  // Workbooks converted from an OpenDocument spreadsheet print like LibreOffice Calc: pages without
+  // content are left out. Returns the state the page calculation shares across sheets, or null.
+  WorkbookView.prototype.getSkipEmptyPrintPages = function () {
+	if (!this.model.isOpenDocumentSource()) {
+		return null;
+	}
+	return {firstEmptyPage: null, skippedCount: 0, limitReached: false};
+  };
+  WorkbookView.prototype._calcPagesPrintSheet = function (index, printPagesData, onlySelection, adjustPrint, skipEmptyPages) {
   	var ws = this.model.getWorksheet(index);
   	var wsView = this.getWorksheet(index);
   	if (!ws.getHidden()) {
 		var pageOptionsMap = adjustPrint ? adjustPrint.asc_getPageOptionsMap() : null;
   		var pagePrintOptions = pageOptionsMap && pageOptionsMap[index] ? pageOptionsMap[index] : ws.PagePrintOptions;
-  		wsView.calcPagesPrint(pagePrintOptions, onlySelection, index, printPagesData.arrPages, null, adjustPrint);
+  		wsView.calcPagesPrint(pagePrintOptions, onlySelection, index, printPagesData.arrPages, null, adjustPrint, null, skipEmptyPages);
   	}
   };
   WorkbookView.prototype.calcPagesPrint = function (adjustPrint) {
@@ -4162,6 +4181,7 @@
 	var nActive = isPrintPreview && null !== this.printPreviewState.realActiveSheet ? this.printPreviewState.realActiveSheet : this.model.getActive();
 
     var printPagesData = new asc_CPrintPagesData();
+    let skipEmptyPages = this.getSkipEmptyPrintPages();
     var printType = adjustPrint.asc_getPrintType();
 
 	var i;
@@ -4172,10 +4192,10 @@
 				if(adjustPrint.isOnlyFirstPage && i !== 0) {
 					break;
 				}
-				this._calcPagesPrintSheet(activeSheetsArray[i], printPagesData, false, adjustPrint);
+				this._calcPagesPrintSheet(activeSheetsArray[i], printPagesData, false, adjustPrint, skipEmptyPages);
 			}
 		} else {
-			this._calcPagesPrintSheet(nActive, printPagesData, false, adjustPrint);
+			this._calcPagesPrintSheet(nActive, printPagesData, false, adjustPrint, skipEmptyPages);
 		}
     } else if (printType === Asc.c_oAscPrintType.EntireWorkbook) {
       // Колличество листов
@@ -4184,15 +4204,20 @@
       	if(adjustPrint.isOnlyFirstPage && i !== 0) {
       		break;
 		}
-      	this._calcPagesPrintSheet(i, printPagesData, false, adjustPrint);
+      	this._calcPagesPrintSheet(i, printPagesData, false, adjustPrint, skipEmptyPages);
       }
     } else if (printType === Asc.c_oAscPrintType.Selection) {
 		let _activeSheetsArray = adjustPrint && adjustPrint.asc_getActiveSheetsArray && adjustPrint.asc_getActiveSheetsArray();
 		let activeSheet = _activeSheetsArray && _activeSheetsArray[0] != null ? _activeSheetsArray[0] : null;
-		this._calcPagesPrintSheet(activeSheet != null ? activeSheet : nActive, printPagesData, true, adjustPrint);
+		this._calcPagesPrintSheet(activeSheet != null ? activeSheet : nActive, printPagesData, true, adjustPrint, skipEmptyPages);
     }
 
-    if (this.printPreviewState.isNeedShowError(AscCommonExcel.c_kMaxPrintPages === printPagesData.arrPages.length)) {
+    // Nothing but empty pages: print the first of them, as before
+    if (skipEmptyPages && 0 === printPagesData.arrPages.length && skipEmptyPages.firstEmptyPage) {
+		printPagesData.arrPages.push(skipEmptyPages.firstEmptyPage);
+    }
+    if (this.printPreviewState.isNeedShowError(AscCommonExcel.c_kMaxPrintPages === printPagesData.arrPages.length ||
+		!!(skipEmptyPages && skipEmptyPages.limitReached))) {
 		this.handlers.trigger("asc_onError", c_oAscError.ID.PrintMaxPagesCount, c_oAscError.Level.NoCritical);
     }
 
@@ -5519,10 +5544,10 @@
 		var res = null;
 		if (this.printOptionsJson) {
 			let sheetsProps = this.printOptionsJson["spreadsheetLayout"] && this.printOptionsJson["spreadsheetLayout"]["sheetsProps"];
-			var ws = this.model.getWorksheet(index);
-			res = new Asc.CHeaderFooter(ws);
-			if (sheetsProps && sheetsProps[index] && sheetsProps[index]["pageSetup"] && sheetsProps[index]["pageSetup"]["headerFooter"]) {
-				res.initFromJson(sheetsProps[index]["pageSetup"]["headerFooter"]);
+			var json = sheetsProps && sheetsProps[index] && sheetsProps[index]["pageSetup"] && sheetsProps[index]["pageSetup"]["headerFooter"];
+			if (json) {
+				res = new Asc.CHeaderFooter(this.model.getWorksheet(index));
+				res.initFromJson(json);
 			}
 		}
 		return res;

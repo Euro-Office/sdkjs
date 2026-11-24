@@ -1383,8 +1383,25 @@ $(function() {
 
 	QUnit.module("Print");
 
+	function testPrintHeaderFooterFromJson() {
+		QUnit.test("Test: header and footer of the sheet survive print json params", function (assert) {
+			try {
+				api.wb.printOptionsJson = null;
+				assert.strictEqual(api.wb.getPrintHeaderFooterFromJson(0), null, "no json params");
+				api.wb.printOptionsJson = {"spreadsheetLayout": {"fitToWidth": 0}};
+				assert.strictEqual(api.wb.getPrintHeaderFooterFromJson(0), null, "json params without header and footer fall back to the sheet");
+				api.wb.printOptionsJson = {"spreadsheetLayout": {"sheetsProps": [{"pageSetup": {"headerFooter": {"oddHeader": "&CX"}}}]}};
+				let headerFooter = api.wb.getPrintHeaderFooterFromJson(0);
+				assert.ok(headerFooter && headerFooter.getOddHeader(), "header and footer from the json params");
+			} finally {
+				api.wb.printOptionsJson = null;
+			}
+		});
+	}
+
 	function startTests() {
 		QUnit.start();
+		testPrintHeaderFooterFromJson();
 		testPrintFileSettings();
 		testPageBreaksSimple();
 		testPageBreaksAndTitles();
