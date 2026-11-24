@@ -5,10 +5,10 @@
 | Scenario | Tool | Wall clock |
 |---|---|---|
 | All 4 modules (grunt, sequential) | Closure Compiler (Java) | **399 s** |
-| All 4 modules (webpack, parallel) | Terser (Node.js) | **~50 s** |
-| Single module cold start | webpack + Terser | ~30–34 s |
-| **Single module warm start (FS cache)** | webpack + Terser | **~0.6 s** |
-| Single module, dev mode (no Terser) | webpack | ~5.5 s |
+| All 4 modules (webpack, parallel) | esbuild (Node.js) | **~18 s** (was ~50 s with Terser) |
+| Single module cold start | webpack + esbuild | ~6 s (word; was ~26 s with Terser) |
+| **Single module warm start (FS cache)** | webpack + esbuild | **~0.6 s** |
+| Single module, dev mode (no minifier) | webpack | ~5.5 s |
 | Watch: initial build | webpack dev mode | ~5.7 s |
 | **Watch: incremental rebuild** | webpack dev mode | **~4 s** |
 
@@ -76,7 +76,7 @@ npm run watch:slide
 npm run watch:visio
 ```
 
-- Development mode disables Terser → **8× faster** per-rebuild vs production
+- Development mode disables minification → **8× faster** per-rebuild vs production
 - The concat loader already calls `addContextDependency()` for glob directories, so
   adding a new source file triggers a rebuild automatically without restarting watch
 - Pair with `make front-dev` (nginx serving from the deploy directory) for browser
@@ -156,11 +156,11 @@ of that expression — including the LHS of the declaration in `common/commonDef
 // commonDefines.js (in the min chunk):
 window.AscCommon.g_cCompanyName = "onlyoffice";
 // → DefinePlugin turns this into:
-"onlyoffice" = "onlyoffice";   // ← invalid assignment, Terser rejects
+"onlyoffice" = "onlyoffice";   // ← invalid assignment, the minifier rejects
 ```
 
 Only the unprefixed `AscCommon.g_cXxx` form is safe. This covers all call-site
-comparisons (`if (AscCommon.g_cIsBeta === 'true')`) and enables Terser dead-code
+comparisons (`if (AscCommon.g_cIsBeta === 'true')`) and enables esbuild dead-code
 elimination. The `window.AscCommon.g_cXxx = "..."` declarations in `commonDefines.js`
 stay as runtime defaults — they run once on load, then the constant-folded call-sites
 take over.
@@ -217,14 +217,14 @@ of silently building an incomplete bundle. Most flags map directly to an env var
 error message itself for the full mapping). Three don't:
 
 - **`--level`** — Closure Compiler's `--compilation_level` (`ADVANCED` vs
-  `WHITESPACE_ONLY`). There's no Terser flag with the same meaning. The one distinction
+  `WHITESPACE_ONLY`). There's no esbuild flag with the same meaning. The one distinction
   the old flag was actually used for in practice — a lighter pass for desktop/mobile —
-  is preserved directly: `SDK_PLATFORM=desktop|mobile` sets Terser's `compress: false`
+  is preserved directly: `SDK_PLATFORM=desktop|mobile` sets esbuild's `minifySyntax: false`
   in `webpack.sdk.factory.mjs`. There's no general replacement beyond that one case.
 
 - **`--formatting`** — Closure's pretty-print output flag (e.g. `PRETTY_PRINT`).
-  Terser has no equivalent output mode. To read unminified output, use development mode
-  instead (`npm run watch:*`, or `NODE_ENV=development`), which skips Terser entirely
+  The minifier has no equivalent output mode. To read unminified output, use development mode
+  instead (`npm run watch:*`, or `NODE_ENV=development`), which skips minification entirely
   rather than asking it to format its output legibly.
 
 - **`--src`** — overrode the source-tree root for a one-off build against a different
@@ -237,8 +237,8 @@ error message itself for the full mapping). Three don't:
 ## Resolved — ES5 Syntax Downleveling / webpack `target`
 
 The old Gruntfile forced `--language_out=ECMASCRIPT5` on every Closure Compiler
-build. Terser (this pipeline's minifier) only minifies — it does not transpile
-syntax, so `let`/`const`/arrow functions/classes/template literals now ship
+build. esbuild (this pipeline's minifier) only minifies, with `target: 'es2022'` capping
+the syntax it may introduce (e.g. `?.`, `??`), so `let`/`const`/arrow functions/classes/template literals now ship
 as-authored. `webpack.sdk.factory.mjs` also sets no explicit `target`, and
 `build/package.json` has no `browserslist` field, so webpack 5 falls back to
 its own implicit target resolution.

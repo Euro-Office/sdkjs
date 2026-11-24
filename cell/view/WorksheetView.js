@@ -18894,8 +18894,28 @@ function isAllowPasteLink(pastedWb) {
 		}
     };
 
-    WorksheetView.prototype.autoFitRowHeight = function (r1, r2) {
-		if (this.model.isUserProtectedRangesIntersection(new Asc.Range(0, r1, gc_nMaxCol0, r2))) {
+    WorksheetView.prototype.autoFitRowHeight = function (r1, r2, checkSelection) {
+		if (null === r1) {
+			var lastSelection = this.model.selectionRange.getLast();
+			r1 = lastSelection.r1;
+			r2 = lastSelection.r2;
+		}
+		var ranges = [new Asc.Range(0, r1, gc_nMaxCol0, r2)];
+		if (checkSelection) {
+			//if row contains into selected whole rows, fit all of them
+			let selectionRanges = this.model.selectionRange.ranges;
+			let isRowsSelection = selectionRanges.every(function (range) {
+				return range.getType() === c_oAscSelectionType.RangeMax || range.getType() === c_oAscSelectionType.RangeRow;
+			});
+			if (isRowsSelection && this.model.selectionRange.containsRow(r1)) {
+				ranges = selectionRanges.map(function (range) {
+					return new Asc.Range(0, range.r1, gc_nMaxCol0, range.r2);
+				});
+			}
+		}
+		if (ranges.some(function (range) {
+			return this.model.isUserProtectedRangesIntersection(range);
+		}, this)) {
 			this.model.workbook.handlers.trigger("asc_onError", c_oAscError.ID.ProtectedRangeByOtherUser, c_oAscError.Level.NoCritical);
 			return false;
 		}
@@ -18904,25 +18924,24 @@ function isAllowPasteLink(pastedWb) {
 		}
     	var viewMode = this.handlers.trigger('getViewMode');
         var t = this;
-		if (null === r1) {
-			var lastSelection = this.model.selectionRange.getLast();
-			r1 = lastSelection.r1;
-			r2 = lastSelection.r2;
-		}
 
         var onChangeCallback = function (isSuccess) {
             if (false === isSuccess) {
                 return;
             }
 
-            var r;
-            for (r = r1; r <= r2; ++r) {
-				if (t.model.getRowCustomHeight(r)) {
-					break;
+            var hasCustomHeight = ranges.some(function (range) {
+				for (var r = range.r1; r <= range.r2; ++r) {
+					if (t.model.getRowCustomHeight(r)) {
+						return true;
+					}
 				}
-			}
-            if (r2 < r) {
-                t._updateRange(new Asc.Range(0, r1, gc_nMaxCol0, r2));
+				return false;
+			});
+            if (!hasCustomHeight) {
+				ranges.forEach(function (range) {
+					t._updateRange(range);
+				});
                 t.draw();
             	return;
 			}
@@ -18933,15 +18952,18 @@ function isAllowPasteLink(pastedWb) {
             History.Create_NewPoint();
             var oSelection = History.GetSelection();
             if (null != oSelection) {
+                // ToDo multi-select
                 oSelection = oSelection.clone();
-                oSelection.assign(0, r1, gc_nMaxCol0, r2);
+                oSelection.assign(0, ranges[0].r1, gc_nMaxCol0, ranges[0].r2);
                 History.SetSelection(oSelection);
                 History.SetSelectionRedo(oSelection);
             }
             History.StartTransaction();
 
-			t.model.setRowBestFit(true, AscCommonExcel.oDefaultMetrics.RowHeight, r1, r2);
-			t._updateRange(new Asc.Range(0, r1, gc_nMaxCol0, r2));
+			ranges.forEach(function (range) {
+				t.model.setRowBestFit(true, AscCommonExcel.oDefaultMetrics.RowHeight, range.r1, range.r2);
+				t._updateRange(range);
+			});
 			t.draw();
             History.EndTransaction();
 			if (viewMode) {

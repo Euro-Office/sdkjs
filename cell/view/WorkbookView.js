@@ -2169,7 +2169,7 @@
       if (ct.target === c_oTargetType.ColumnResize) {
       	ws.autoFitColumnsWidth(ct.col);
       } else {
-      	ws.autoFitRowHeight(ct.row, ct.row);
+      	ws.autoFitRowHeight(ct.row, ct.row, true);
       }
       asc_applyFunction(callback);
     } else {

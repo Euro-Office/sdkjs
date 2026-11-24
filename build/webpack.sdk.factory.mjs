@@ -80,28 +80,13 @@ export function stripBootstrapStrictDirective(source, scanLimit = PROLOGUE_SCAN_
         source.slice(idx + STRICT_DIRECTIVE.length);
 }
 
-// @@license-banner@@ exists only so Terser's format.comments regex (below) can tell
-// the single BannerPlugin-injected banner apart from the ~400 identical per-file AGPL
-// headers it would otherwise also match. It has to survive in the bundle text through
-// the Terser pass for that match to work, so it can't be stripped from licenseText
-// before injection — instead, strip it from the asset after minification is done.
-//
-// Combines both the strict-mode-directive strip and the license-sentinel strip into a
-// single processAssets pass: each is a separate transform on the same asset, and doing
-// them as two independent plugins would materialize/scan/updateAsset the full bundle
-// source twice per chunk (multi-MB for sdk-all, across 4 modules x 2 chunks per build).
-//
 // Exported (only) for the real-compilation integration test in
-// build/test/webpack-sdk-factory.test.cjs — this plugin's correctness depends on
-// webpack's own internal bootstrap-generation format and Terser's output formatting,
-// neither of which is a stable public API, so it needs an actual webpack+Terser run to
-// validate, not just the pure-string-function tests above. The constructor flags let
-// that test exercise each transform in isolation without giving up the single-pass shape
-// used in production (sdkConfig() below always enables both).
+// build/test/webpack-sdk-factory.test.cjs: this plugin's correctness depends on
+// webpack's own internal bootstrap-generation format and the minifier's output
+// formatting, neither of which is a stable public API, so it needs an actual webpack
+// run to validate, not just the pure-string-function tests above.
 export class StripBundlePostprocessPlugin {
-    constructor({ stripStrictMode = true, stripLicenseSentinel = true, scanLimit = PROLOGUE_SCAN_LIMIT } = {}) {
-        this.stripStrictMode = stripStrictMode;
-        this.stripLicenseSentinel = stripLicenseSentinel;
+    constructor({ scanLimit = PROLOGUE_SCAN_LIMIT } = {}) {
         this.scanLimit = scanLimit;
     }
 
@@ -119,13 +104,7 @@ export class StripBundlePostprocessPlugin {
                         const source = compilation.getAsset(name).source.source();
                         if (typeof source !== 'string') continue;
 
-                        let patched = source;
-                        if (this.stripStrictMode) {
-                            patched = stripBootstrapStrictDirective(patched, this.scanLimit);
-                        }
-                        if (this.stripLicenseSentinel && patched.includes('@@license-banner@@')) {
-                            patched = patched.replace(/\s?@@license-banner@@/, '');
-                        }
+                        const patched = stripBootstrapStrictDirective(source, this.scanLimit);
                         if (patched === source) continue;
 
                         compilation.updateAsset(name, new webpack.sources.RawSource(patched));
@@ -170,6 +149,7 @@ export function sdkConfig(moduleName) {
     const SRC_ROOT  = path.resolve(__dirname, '..');
     const OUT_DIR   = path.join(BUILD_ROOT, moduleName);
     const platform  = process.env.SDK_PLATFORM || '';
+    const desktopOrMobile = platform === 'desktop' || platform === 'mobile';
     const addonDirs = parseAddonDirs();
 
     const companyName  = process.env.COMPANY_NAME     || 'Euro-Office';
@@ -200,9 +180,6 @@ export function sdkConfig(moduleName) {
         watchAggregateTimeout = 500;
     }
 
-    // Sentinel deliberately kept in (stripSentinel: false, the default) — Terser's
-    // format.comments regex below matches on it, and StripBundlePostprocessPlugin
-    // strips it from the asset only after that Terser pass runs.
     const licenseText = buildLicenseHeader(__dirname);
 
     function chunkConfig(chunk, outName) {
@@ -273,10 +250,15 @@ export function sdkConfig(moduleName) {
             },
 
             plugins: [
+                // Runs right after minification (OPTIMIZE_SIZE), because esbuild drops
+                // every comment (legalComments:'none' below), banner included. Running
+                // afterwards also means the ~400 per-file AGPL headers are already gone,
+                // so the bundle carries exactly one license header.
                 new webpack.BannerPlugin({
                     banner: licenseText,
                     raw: true,
                     entryOnly: true,
+                    stage: webpack.Compilation.PROCESS_ASSETS_STAGE_OPTIMIZE_SIZE + 1,
                 }),
 
                 // scanLimit derives from the actual injected banner so a future
@@ -288,7 +270,7 @@ export function sdkConfig(moduleName) {
                 // Replaces Closure Compiler's --define= flags.
                 // webpack DefinePlugin performs AST-level identifier replacement
                 // so dead-code branches (if (g_cIsBeta === 'true') …) are
-                // eliminated by TerserPlugin in the same pass.
+                // eliminated by the minifier (esbuild minifySyntax) in the same pass.
                 //
                 // Only the unprefixed form `AscCommon.g_cXxx` is listed here.
                 // The `window.AscCommon.g_cXxx = "..."` declarations in
@@ -310,83 +292,77 @@ export function sdkConfig(moduleName) {
             optimization: {
                 minimize: env === 'production',
                 minimizer: [
+                    // esbuild via terser-webpack-plugin's adapter: ~4x faster and half the
+                    // peak memory of Terser on these multi-MB concatenated bundles, at about
+                    // the same output size.
                     new TerserPlugin({
+                        minify: TerserPlugin.esbuildMinify,
                         extractComments: false,
                         // build-pipeline.cjs spawns 4 webpack-cli processes concurrently
-                        // (word/cell/slide/visio), each running 2 chunk configs — up to 8
-                        // TerserPlugin worker pools at once. Left at the library default
+                        // (word/cell/slide/visio), each running 2 chunk configs, so up to 8
+                        // minifier worker pools at once. Left at the library default
                         // (parallel:true, sized to os.cpus().length), that's 8x
                         // over-subscription on small CI runners. Cap each pool to a
-                        // quarter of the core count so total worker threads stay in the
+                        // quarter of the core count so total workers stay in the
                         // same ballpark as the host's core count.
                         parallel: Math.max(1, Math.floor(os.cpus().length / 4)),
+                        // Passed to esbuild.transform() as-is (the adapter only adds
+                        // sourcemap and sourcefile).
                         terserOptions: {
-                            format: {
-                                // BannerPlugin (stage ADDITIONS) injects the license banner into
-                                // the asset *before* Terser (stage OPTIMIZE_SIZE) runs, so the
-                                // banner is just another comment to Terser at this point. Match
-                                // only the sentinel below — matching on AGPL/Copyright/License
-                                // text also matches the identical per-file header repeated in
-                                // all ~400+ concatenated source files.
-                                comments: /@@license-banner@@/,
-
-                                // BOTH of the options below are required; neither is
-                                // sufficient alone. doctrenderer/x2t run these bundles on a
-                                // V8 built with v8_enable_i18n_support=false, whose reduced
-                                // Unicode tables do not classify supplementary-plane
-                                // ("astral") characters as ID_Start. The LaTeX symbol table
-                                // in word/Math/NamesOfLiterals.js keys an object on such
-                                // characters, and this pipeline emits them unquoted.
-                                //
-                                // ascii_only escapes non-ASCII *characters*, but an escaped
-                                // bare key is still a bare astral identifier: with
-                                // ascii_only alone this build emits 131 keys of the form
-                                //     \u{1d552}:"\\doublea"
-                                // which is pure ASCII text yet still resolves to U+1D552 for
-                                // ID_Start classification, so that V8 rejects it exactly as
-                                // it rejects the raw UTF-8 form. Measured: with ascii_only
-                                // alone, `x2t -create-js-cache` still aborts and writes a
-                                // 0-byte sdk-all.cache.
-                                //
-                                // quote_keys is therefore the load-bearing option -- it
-                                // turns the key into a string literal, which ascii_only then
-                                // escapes into `"\u{1d552}"`. ascii_only remains necessary
-                                // in its own right so no raw non-ASCII byte reaches the
-                                // bundle at all.
-                                //
-                                // quote_keys must live inside `format`; Terser rejects a
-                                // top-level one with "`quote_keys` is not a supported
-                                // option". Covered by
-                                // build/test/webpack-sdk-terser-options.test.cjs and by the
-                                // bundle scan in check-build.yml. See #80.
-                                ascii_only: true,
-                                quote_keys: true,
-                            },
-                            compress: (platform === 'desktop' || platform === 'mobile')
-                                // Old build-desktop.bat/build-mobile.command ran Closure's
-                                // WHITESPACE_ONLY (comments/whitespace stripped, no semantic
-                                // transforms) instead of web's ADVANCED. `compress: false` is
-                                // Terser's closest equivalent — it disables the whole compress
-                                // pass (dead-code elim, inlining, etc.) and keeps output to
-                                // whitespace/name-shortening-free minification, restoring that
-                                // lighter tier instead of silently adopting web's ADVANCED-like
-                                // pass on desktop/mobile.
-                                ? false
-                                : {
-                                    // The legacy Closure Compiler build did not drop console
-                                    // calls, and sdkjs uses console.* for non-debug diagnostics
-                                    // (invalid-JS errors, clipboard permission warnings, custom
-                                    // function registration warnings, workbook diagnostics) —
-                                    // silently discarding those in production removes real
-                                    // observability and can skip evaluation of their arguments.
-                                    // Opt in explicitly per-build instead of dropping by default.
-                                    drop_console: process.env.DROP_CONSOLE === '1',
-                                },
-                            // mangle:false is load-bearing — same reason as web-apps:
-                            // sdkjs files communicate via window.AscCommon.xxx and bare
-                            // top-level var declarations shared across concatenated scope.
-                            // Mangling property names would silently corrupt those references.
-                            mangle: false,
+                            // minify:false plus the three flags below, NOT minify:true with
+                            // minifyIdentifiers:false: with minify:true esbuild still renamed
+                            // locals. Top-level names must never be renamed: sdkjs files
+                            // communicate via window.AscCommon.xxx and bare top-level var
+                            // declarations shared across the concatenated scope (the same
+                            // reason the Terser build had mangle:false). esbuild still numbers
+                            // a local that shadows an outer one (`window` -> `window2`, nested
+                            // `function CShape` -> `CShape2`), which changes Function.name of
+                            // such nested declarations; nothing in sdkjs relies on it beyond
+                            // debug logging, and there is no option to turn it off.
+                            minify: false,
+                            minifyWhitespace: true,
+                            minifyIdentifiers: false,
+                            // Cap the syntax esbuild may introduce while minifying (e.g.
+                            // `a?.b`, `??`, `catch{}`) at the documented ES2022 floor (see
+                            // build/DEVELOPER-GUIDE.md). Source already at or below it ships as is.
+                            target: 'es2022',
+                            // Old build-desktop.bat/build-mobile.command ran Closure's
+                            // WHITESPACE_ONLY (comments/whitespace stripped, no semantic
+                            // transforms) instead of web's ADVANCED. Whitespace-only esbuild
+                            // keeps that lighter tier on desktop/mobile.
+                            minifySyntax: !desktopOrMobile,
+                            // ASCII-only output (#80). doctrenderer/x2t run these bundles on a
+                            // V8 built with v8_enable_i18n_support=false, whose reduced Unicode
+                            // tables do not classify supplementary-plane ("astral") characters
+                            // as ID_Start. The LaTeX symbol table in word/Math/NamesOfLiterals.js
+                            // keys an object on such characters.
+                            //
+                            // The Terser build needed format.quote_keys on top of ascii_only,
+                            // because Terser emitted those keys bare as `\u{1d552}:` which is
+                            // pure ASCII yet still a bare astral identifier. esbuild has no
+                            // quote_keys option: it unquotes plain keys, but with charset
+                            // 'ascii' it keeps astral keys quoted as `"\u{1D552}":` (131 keys
+                            // in word sdk-all.js), which is what #80 needs.
+                            // build/scripts/check-bundle-ascii.cjs (run in check-build.yml) and
+                            // build/test/webpack-sdk-terser-options.test.cjs guard both. Not yet
+                            // verified end to end: `x2t -create-js-cache` on esbuild output.
+                            //
+                            // esbuild does not escape non-ASCII inside regex literals; such
+                            // ranges must be written as \uXXXX escapes in source (see
+                            // common/editorscommon.js), or the bundle scan fails.
+                            charset: 'ascii',
+                            // Strip every comment, including /*! and @license ones; the
+                            // single banner is added after minification (BannerPlugin above).
+                            legalComments: 'none',
+                            // The legacy Closure Compiler build did not drop console
+                            // calls, and sdkjs uses console.* for non-debug diagnostics
+                            // (invalid-JS errors, clipboard permission warnings, custom
+                            // function registration warnings, workbook diagnostics),
+                            // silently discarding those in production removes real
+                            // observability and can skip evaluation of their arguments.
+                            // Opt in explicitly per-build instead of dropping by default.
+                            // Like Terser's drop_console before, never on desktop/mobile.
+                            drop: (!desktopOrMobile && process.env.DROP_CONSOLE === '1') ? ['console'] : [],
                         },
                     }),
                 ],
@@ -429,7 +405,7 @@ export function sdkConfig(moduleName) {
                 // Verified empirically: production (SDK_SOURCE_MAPS=1) -> development
                 // -> production again against the same cache dir produces byte-identical,
                 // correctly-minified output on the second production run, served from
-                // `[cached] modules`. Terser only minifies the *output* of the cached
+                // `[cached] modules`. The minifier only minifies the *output* of the cached
                 // module (per optimization.minimize, gated on `mode`) as a separate
                 // build-time step every run — it is never itself part of what gets
                 // cached, so a mode switch can't serve a stale minified/unminified asset.

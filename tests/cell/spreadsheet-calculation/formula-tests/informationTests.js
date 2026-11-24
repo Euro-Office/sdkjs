@@ -5315,10 +5315,10 @@ $(function () {
 		oParser = new parserFormula('TYPE(Sheet2!A1:A2)', 'A2', ws);
 		assert.ok(oParser.parse(), 'Test: TYPE(Sheet2!A1:A2) is parsed.');
 		//? assert.strictEqual(oParser.calculate().getValue(), 64, 'Test: Negative case: Area3D. 3D multi-cell range. Returns #VALUE!.');
-		// Case #3: Empty. Reference to empty cell. Returns #VALUE!.
+		// Case #3: Empty. Reference to empty cell. Returns 1.
 		oParser = new parserFormula('TYPE(A103)', 'A2', ws);
 		assert.ok(oParser.parse(), 'Test: TYPE(A103) is parsed.');
-		//? assert.strictEqual(oParser.calculate().getValue(), 1, 'Test: Negative case: Empty. Reference to empty cell. Returns #VALUE!.');
+		assert.strictEqual(oParser.calculate().getValue(), 1, 'Test: Negative case: Empty. Reference to empty cell. Returns 1.');
 		// Case #4: String. Empty string. Returns 2.
 		oParser = new parserFormula('TYPE("")', 'A2', ws);
 		assert.ok(oParser.parse(), 'Test: TYPE("") is parsed.');

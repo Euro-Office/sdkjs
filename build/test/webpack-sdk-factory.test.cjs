@@ -67,60 +67,6 @@ test('stripBootstrapStrictDirective: honors a caller-supplied scanLimit', async 
     assert.equal(patched.length, bundle.length);
 });
 
-test('StripBundlePostprocessPlugin: strips the sentinel even without a leading space (reformatted banner)', async () => {
-    const { StripBundlePostprocessPlugin } = await import(
-        url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
-    );
-
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'strip-license-sentinel-nospace-test-'));
-    const entry  = path.join(tmpDir, 'entry.js');
-    fs.writeFileSync(entry, 'var AscCommonSdkTestGlobal = { value: 1 + 1 };\n');
-
-    // No leading space before the sentinel — the guard/action mismatch this
-    // regression covers only manifests once the banner is formatted this way.
-    const banner = '/*@@license-banner@@\n * Copyright (C) Test Corp\n */';
-
-    function runCompiler(withPlugin) {
-        return new Promise((resolve, reject) => {
-            const compiler = webpack({
-                mode: 'production',
-                entry,
-                output: { path: tmpDir, filename: withPlugin ? 'with-plugin.js' : 'without-plugin.js', iife: false },
-                plugins: [
-                    new webpack.BannerPlugin({ banner, raw: true, entryOnly: true }),
-                    ...(withPlugin ? [new StripBundlePostprocessPlugin({ stripStrictMode: false })] : []),
-                ],
-                optimization: {
-                    minimize: true,
-                    minimizer: [
-                        new TerserPlugin({
-                            extractComments: false,
-                            terserOptions: {
-                                mangle: false,
-                                compress: true,
-                                format: { comments: /@@license-banner@@/ },
-                            },
-                        }),
-                    ],
-                },
-            });
-            compiler.run((err, stats) => {
-                compiler.close(() => {});
-                if (err || stats.hasErrors()) return reject(err || new Error(stats.toString()));
-                resolve(fs.readFileSync(path.join(tmpDir, withPlugin ? 'with-plugin.js' : 'without-plugin.js'), 'utf8'));
-            });
-        });
-    }
-
-    try {
-        const withPlugin = await runCompiler(true);
-        assert.equal(withPlugin.includes('Copyright (C) Test Corp'), true);
-        assert.equal(withPlugin.includes('@@license-banner@@'), false);
-    } finally {
-        fs.rmSync(tmpDir, { recursive: true, force: true });
-    }
-});
-
 test('StripBundlePostprocessPlugin: strips webpack\'s bootstrap "use strict" from a real minified compilation', async (t) => {
     const { StripBundlePostprocessPlugin } = await import(
         url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
@@ -144,7 +90,7 @@ test('StripBundlePostprocessPlugin: strips webpack\'s bootstrap "use strict" fro
                     minimizer: [new TerserPlugin({ terserOptions: { mangle: false, compress: true } })],
                 },
                 plugins: withPlugin
-                    ? [new StripBundlePostprocessPlugin({ stripLicenseSentinel: false })]
+                    ? [new StripBundlePostprocessPlugin()]
                     : [],
             });
             compiler.run((err, stats) => {
@@ -295,72 +241,53 @@ test('sdkConfig: WATCH_AGGREGATE_TIMEOUT overrides the default watch debounce', 
     }
 });
 
-test('StripBundlePostprocessPlugin: strips the @@license-banner@@ sentinel after Terser has used it to keep the banner', async () => {
-    const { StripBundlePostprocessPlugin } = await import(
+// Builds a small script with sdkConfig()'s own plugins and minimizer, so a
+// change to the real BannerPlugin stage or esbuild options is what gets tested.
+test('sdkConfig: minified bundle carries exactly one license banner, keeps names and drops webpack\'s "use strict"', async () => {
+    const { sdkConfig } = await import(
         url.pathToFileURL(path.join(__dirname, '..', 'webpack.sdk.factory.mjs'))
     );
 
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'strip-license-sentinel-test-'));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sdk-banner-test-'));
     const entry  = path.join(tmpDir, 'entry.js');
-    // A per-file AGPL header identical in shape to the ~400 real ones sdk-concat-loader
-    // concatenates ahead of the BannerPlugin-injected banner — it must NOT be kept by
-    // Terser's comments regex, only the sentinel-marked banner should survive.
-    fs.writeFileSync(
-        entry,
-        '/* AGPL header, repeated in every source file */\n' +
-        'var AscCommonSdkTestGlobal = { value: 1 + 1 };\n'
-    );
+    // Two per-file AGPL-style headers, the shape sdk-concat-loader concatenates
+    // ~400 times; esbuild must drop them all.
+    fs.writeFileSync(entry,
+        '/* Copyright Ascensio System SIA, per-file header one */\n' +
+        'var AscCommonSdkTestGlobal = { value: 1 + 1 };\n' +
+        '/* Copyright Ascensio System SIA, per-file header two */\n' +
+        'function sdkTestFn() { var someLongLocalName = AscCommonSdkTestGlobal; return someLongLocalName; }\n');
 
-    const banner = '/* @@license-banner@@\n * Copyright (C) Test Corp\n */';
+    const prevNodeEnv = process.env.NODE_ENV;
+    delete process.env.NODE_ENV;
+    let real;
+    try {
+        real = sdkConfig('word')[0];
+    } finally {
+        if (prevNodeEnv !== undefined) process.env.NODE_ENV = prevNodeEnv;
+    }
 
-    function runCompiler(withPlugin) {
-        return new Promise((resolve, reject) => {
+    try {
+        const out = await new Promise((resolve, reject) => {
             const compiler = webpack({
                 mode: 'production',
                 entry,
-                output: { path: tmpDir, filename: withPlugin ? 'with-plugin.js' : 'without-plugin.js', iife: false },
-                plugins: [
-                    new webpack.BannerPlugin({ banner, raw: true, entryOnly: true }),
-                    ...(withPlugin ? [new StripBundlePostprocessPlugin({ stripStrictMode: false })] : []),
-                ],
-                optimization: {
-                    minimize: true,
-                    minimizer: [
-                        new TerserPlugin({
-                            extractComments: false,
-                            terserOptions: {
-                                mangle: false,
-                                compress: true,
-                                // Same regex used in sdkConfig(): only the sentinel-marked
-                                // banner should survive Terser's comment-stripping pass,
-                                // not the per-file AGPL headers.
-                                format: { comments: /@@license-banner@@/ },
-                            },
-                        }),
-                    ],
-                },
+                output: { path: tmpDir, filename: 'out.js', iife: false },
+                plugins: real.plugins,
+                optimization: real.optimization,
             });
             compiler.run((err, stats) => {
                 compiler.close(() => {});
                 if (err || stats.hasErrors()) return reject(err || new Error(stats.toString()));
-                resolve(fs.readFileSync(path.join(tmpDir, withPlugin ? 'with-plugin.js' : 'without-plugin.js'), 'utf8'));
+                resolve(fs.readFileSync(path.join(tmpDir, 'out.js'), 'utf8'));
             });
         });
-    }
 
-    try {
-        const withoutPlugin = await runCompiler(false);
-        const withPlugin    = await runCompiler(true);
-
-        // Sanity checks on the fixture itself: the per-file header must be gone
-        // (Terser's regex didn't match it) and the banner text must have survived
-        // in both outputs — only the sentinel differs between them.
-        assert.equal(withoutPlugin.includes('AGPL header, repeated'), false);
-        assert.equal(withoutPlugin.includes('Copyright (C) Test Corp'), true);
-        assert.equal(withPlugin.includes('Copyright (C) Test Corp'), true);
-
-        assert.equal(withoutPlugin.includes('@@license-banner@@'), true);
-        assert.equal(withPlugin.includes('@@license-banner@@'), false);
+        assert.equal(out.match(/All rights reserved/g)?.length, 1, `expected exactly one banner:\n${out}`);
+        assert.ok(out.startsWith('/*\n'), `banner must open the bundle:\n${out}`);
+        assert.equal(out.includes('per-file header'), false);
+        assert.equal(out.includes('"use strict"'), false);
+        assert.match(out, /someLongLocalName/);
     } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true });
     }

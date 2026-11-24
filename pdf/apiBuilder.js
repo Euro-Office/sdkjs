@@ -2411,13 +2411,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFNumber_Format(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + "," + private_GetInnerNumberNegType(sNegStyle) + "," + "0" + ',"' + sCurrency + '",' + bCurrencyPrepend + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFNumber_Keystroke(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + "," + private_GetInnerNumberNegType(sNegStyle) + "," + "0" + ',"' + sCurrency + '",' + bCurrencyPrepend + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 
 		this.Field.Commit();
 
@@ -2440,13 +2440,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFPercent_Format(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + ");"
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFPercent_Keystroke(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -2467,13 +2467,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFDate_Format("' + sFormat + '");'
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFDate_Keystroke("' + sFormat + '");'
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -2494,13 +2494,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFTime_Format(' + private_GetInnerTimeFormatType(sFormat) + ');'
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFTime_Keystroke(' + private_GetInnerTimeFormatType(sFormat) + ');'
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -2521,13 +2521,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFSpecial_Format(" + private_GetInnerSpecialPsfType(sFormat) + ");"
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFSpecial_Keystroke(" + private_GetInnerSpecialPsfType(sFormat) + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -2607,7 +2607,7 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFRange_Validate(' + bGreaterThan +  ',' + nGreaterThan + ',' + bLessThan + ',' + nLessThan +  ');'
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Validate, aActionsValidate);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Validate, aActionsValidate);
 
 		return true;
 	};
@@ -2901,13 +2901,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFNumber_Format(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + "," + private_GetInnerNumberNegType(sNegStyle) + "," + "0" + ',"' + sCurrency + '",' + bCurrencyPrepend + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFNumber_Keystroke(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + "," + private_GetInnerNumberNegType(sNegStyle) + "," + "0" + ',"' + sCurrency + '",' + bCurrencyPrepend + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 
 		this.Field.Commit();
 
@@ -2930,13 +2930,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFPercent_Format(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + ");"
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFPercent_Keystroke(" + nDemical + "," + private_GetInnerNumberSeparateType(sSepStyle) + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -2957,13 +2957,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFDate_Format("' + sFormat + '");'
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFDate_Keystroke("' + sFormat + '");'
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -2984,13 +2984,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFTime_Format(' + private_GetInnerTimeFormatType(sFormat) + ');'
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFTime_Keystroke(' + private_GetInnerTimeFormatType(sFormat) + ');'
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -3011,13 +3011,13 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFSpecial_Format(" + private_GetInnerSpecialPsfType(sFormat) + ");"
 		}]
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Format, aActionsFormat);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Format, aActionsFormat);
 
 		let aActionsKeystroke = [{
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": "AFSpecial_Keystroke(" + private_GetInnerSpecialPsfType(sFormat) + ");"
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Keystroke, aActionsKeystroke);
 		this.Field.Commit();
 
 		return true;
@@ -3097,7 +3097,7 @@
 			"S": AscPDF.ACTIONS_TYPES.JavaScript,
 			"JS": 'AFRange_Validate(' + bGreaterThan +  ',' + nGreaterThan + ',' + bLessThan + ',' + nLessThan +  ');'
 		}];
-		this.Field.SetActions(AscPDF.FORMS_TRIGGERS_TYPES.Validate, aActionsValidate);
+		this.Field.SetActions(AscPDF.PDF_TRIGGERS_TYPES.Validate, aActionsValidate);
 
 		return true;
 	};

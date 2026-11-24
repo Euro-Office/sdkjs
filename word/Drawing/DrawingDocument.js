@@ -6185,6 +6185,9 @@ function CDrawingDocument()
 	this.Update_ParaTab = function (Default_Tab, ParaTabs)
 	{
 		var hor_ruler = this.m_oWordControl.m_oHorRuler;
+		// a tab stop is being dragged with a live preview: the ruler keeps its own values until mouse up
+		if (hor_ruler.m_bIsMouseDown && hor_ruler.m_bLivePreviewActive)
+			return;
 
 		var __tabs = ParaTabs.Tabs;
 		if (undefined === __tabs)
