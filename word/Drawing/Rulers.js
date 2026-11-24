@@ -205,6 +205,7 @@ function CHorRuler()
     this.m_dIndentRight         = 20;
     this.m_dIndentLeftFirst     = 20;
 	this.m_bRtl                 = false;
+	this.m_oIndentAtDragStart   = null; // the indents when dragging starts, see SetPrProperties
 
     this.m_oCanvas              = null;
 
@@ -1839,6 +1840,9 @@ function CHorRuler()
         AscCommon.check_MouseDownEvent(e, true);
         global_mouseEvent.LockMouse();
 
+        // the indents as shown when dragging starts: with several paragraphs selected each one moves by the change
+        this.m_oIndentAtDragStart = {left : this.m_dIndentLeft, right : this.m_dIndentRight, first : this.m_dIndentLeftFirst};
+
         this.SimpleChanges.Reinit();
 
         var dKoefPxToMM = 100 * g_dKoef_pix_to_mm / word_control.m_nZoomValue;
@@ -2343,11 +2347,17 @@ function CHorRuler()
 			logicDocument.TurnOff_InterfaceEvents();
 		
 		logicDocument.StartAction(AscDFH.historydescription_Document_SetParagraphIndentFromRulers);
-		logicDocument.SetParagraphIndent({
-			Left      : left,
-			Right     : right,
-			FirstLine : firstLine
-		});
+		// With several paragraphs selected every indent moves by the same distance, so their differences stay (as in Word).
+		// This ruler is shared with the presentation and Visio editors, whose logic document has no ShiftParagraphIndents.
+		let start = this.m_oIndentAtDragStart;
+		if (!(start && logicDocument.ShiftParagraphIndents && logicDocument.ShiftParagraphIndents(left - start.left, right - start.right, this.m_dIndentLeftFirst - start.first, this.m_bRtl)))
+		{
+			logicDocument.SetParagraphIndent({
+				Left      : left,
+				Right     : right,
+				FirstLine : firstLine
+			});
+		}
 		logicDocument.UpdateInterface();
 		logicDocument.Recalculate();
 		logicDocument.FinalizeAction();
