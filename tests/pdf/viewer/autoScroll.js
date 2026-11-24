@@ -203,6 +203,29 @@ $(function ()
 		}, 10);
 	});
 
+	QUnit.test("The Esc that stops the auto-scroll does nothing else", function (assert)
+	{
+		let viewer = createViewer();
+		let target = createTarget();
+		CAutoScroll.start(viewer, 100, 100);
+
+		let other = new KeyboardEvent("keydown", {bubbles : true, cancelable : true, keyCode : 40});
+		target.dispatchEvent(other);
+		assert.ok(viewer.autoScroll, "another key doesn't stop it");
+		assert.notOk(other.defaultPrevented, "and is not consumed");
+
+		let esc = new KeyboardEvent("keydown", {bubbles : true, cancelable : true, keyCode : 27});
+		target.dispatchEvent(esc);
+		assert.strictEqual(viewer.autoScroll, null, "Esc stops it");
+		assert.ok(esc.defaultPrevented, "the Esc is consumed");
+		assert.deepEqual(target.received, ["keydown"], "only the other key reached the viewer");
+
+		let next = new KeyboardEvent("keydown", {bubbles : true, cancelable : true, keyCode : 27});
+		target.dispatchEvent(next);
+		assert.deepEqual(target.received, ["keydown", "keydown"], "the next Esc works as usual");
+		document.body.removeChild(target);
+	});
+
 	QUnit.test("Leaving the window stops", function (assert)
 	{
 		let viewer = createViewer();

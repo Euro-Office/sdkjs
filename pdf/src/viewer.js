@@ -598,8 +598,12 @@
 		}
 		function onKey(ev)
 		{
-			if (27 === ev.keyCode)
-				CAutoScroll.stop(viewer);
+			if (27 !== ev.keyCode)
+				return;
+			// the Esc only stops the auto-scroll, it must not also e.g. deselect an annotation
+			ev.preventDefault();
+			ev.stopPropagation();
+			CAutoScroll.stop(viewer);
 		}
 		function onOut(ev)
 		{
