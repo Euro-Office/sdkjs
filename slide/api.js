@@ -6028,6 +6028,14 @@ background-repeat: no-repeat;\
 			oImageObject.Image.height = 50;
 			if(sType === "localVideo") {
 				oImageObject.videoUrl = sLink;
+				// the desktop app takes the poster from the video, so its size
+				// gives the video's aspect ratio
+				let nPosterW = _image.Image.naturalWidth || _image.Image.width;
+				let nPosterH = _image.Image.naturalHeight || _image.Image.height;
+				if(nPosterW > 0 && nPosterH > 0) {
+					oImageObject.Image.width = nPosterW;
+					oImageObject.Image.height = nPosterH;
+				}
 			}
 			else if(sType === "localAudio") {
 				oImageObject.audioUrl = sLink;
