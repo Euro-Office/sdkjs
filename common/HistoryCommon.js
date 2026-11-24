@@ -1390,6 +1390,9 @@
 			case AscDFH.historydescription_Document_AddCheckBoxLabel:
 				sString = "Document_AddCheckBoxLabel";
 				break;
+			case AscDFH.historydescription_Document_RemovePersonalInformation:
+				sString = "Document_RemovePersonalInformation";
+				break;
 		}
 		return sString;
 	}
@@ -1928,6 +1931,7 @@
 	window['AscDFH'].historyitem_Document_Settings_DoNotHyphenateCaps     = window['AscDFH'].historyitem_type_Document | 14;
 	window['AscDFH'].historyitem_Document_Settings_HyphenationZone        = window['AscDFH'].historyitem_type_Document | 15;
 	window['AscDFH'].historyitem_Document_PageColor                       = window['AscDFH'].historyitem_type_Document | 16;
+	window['AscDFH'].historyitem_Document_AppProps                        = window['AscDFH'].historyitem_type_Document | 17;
 
 	window['AscDFH'].historyitem_Document_DisconnectEveryone              = window['AscDFH'].historyitem_type_Document | 10000;
 	//------------------------------------------------------------------------------------------------------------------
@@ -3370,6 +3374,12 @@
 	// Типы изменений класса CCore
 	//------------------------------------------------------------------------------------------------------------------
 	window['AscDFH'].historyitem_CoreProperties = window['AscDFH'].historyitem_type_Core | 1;
+	window['AscDFH'].historyitem_Core_LastModifiedByRemoved = window['AscDFH'].historyitem_type_Core | 2;
+
+	//------------------------------------------------------------------------------------------------------------------
+	// Types of changes of CParaRevisionMove
+	//------------------------------------------------------------------------------------------------------------------
+	window['AscDFH'].historyitem_ParaRevisionMove_ReviewInfo = window['AscDFH'].historyitem_type_ParaRevisionMove | 1;
 
 	//------------------------------------------------------------------------------------------------------------------
 	// Типы изменений класса CSlicerView
@@ -4806,6 +4816,7 @@
 	window['AscDFH'].historydescription_Spreadsheet_SetCellFormula					= 0x01fb;
 	window['AscDFH'].historydescription_Document_AddCheckBoxLabel                   = 0x01fc;
 	window['AscDFH'].historydescription_Document_StretchFormToCell                  = 0x01fd;
+	window['AscDFH'].historydescription_Document_RemovePersonalInformation          = 0x01fe;
 
 	// pdf
 	window['AscDFH'].historydescription_Pdf_AddAnnot			= 0x29a;

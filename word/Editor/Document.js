@@ -14217,6 +14217,213 @@ CDocument.prototype.GetSelectionAnchorPos = function()
 	return {X0 : Coords0.X, X1 : Coords1.X, Y : Coords0.Y};
 };
 /**
+ * Checks that the personal information of all authors can be removed: the user may edit the whole document and no part
+ * of it is edited by another user
+ * @returns {boolean}
+ */
+CDocument.prototype.CanRemovePersonalInformation = function()
+{
+	// with protection to tracked changes the user may only change the own changes, the other modes only allow
+	// comments, forms or nothing
+	let oProtection = this.Settings ? this.Settings.DocumentProtection : null;
+	let nEditType   = oProtection ? oProtection.asc_getEditType() : null;
+	if (null !== nEditType && undefined !== nEditType && Asc.c_oAscEDocProtect.None !== nEditType)
+		return false;
+
+	// false if the editing is restricted (view, only comments, only forms) or globally locked
+	if (!this.StartSelectionLockCheck())
+		return false;
+
+	this.ProcessSelectionLockCheck(AscCommon.changestype_CorePr);
+	this.ProcessSelectionLockCheck(AscCommon.changestype_CustomPr);
+	// company, manager and hyperlink base are changes of the document itself
+	this.ProcessSelectionLockCheck(AscCommon.changestype_Document_Settings);
+
+	let arrParagraphs = this.GetAllParagraphs({All : true});
+	for (let nIndex = 0, nCount = arrParagraphs.length; nIndex < nCount; ++nIndex)
+	{
+		arrParagraphs[nIndex].Document_Is_SelectionLocked(AscCommon.changestype_Paragraph_Properties);
+	}
+
+	let arrTables = this.GetAllTables({All : true});
+	for (let nIndex = 0, nCount = arrTables.length; nIndex < nCount; ++nIndex)
+	{
+		arrTables[nIndex].Document_Is_SelectionLocked(AscCommon.changestype_Table_Properties, false);
+	}
+
+	let arrCommentIds = [];
+	let oComments     = this.Comments.GetAllComments();
+	for (let sId in oComments)
+	{
+		if (oComments[sId])
+			arrCommentIds.push(oComments[sId].GetId());
+	}
+	this.Comments.Document_Is_SelectionLocked(arrCommentIds);
+
+	return !this.EndSelectionLockCheck();
+};
+/**
+ * Replaces the author of every comment, reply and tracked change with one name and removes the document properties,
+ * custom properties included, and the company, manager and hyperlink base, like the document inspector of Word.
+ * The dates of comments and changes and the template are kept.
+ * @param {string} sName
+ * @returns {string[]} ids of the changed comments
+ */
+CDocument.prototype.RemovePersonalInformation = function(sName)
+{
+	function anonymizeReviewInfo(oInfo)
+	{
+		if (!oInfo)
+			return oInfo;
+
+		let oNewInfo = oInfo.Copy();
+		for (let oCurInfo = oNewInfo; oCurInfo; oCurInfo = oCurInfo.PrevInfo)
+		{
+			oCurInfo.UserName = sName;
+			oCurInfo.UserId   = "";
+		}
+		return oNewInfo;
+	}
+
+	function anonymizeCommentData(oData)
+	{
+		oData.m_sUserName   = sName;
+		oData.m_sUserId     = "";
+		oData.m_sProviderId = "";
+		oData.m_sInitials   = "";
+		for (let nIndex = 0, nCount = oData.m_aReplies.length; nIndex < nCount; ++nIndex)
+		{
+			anonymizeCommentData(oData.m_aReplies[nIndex]);
+		}
+	}
+
+	function anonymizeMoveMarks(arrContent)
+	{
+		for (let nIndex = 0, nCount = arrContent ? arrContent.length : 0; nIndex < nCount; ++nIndex)
+		{
+			let oItem = arrContent[nIndex];
+			// the start marks keep the author of a move, the end marks inside runs have no author in the file
+			if (para_RevisionMove === oItem.Type && oItem.ReviewInfo)
+				oItem.SetReviewInfo(anonymizeReviewInfo(oItem.ReviewInfo));
+			else if (oItem.Content && para_Run !== oItem.Type)
+				anonymizeMoveMarks(oItem.Content);
+		}
+	}
+
+	let arrCommentIds = [];
+	let oComments     = this.Comments.GetAllComments();
+	for (let sId in oComments)
+	{
+		let oComment = oComments[sId];
+		if (!oComment || !oComment.GetData())
+			continue;
+
+		let oData = oComment.GetData().Copy();
+		anonymizeCommentData(oData);
+		oComment.SetData(oData);
+		arrCommentIds.push(oComment.GetId());
+	}
+
+	let arrParagraphs = this.GetAllParagraphs({All : true});
+	for (let nIndex = 0, nCount = arrParagraphs.length; nIndex < nCount; ++nIndex)
+	{
+		let oParagraph = arrParagraphs[nIndex];
+		oParagraph.CheckRunContent(function(oRun)
+		{
+			if (reviewtype_Common !== oRun.GetReviewType())
+				// false: the mark of the last paragraph of the document or of a table cell has its own author too
+				oRun.SetReviewTypeWithInfo(oRun.GetReviewType(), anonymizeReviewInfo(oRun.GetReviewInfo()), false);
+
+			if (oRun.HavePrChange())
+				oRun.SetPrChange(oRun.Pr.PrChange, anonymizeReviewInfo(oRun.Pr.ReviewInfo));
+
+			return false;
+		});
+
+		if (oParagraph.HavePrChange())
+			oParagraph.SetPrChange(oParagraph.Pr.PrChange, anonymizeReviewInfo(oParagraph.Pr.ReviewInfo));
+
+		anonymizeMoveMarks(oParagraph.Content);
+	}
+
+	function anonymizePrChange(oElement, fChangeClass)
+	{
+		if (!oElement.HavePrChange())
+			return;
+
+		let oPrChange   = oElement.Pr.PrChange;
+		let oReviewInfo = anonymizeReviewInfo(oElement.Pr.ReviewInfo);
+		AscCommon.History.Add(new fChangeClass(oElement, {
+			PrChange   : oPrChange,
+			ReviewInfo : oElement.Pr.ReviewInfo
+		}, {
+			PrChange   : oPrChange,
+			ReviewInfo : oReviewInfo
+		}));
+		oElement.Pr.SetPrChange(oPrChange, oReviewInfo);
+	}
+
+	let arrTables = this.GetAllTables({All : true});
+	for (let nTableIndex = 0, nTablesCount = arrTables.length; nTableIndex < nTablesCount; ++nTableIndex)
+	{
+		let oTable = arrTables[nTableIndex];
+		anonymizePrChange(oTable, CChangesTablePrChange);
+		for (let nRowIndex = 0, nRowsCount = oTable.GetRowsCount(); nRowIndex < nRowsCount; ++nRowIndex)
+		{
+			let oRow = oTable.GetRow(nRowIndex);
+			if (reviewtype_Common !== oRow.GetReviewType())
+				oRow.SetReviewTypeWithInfo(oRow.GetReviewType(), anonymizeReviewInfo(oRow.GetReviewInfo()));
+
+			anonymizePrChange(oRow, CChangesTableRowPrChange);
+			for (let nCellIndex = 0, nCellsCount = oRow.GetCellsCount(); nCellIndex < nCellsCount; ++nCellIndex)
+			{
+				anonymizePrChange(oRow.GetCell(nCellIndex), CChangesTableCellPrChange);
+			}
+		}
+		oTable.updateTrackRevisions();
+	}
+
+	if (this.Core)
+	{
+		let oCoreProps = this.Core.copy();
+		// setProps takes exactly these fields; the save writes a new modified date anyway
+		["category", "contentStatus", "created", "creator", "description", "identifier", "keywords", "language",
+			"lastModifiedBy", "lastPrinted", "revision", "subject", "title", "version"].forEach(function(sKey)
+		{
+			oCoreProps[sKey] = null;
+		});
+		this.Core.setProps(oCoreProps);
+		// otherwise the save writes the name of the current user as "last modified by" again
+		if (!this.Core.lastModifiedByRemoved)
+			this.Core.setLastModifiedByRemoved(true);
+	}
+
+	if (this.CustomProperties)
+	{
+		for (let nIndex = this.CustomProperties.getAllProperties().length - 1; nIndex >= 0; --nIndex)
+		{
+			this.CustomProperties.RemoveProperty(nIndex);
+		}
+	}
+
+	if (this.App)
+	{
+		// recorded as a change, the server saves by replaying the changes onto the original file
+		let oNewAppProps = {Company : null, Manager : null, HyperlinkBase : null};
+		let oOldAppProps = {
+			Company       : this.App.Company,
+			Manager       : this.App.Manager,
+			HyperlinkBase : this.App.HyperlinkBase
+		};
+		AscCommon.History.Add(new CChangesDocumentAppProps(this, oOldAppProps, oNewAppProps));
+		this.App.Company       = null;
+		this.App.Manager       = null;
+		this.App.HyperlinkBase = null;
+	}
+
+	return arrCommentIds;
+};
+/**
  * Получаем все комментарии по заданным параметрам
  * @param isMine {boolean} удаляем только все свои комментарии
  * @param isCurrent {boolean} удаляем только все комментарии, находящиеся в текущей позиции
