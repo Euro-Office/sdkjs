@@ -76,7 +76,9 @@ jobs:
         with:
             node-version: 20
             cache: npm
-            cache-dependency-path: sdkjs/build/npm-shrinkwrap.json
+            cache-dependency-path: |
+              sdkjs/build/npm-shrinkwrap.json
+              sdkjs/tests/npm-shrinkwrap.json
 
       - name: Build develop SDK
         working-directory: sdkjs
@@ -88,13 +90,13 @@ jobs:
           # because the addon is checked out but never merged into the build.
           SDK_ADDONS: ../../sdkjs-forms
         run: |
-          npm install node-qunit-puppeteer
+          npm ci --prefix tests
           npm ci --prefix build
           npm run --prefix build develop
 
       - name: Run unit tests
         working-directory: sdkjs
-        run: node tests/runAll.js
+        run: npm test --prefix tests
 
   build-test:
     runs-on: ubuntu-latest
@@ -125,7 +127,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: sdkjs/build/npm-shrinkwrap.json
+          cache-dependency-path: |
+            sdkjs/build/npm-shrinkwrap.json
+            sdkjs/tests/npm-shrinkwrap.json
 
       - name: Run build-tooling unit tests
         run: |
@@ -169,7 +173,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libatk1.0-0 libcups2 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libnss3 libgbm1 libasound2t64
           cd sdkjs
-          npm install node-qunit-puppeteer
+          npm ci --prefix tests
 
       # The "unit-tests" job above runs the QUnit suite against raw source files
       # (COMPILED unset) — it never touches the webpack output, so a regression in the
@@ -212,11 +216,11 @@ jobs:
         run: |
           cd sdkjs
           COMPILED=1 npm run --prefix build develop
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api.html 30000 "--no-sandbox"
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-cell.html 30000 "--no-sandbox"
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-slide.html 30000 "--no-sandbox"
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-visio.html 30000 "--no-sandbox"
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-word-compiled.html 30000 "--no-sandbox"
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-cell-compiled.html 30000 "--no-sandbox"
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-slide-compiled.html 30000 "--no-sandbox"
-          node node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-visio-compiled.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-cell.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-slide.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-visio.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-word-compiled.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-cell-compiled.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-slide-compiled.html 30000 "--no-sandbox"
+          node tests/node_modules/node-qunit-puppeteer/cli.js tests/common/api/api-visio-compiled.html 30000 "--no-sandbox"

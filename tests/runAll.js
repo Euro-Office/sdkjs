@@ -52,12 +52,14 @@ const allTests = [
 	'cell/spreadsheet-calculation/ExternalReference.html',
 	'cell/spreadsheet-calculation/SheetMemoryTest.html',
 	'cell/spreadsheet-calculation/PrintJsonParamsTests.html',
+	'cell/spreadsheet-calculation/OpenRecalcTests.html',
 	'cell/js-api/js-api.html',
 
 	'common/api/api.html',
 	'common/api/api-cell.html',
 	'common/api/api-slide.html',
 	'common/api/api-visio.html',
+	'common/libfont/like-fonts.html',
 
 	'word/unit-tests/paragraphContentPos.html',
 	'word/unit-tests/deleted-text-recovery.html',

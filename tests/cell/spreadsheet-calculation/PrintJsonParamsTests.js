@@ -209,4 +209,165 @@ $(function () {
 			pageSetup.scale = oldScale;
 		}
 	});
+
+	QUnit.module("Print pages of a workbook from an ODS file");
+
+	QUnit.test("Empty pages are left out only for a workbook from an ODS file", function (assert) {
+		let ws = api.wbModel.getWorksheet(0);
+		let wsView = api.wb.getWorksheet(0);
+		let oldSourceFileType = api.wbModel.sourceFileType;
+		// Five pages of 50 rows in columns 50-55, away from what the other tests use
+		let c1 = 50, c2 = 55, r1 = 1000, rows = 50, count = 5;
+		let firstRow = function (index) {
+			return r1 + index * rows;
+		};
+		let pages = function () {
+			let arrPages = [];
+			for (let i = 0; i < count; ++i) {
+				let page = new AscCommonExcel.CPagePrint();
+				page.pageRange = new Asc.Range(c1, firstRow(i), c2, firstRow(i) + rows - 1);
+				arrPages.push(page);
+			}
+			return arrPages;
+		};
+		let index = function (page) {
+			return (page.pageRange.r1 - r1) / rows;
+		};
+		let lastState = null;
+		// The pages the print path keeps, the way _calcPagesPrint adds them one by one
+		let printedPages = function () {
+			let arrPages = [];
+			lastState = api.wb.getSkipEmptyPrintPages();
+			pages().forEach(function (page) {
+				wsView._addPrintPage(arrPages, page, lastState);
+			});
+			return arrPages.map(index);
+		};
+		let cell = function (row, col) {
+			return ws.getRange3(row, col, row, col);
+		};
+		let comment = null, sparklineGroup = null;
+		try {
+			cell(firstRow(4) + 49, c2).setFillColor(new AscCommonExcel.RgbColor(0xFF0000));
+			api.wbModel.sourceFileType = Asc.c_oAscFileType.ODS;
+			assert.deepEqual(printedPages(), [], "ODS, no content at all: no page is added");
+			assert.strictEqual(index(lastState.firstEmptyPage), 0, "ODS, no content at all: the first page is kept for a job without pages");
+			assert.strictEqual(lastState.skippedCount, 5, "ODS, no content at all: five pages left out");
+			assert.strictEqual(lastState.limitReached, false, "ODS, no content at all: below the page limit");
+
+			let maxPrintPages = AscCommonExcel.c_kMaxPrintPages;
+			try {
+				AscCommonExcel.c_kMaxPrintPages = 3;
+				printedPages();
+				assert.strictEqual(lastState.limitReached, true, "ODS: left out pages stop at the page limit");
+			} finally {
+				AscCommonExcel.c_kMaxPrintPages = maxPrintPages;
+			}
+
+			cell(firstRow(0), c1).setValue("first");
+			cell(firstRow(4) + 49, c2).setValue("last");
+
+			api.wbModel.sourceFileType = null;
+			assert.deepEqual(printedPages(), [0, 1, 2, 3, 4], "unknown source: every page is printed");
+			assert.strictEqual(lastState, null, "unknown source: the print path does not leave out pages");
+			api.wbModel.sourceFileType = Asc.c_oAscFileType.XLSX;
+			assert.deepEqual(printedPages(), [0, 1, 2, 3, 4], "XLSX: every page is printed");
+
+			api.wbModel.sourceFileType = Asc.c_oAscFileType.ODS;
+			assert.deepEqual(printedPages(), [0, 4], "ODS: only the pages with values");
+			api.wbModel.sourceFileType = Asc.c_oAscFileType.FODS;
+			assert.deepEqual(printedPages(), [0, 4], "flat ODS: only the pages with values");
+			api.wbModel.sourceFileType = Asc.c_oAscFileType.OTS;
+			assert.deepEqual(printedPages(), [0, 4], "ODS template: only the pages with values");
+			api.wbModel.sourceFileType = Asc.c_oAscFileType.ODS;
+
+			let diagonal = new AscCommonExcel.Border();
+			diagonal.initDefault();
+			diagonal.d.setStyle(Asc.c_oAscBorderStyles.Thin);
+			diagonal.dd = true;
+			cell(firstRow(1) + 5, c1 + 1).setBorderSrc(diagonal);
+			assert.deepEqual(printedPages(), [0, 4], "ODS: a diagonal line alone does not count, as in LibreOffice");
+
+			let border = new AscCommonExcel.Border();
+			border.initDefault();
+			border.b.setStyle(Asc.c_oAscBorderStyles.Thin);
+			cell(firstRow(1) + 10, c1 + 2).setBorderSrc(border);
+			assert.deepEqual(printedPages(), [0, 1, 4], "ODS: a page with a border is printed");
+
+			cell(firstRow(2) + 20, c1 + 3).setValue("=\"\"");
+			assert.deepEqual(printedPages(), [0, 1, 2, 4], "ODS: a page with a formula is printed, also with an empty result");
+
+			cell(firstRow(3) + 30, c1 + 4).setFillColor(new AscCommonExcel.RgbColor(0x00FF00));
+			assert.deepEqual(printedPages(), [0, 1, 2, 4], "ODS: a page with a fill only is not printed");
+
+			sparklineGroup = {arrSparklines: [{sqRef: new Asc.Range(c2, firstRow(3) + 40, c2, firstRow(3) + 40)}]};
+			ws.aSparklineGroups.push(sparklineGroup);
+			assert.deepEqual(printedPages(), [0, 1, 2, 3, 4], "ODS: a page with a sparkline is printed");
+			ws.aSparklineGroups.splice(ws.aSparklineGroups.indexOf(sparklineGroup), 1);
+			sparklineGroup = null;
+			assert.deepEqual(printedPages(), [0, 1, 2, 4], "ODS: without the sparkline the page is left out again");
+
+			comment = new Asc.asc_CCommentData();
+			comment.nRow = firstRow(3) + 5;
+			comment.nCol = c1;
+			ws.aComments.push(comment);
+			assert.deepEqual(printedPages(), [0, 1, 2, 3, 4], "ODS: a page with a comment is printed");
+		} finally {
+			if (sparklineGroup) {
+				ws.aSparklineGroups.splice(ws.aSparklineGroups.indexOf(sparklineGroup), 1);
+			}
+			if (comment) {
+				ws.aComments.splice(ws.aComments.indexOf(comment), 1);
+			}
+			api.wbModel.sourceFileType = oldSourceFileType;
+			ws.getRange3(r1, c1, firstRow(count) - 1, c2).cleanAll();
+		}
+	});
+
+	QUnit.test("Text running in from the left keeps a page and is measured once per layout pass", function (assert) {
+		let ws = api.wbModel.getWorksheet(0);
+		let wsView = api.wb.getWorksheet(0);
+		let oldSourceFileType = api.wbModel.sourceFileType;
+		let addCellTextToCache = wsView._addCellTextToCache;
+		let getRowHeight = wsView._getRowHeight;
+		// One band of 50 rows, the text cell in column 70, pages to its right. The test view cannot measure
+		// text (no drawing context), so the measurement is replaced: the text runs 10 columns to the right.
+		let col = 70, r1 = 2000, r2 = 2049, row = 2010;
+		let page = function (c1, c2) {
+			let printPage = new AscCommonExcel.CPagePrint();
+			printPage.pageRange = new Asc.Range(c1, r1, c2, r2);
+			return printPage;
+		};
+		let measured = 0;
+		try {
+			api.wbModel.sourceFileType = Asc.c_oAscFileType.ODS;
+			ws.getRange3(row, col, row, col).setValue("text that runs to the right");
+			wsView._getRowHeight = function () {
+				return 15;
+			};
+			wsView._addCellTextToCache = function (c, r) {
+				if (c === col && r === row) {
+					++measured;
+				}
+				return {flags: {isMerged: function () {
+					return false;
+				}, wrapText: false}, sideR: 10};
+			};
+			let arrPages = [];
+			let state = api.wb.getSkipEmptyPrintPages();
+			[page(71, 73), page(74, 76), page(81, 83), page(1000, 1002)].forEach(function (printPage) {
+				wsView._addPrintPage(arrPages, printPage, state);
+			});
+			assert.deepEqual(arrPages.map(function (printPage) {
+				return printPage.pageRange.c1;
+			}), [71, 74], "ODS: the pages the text runs into are printed, the pages after its end are not");
+			assert.strictEqual(measured, 1, "the text is measured once for all pages to its right");
+			assert.strictEqual(wsView._isPrintPageEmpty(new Asc.Range(74, r1, 76, r2)), false, "without a print state the check still works");
+		} finally {
+			wsView._addCellTextToCache = addCellTextToCache;
+			wsView._getRowHeight = getRowHeight;
+			api.wbModel.sourceFileType = oldSourceFileType;
+			ws.getRange3(r1, col, r2, col).cleanAll();
+		}
+	});
 });

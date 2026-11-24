@@ -3275,6 +3275,9 @@
 		this.showHorizontalScroll = null;
 		this.App = null;
 		this.Core = null;
+		// File type (Asc.c_oAscFileType) of the document the workbook was converted from, when the
+		// converter recorded it; null otherwise.
+		this.sourceFileType = null;
 
 		AscFormat.ExecuteNoHistory(function () {
 			this.CustomProperties = new AscCommon.CCustomProperties();
@@ -5871,6 +5874,11 @@
 		return res;
 	};
 
+	Workbook.prototype.isOpenDocumentSource = function () {
+		let fileType = this.sourceFileType;
+		return fileType === Asc.c_oAscFileType.ODS || fileType === Asc.c_oAscFileType.FODS ||
+			fileType === Asc.c_oAscFileType.OTS;
+	};
 	Workbook.prototype.getPrintOptionsJson = function () {
 		var res = [];
 		for(var i = 0; i < this.aWorksheets.length; ++i) {
@@ -15338,6 +15346,14 @@
 	Cell.prototype.isNullText=function(){
 		return this.isNullTextString() && !this.formulaParsed;
 	};
+	// A blank member of a calculated array formula read from a file: it has no value and nothing calculates it until its
+	// array is recalculated (see setArrayFormulasOpen). Not a pure check: isNullTextString calculates a dirty cell first
+	// (callers like checkTypeCell have already done so); a cell whose calculation is skipped (recursion limit) stays
+	// dirty, and a cell being calculated is not one either.
+	Cell.prototype.isBlankArrayResult = function() {
+		return null != this.formulaParsed && !!this.formulaParsed.getArrayFormulaRef() && !this.getIsCalc() &&
+			this.isNullTextString() && !this.getIsDirty();
+	};
 	Cell.prototype.isEmptyTextString = function() {
 		this._checkDirty();
 		if(null != this.number || (null != this.text && "" != this.text))
@@ -19921,6 +19937,13 @@
 			isNullText = (null != cell) ? cell.isNullText() : true;
 		});
 		return isNullText;
+	};
+	Range.prototype.isBlankArrayResult = function() {
+		var res = false;
+		this.worksheet._getCellNoEmpty(this.bbox.r1, this.bbox.c1, function(cell) {
+			res = null != cell && cell.isBlankArrayResult();
+		});
+		return res;
 	};
 	Range.prototype.isEmptyTextString=function(){
 		var isEmptyTextString;
