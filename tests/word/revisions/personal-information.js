@@ -139,8 +139,9 @@ $(function ()
 			sync_ChangeCommentData   : function(id, data) { changedComments.push(id + "|" + data.m_sUserName); },
 			UpdateInterfaceState     : function() {}
 		};
-		Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api);
+		let result = Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api);
 
+		assert.strictEqual(result, true, "The command reports that the information was removed");
 		assert.deepEqual(getReviewNames(paragraph), ["Author|"], "The tracked change has the default name");
 		assert.notStrictEqual(changedComments.indexOf(comment.GetId() + "|Author"), -1, "The interface gets the changed comment");
 	});
@@ -442,5 +443,88 @@ $(function ()
 		assert.strictEqual(getSavedCore(logicDocument.Core).lastModifiedBy, "Mallory", "After undo the save writes the current user again");
 
 		logicDocument.Core = core;
+	});
+
+	function createApi(changedComments)
+	{
+		return {
+			private_GetLogicDocument : function() { return logicDocument; },
+			sync_ChangeCommentData   : function(id, data) { changedComments.push(id + "|" + data.m_sUserName); },
+			UpdateInterfaceState     : function() {}
+		};
+	}
+
+	QUnit.test("Nothing is changed and the command says so if another user edits a part of the document", function (assert)
+	{
+		AscTest.ClearDocument();
+
+		let paragraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(paragraph);
+		paragraph.AddToContentToEnd(createRun("added", reviewtype_Add, "Alice"));
+		let lockedParagraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(lockedParagraph);
+		lockedParagraph.AddToContentToEnd(createRun("removed", reviewtype_Remove, "Bob"));
+
+		let comment = new AscCommon.CComment(logicDocument.Comments, createCommentData("Erin", "Please check"));
+		logicDocument.Comments.Add(comment);
+
+		let changedComments = [];
+		let api = createApi(changedComments);
+
+		lockedParagraph.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeOther, false);
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), false, "A locked paragraph: the command reports that nothing was removed");
+		assert.deepEqual(getReviewNames(paragraph).concat(getReviewNames(lockedParagraph)), ["Alice|alice", "Bob|bob"], "No author is replaced");
+		assert.strictEqual(logicDocument.Comments.Get_ById(comment.GetId()).GetData().m_sUserName, "Erin", "The comment keeps its author");
+		assert.deepEqual(changedComments, [], "The interface gets no changed comment");
+		lockedParagraph.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+
+		comment.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeOther, false);
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), false, "A locked comment: nothing is removed");
+		assert.strictEqual(logicDocument.Comments.Get_ById(comment.GetId()).GetData().m_sUserName, "Erin", "The comment keeps its author");
+		comment.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeNone, false);
+
+		let core = logicDocument.Core;
+		logicDocument.Core = new AscCommon.CCore();
+		logicDocument.Core.creator = "Grace";
+		logicDocument.Core.Lock.Set_Type(AscCommon.c_oAscLockTypes.kLockTypeOther, false);
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), false, "Locked document properties: nothing is removed");
+		assert.strictEqual(logicDocument.Core.creator, "Grace", "The document author is kept");
+		logicDocument.Core = core;
+
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), true, "Without locks the information is removed");
+		assert.deepEqual(getReviewNames(paragraph).concat(getReviewNames(lockedParagraph)), ["Author|", "Author|"], "Then the authors are replaced");
+	});
+
+	QUnit.test("Users who may not change the authors of others cannot remove personal information", function (assert)
+	{
+		AscTest.ClearDocument();
+
+		let paragraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(paragraph);
+		paragraph.AddToContentToEnd(createRun("added", reviewtype_Add, "Alice"));
+		let api = createApi([]);
+
+		// protection to tracked changes: the user may only accept or reject the own changes
+		let protection = logicDocument.GetDocumentSettings().DocumentProtection;
+		let oldEdit = protection.edit, oldEnforcement = protection.enforcement;
+		protection.edit        = Asc.c_oAscEDocProtect.TrackedChanges;
+		protection.enforcement = true;
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), false, "Protection to tracked changes: nothing is removed");
+		assert.deepEqual(getReviewNames(paragraph), ["Alice|alice"], "The author is kept");
+		protection.edit        = Asc.c_oAscEDocProtect.Comments;
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), false, "Protection to comments: nothing is removed");
+		protection.edit        = oldEdit;
+		protection.enforcement = oldEnforcement;
+
+		// a user who may only comment or fill in forms
+		let restrictions = editor.restrictions;
+		editor.restrictions = Asc.c_oAscRestrictionType.OnlyComments;
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), false, "Only comments: nothing is removed");
+		editor.restrictions = Asc.c_oAscRestrictionType.OnlyForms;
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), false, "Only forms: nothing is removed");
+		editor.restrictions = restrictions;
+		assert.deepEqual(getReviewNames(paragraph), ["Alice|alice"], "The author is kept");
+
+		assert.strictEqual(Asc.asc_docs_api.prototype.asc_RemovePersonalInformation.call(api, "Author"), true, "Without restrictions the information is removed");
 	});
 });

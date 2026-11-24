@@ -7717,23 +7717,18 @@ background-repeat: no-repeat;\
 	/**
 	 * Replaces the author of every comment, reply and tracked change with one name and removes the document
 	 * properties, as the document inspector of Word does
-	 * @param {string} [sName="Author"]
+	 * @param {string} [sName="Author"] the interface passes the word in the language of the user
+	 * @returns {boolean} false if nothing was changed: editing is restricted or protected (only comments, forms or
+	 * tracked changes) or another user is editing a part of the document
 	 */
 	asc_docs_api.prototype.asc_RemovePersonalInformation = function(sName)
 	{
 		let oLogicDocument = this.private_GetLogicDocument();
-		if (!oLogicDocument)
-			return;
+		if (!oLogicDocument || !oLogicDocument.CanRemovePersonalInformation())
+			return false;
 
 		if (!sName)
 			sName = "Author";
-
-		if (oLogicDocument.IsSelectionLocked(AscCommon.changestype_None, {
-			Type      : AscCommon.changestype_2_ElementsArray_and_Type,
-			Elements  : oLogicDocument.GetAllParagraphs({All : true}),
-			CheckType : AscCommon.changestype_Paragraph_Properties
-		}))
-			return;
 
 		oLogicDocument.StartAction(AscDFH.historydescription_Document_RemovePersonalInformation);
 
@@ -7758,6 +7753,7 @@ background-repeat: no-repeat;\
 		oLogicDocument.UpdateInterface();
 		this.UpdateInterfaceState();
 		oLogicDocument.FinalizeAction();
+		return true;
 	};
 	asc_docs_api.prototype.asc_GetCommentLogicPosition = function(sId)
 	{

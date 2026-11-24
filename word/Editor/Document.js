@@ -14217,6 +14217,52 @@ CDocument.prototype.GetSelectionAnchorPos = function()
 	return {X0 : Coords0.X, X1 : Coords1.X, Y : Coords0.Y};
 };
 /**
+ * Checks that the personal information of all authors can be removed: the user may edit the whole document and no part
+ * of it is edited by another user
+ * @returns {boolean}
+ */
+CDocument.prototype.CanRemovePersonalInformation = function()
+{
+	// with protection to tracked changes the user may only change the own changes, the other modes only allow
+	// comments, forms or nothing
+	let oProtection = this.Settings ? this.Settings.DocumentProtection : null;
+	let nEditType   = oProtection ? oProtection.asc_getEditType() : null;
+	if (null !== nEditType && undefined !== nEditType && Asc.c_oAscEDocProtect.None !== nEditType)
+		return false;
+
+	// false if the editing is restricted (view, only comments, only forms) or globally locked
+	if (!this.StartSelectionLockCheck())
+		return false;
+
+	this.ProcessSelectionLockCheck(AscCommon.changestype_CorePr);
+	this.ProcessSelectionLockCheck(AscCommon.changestype_CustomPr);
+	// company, manager and hyperlink base are changes of the document itself
+	this.ProcessSelectionLockCheck(AscCommon.changestype_Document_Settings);
+
+	let arrParagraphs = this.GetAllParagraphs({All : true});
+	for (let nIndex = 0, nCount = arrParagraphs.length; nIndex < nCount; ++nIndex)
+	{
+		arrParagraphs[nIndex].Document_Is_SelectionLocked(AscCommon.changestype_Paragraph_Properties);
+	}
+
+	let arrTables = this.GetAllTables({All : true});
+	for (let nIndex = 0, nCount = arrTables.length; nIndex < nCount; ++nIndex)
+	{
+		arrTables[nIndex].Document_Is_SelectionLocked(AscCommon.changestype_Table_Properties, false);
+	}
+
+	let arrCommentIds = [];
+	let oComments     = this.Comments.GetAllComments();
+	for (let sId in oComments)
+	{
+		if (oComments[sId])
+			arrCommentIds.push(oComments[sId].GetId());
+	}
+	this.Comments.Document_Is_SelectionLocked(arrCommentIds);
+
+	return !this.EndSelectionLockCheck();
+};
+/**
  * Replaces the author of every comment, reply and tracked change with one name and removes the document properties,
  * custom properties included, and the company, manager and hyperlink base, like the document inspector of Word.
  * The dates of comments and changes and the template are kept.
