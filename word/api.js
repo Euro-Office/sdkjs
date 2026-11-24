@@ -5973,7 +5973,17 @@ background-repeat: no-repeat;\
 	};
 	asc_docs_api.prototype.tblApply = function(obj)
 	{
-		if (false === this.WordControl.m_oLogicDocument.Document_Is_SelectionLocked(changestype_Table_Properties))
+		// A new cell or column width in a nested table can give the tables around it fixed column widths (see
+		// CTable.GetTablesChangedByColumnResize), so those tables are checked for locks too
+		var oLogicDocument = this.WordControl.m_oLogicDocument;
+		var oWidthTable    = (obj && (undefined !== obj.CellsWidth || undefined !== obj.ColumnWidth)) ? oLogicDocument.GetCurrentTable() : null;
+		var oAdditional    = (oWidthTable && oWidthTable.GetTablesChangedByColumnResize) ? {
+			Type      : AscCommon.changestype_2_ElementsArray_and_Type,
+			Elements  : oWidthTable.GetTablesChangedByColumnResize(),
+			CheckType : AscCommon.changestype_Table_Properties
+		} : undefined;
+
+		if (false === oLogicDocument.Document_Is_SelectionLocked(changestype_Table_Properties, oAdditional))
 		{
 			if (obj.CellBorders)
 			{

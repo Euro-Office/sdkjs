@@ -270,6 +270,55 @@ $(function ()
 		assert.true(sum(table.TableGridCalc) <= sum(outer.TableGridCalc) + 0.1, "the nested table fits into the outer table (" + fmt(table.TableGridCalc) + " in " + fmt(outer.TableGridCalc) + ")");
 	});
 
+	QUnit.test("Width field in a nested table checks the tables around it for locks", function (assert)
+	{
+		let table = setup({nested : true, outerAutofit : true, pct : true});
+		let outer = table.Parent.IsInTable(true);
+		select(table, 1, 0, 1, 4);
+		let before = allWidths(table);
+
+		// api.tblApply with a lock on the outer table: nothing may change
+		let api = {WordControl : {m_oLogicDocument : logicDocument}};
+		let seen = null;
+		let isLocked = logicDocument.Document_Is_SelectionLocked;
+		logicDocument.Document_Is_SelectionLocked = function(checkType, additional)
+		{
+			seen = additional;
+			return true;
+		};
+		try
+		{
+			let props = new Asc.CTableProp();
+			props.put_ColumnWidth(30);
+			Asc.asc_docs_api.prototype.tblApply.call(api, props);
+		}
+		finally
+		{
+			logicDocument.Document_Is_SelectionLocked = isLocked;
+		}
+		AscTest.Recalculate();
+
+		assert.ok(seen && seen.Elements, "the lock check gets the tables that change");
+		assert.ok(seen && seen.Elements.indexOf(table) !== -1, "it contains the nested table");
+		assert.ok(seen && seen.Elements.indexOf(outer) !== -1, "it contains the outer table");
+		assert.strictEqual(fmtAll(allWidths(table)), fmtAll(before), "locked: no width changed");
+
+		// a cell or column width is not set: no extra check
+		seen = undefined;
+		logicDocument.Document_Is_SelectionLocked = function(checkType, additional) { seen = additional; return true; };
+		try
+		{
+			let props = new Asc.CTableProp();
+			props.put_RowsInHeader && props.put_RowsInHeader(0);
+			Asc.asc_docs_api.prototype.tblApply.call(api, props);
+		}
+		finally
+		{
+			logicDocument.Document_Is_SelectionLocked = isLocked;
+		}
+		assert.strictEqual(seen, undefined, "other table settings: only the usual selection check");
+	});
+
 	QUnit.test("Width field shows mixed widths as empty and equal widths as the value", function (assert)
 	{
 		let table = setup({grid : [30, 40, 50]});
