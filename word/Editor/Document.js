@@ -14347,6 +14347,9 @@ CDocument.prototype.RemovePersonalInformation = function(sName)
 			oCoreProps[sKey] = null;
 		});
 		this.Core.setProps(oCoreProps);
+		// otherwise the save writes the name of the current user as "last modified by" again
+		if (!this.Core.lastModifiedByRemoved)
+			this.Core.setLastModifiedByRemoved(true);
 	}
 
 	if (this.CustomProperties)

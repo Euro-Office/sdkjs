@@ -3374,6 +3374,7 @@
 	// Типы изменений класса CCore
 	//------------------------------------------------------------------------------------------------------------------
 	window['AscDFH'].historyitem_CoreProperties = window['AscDFH'].historyitem_type_Core | 1;
+	window['AscDFH'].historyitem_Core_LastModifiedByRemoved = window['AscDFH'].historyitem_type_Core | 2;
 
 	//------------------------------------------------------------------------------------------------------------------
 	// Types of changes of CParaRevisionMove

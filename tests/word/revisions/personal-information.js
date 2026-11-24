@@ -379,4 +379,68 @@ $(function ()
 		logicDocument.Document_Redo();
 		assert.strictEqual(moveStart.GetReviewInfo().GetUserName(), "Author", "Redo replaces it again");
 	});
+
+	QUnit.test("The saved file has no last modified by after removing personal information", function (assert)
+	{
+		// the save writes the name of the current user as "last modified by" (docProps/core.xml)
+		AscTest.ClearDocument();
+		logicDocument.PushToContent(AscTest.CreateParagraph());
+
+		let core = logicDocument.Core;
+		logicDocument.Core = new AscCommon.CCore();
+		logicDocument.Core.creator        = "Grace";
+		logicDocument.Core.lastModifiedBy = "Heidi";
+
+		let api = {DocInfo : {get_UserName : function() { return "Mallory"; }}};
+		function getSavedCore(coreToSave)
+		{
+			let writer = new AscCommon.CBinaryFileWriter();
+			coreToSave.toStream(writer, api);
+			let saved = new AscCommon.CCore();
+			saved.fromStream(new AscCommon.FileStream(writer.data, writer.pos));
+			return saved;
+		}
+
+		assert.strictEqual(getSavedCore(logicDocument.Core).lastModifiedBy, "Mallory", "Normally the save writes the current user");
+
+		AscCommon.History.Clear();
+		logicDocument.StartAction(AscDFH.historydescription_Document_RemovePersonalInformation);
+		logicDocument.RemovePersonalInformation("Author");
+		logicDocument.FinalizeAction();
+
+		let saved = getSavedCore(logicDocument.Core);
+		assert.strictEqual(saved.lastModifiedBy, null, "The saved file has no last modified by");
+		assert.strictEqual(saved.creator, null, "The saved file has no author");
+
+		let change = null;
+		AscCommon.History.Points[AscCommon.History.Index].Items.forEach(function(item)
+		{
+			if (AscDFH.historyitem_Core_LastModifiedByRemoved === item.Data.Type)
+				change = item.Data;
+		});
+		assert.ok(change, "Keeping last modified by out of the file is recorded as a change");
+		if (change)
+		{
+			// the server saves by replaying the changes onto the core properties of the original file
+			let writer = AscTest.GetBinaryWriter();
+			writer.WriteString2(change.Class.Get_Id());
+			writer.WriteLong(change.Type);
+			change.WriteToBinary(writer);
+
+			let reader   = AscTest.GetBinaryReader(writer);
+			let classId  = reader.GetString2();
+			let type     = reader.GetLong();
+			let original = AscCommon.g_oTableId.Get_ById(classId);
+			original.lastModifiedByRemoved = false;
+			let replayed = new AscDFH.changesFactory[type](original);
+			replayed.ReadFromBinary(reader);
+			replayed.Redo();
+			assert.strictEqual(getSavedCore(original).lastModifiedBy, null, "After the replayed change the save does not write last modified by");
+		}
+
+		logicDocument.Document_Undo();
+		assert.strictEqual(getSavedCore(logicDocument.Core).lastModifiedBy, "Mallory", "After undo the save writes the current user again");
+
+		logicDocument.Core = core;
+	});
 });

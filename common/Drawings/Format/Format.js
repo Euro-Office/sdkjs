@@ -13981,6 +13981,10 @@
 		};
 
 		AscDFH.changesFactory[AscDFH.historyitem_CoreProperties] = CChangesCorePr;
+		AscDFH.changesFactory[AscDFH.historyitem_Core_LastModifiedByRemoved] = CChangesDrawingsBool;
+		drawingsChangesMap[AscDFH.historyitem_Core_LastModifiedByRemoved] = function (oClass, value) {
+			oClass.lastModifiedByRemoved = value;
+		};
 
 		function CCore() {
 			AscFormat.CBaseFormatObject.call(this);
@@ -13999,6 +14003,8 @@
 			this.subject = null;
 			this.title = null;
 			this.version = null;
+			// "last modified by" was removed on purpose, the save must not write the current user again
+			this.lastModifiedByRemoved = false;
 
 			this.Lock = new AscCommon.CLock();
 			this.lockType = AscCommon.c_oAscLockTypes.kLockTypeNone;
@@ -14127,7 +14133,7 @@
 
 			s._WriteString2(0, this.title);
 			s._WriteString2(1, this.creator);
-			if (api && api.DocInfo) {
+			if (api && api.DocInfo && !this.lastModifiedByRemoved) {
 				s._WriteString2(2, api.DocInfo.get_UserName());
 			}
 			var revision = 0;
@@ -14278,6 +14284,14 @@
 			this.version = oProps.version;
 		};
 
+		/**
+		 * Keeps "last modified by" out of the saved file, the save writes the current user otherwise
+		 * @param {boolean} isRemoved
+		 */
+		CCore.prototype.setLastModifiedByRemoved = function (isRemoved) {
+			AscCommon.History.Add(new CChangesDrawingsBool(this, AscDFH.historyitem_Core_LastModifiedByRemoved, this.lastModifiedByRemoved, isRemoved));
+			this.lastModifiedByRemoved = isRemoved;
+		};
 		CCore.prototype.setCategory = function (sCategory) {
 			const coreCopy = this.copy();
 			coreCopy.asc_putCategory(sCategory);
