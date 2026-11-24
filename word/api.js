@@ -7542,6 +7542,16 @@ background-repeat: no-repeat;\
 		this.WordControl.m_oLogicDocument.SelectComment(Id, true);
 	};
 
+	/**
+	 * Moves to the comment after (or before) the cursor, wrapping round at the end of the document
+	 * @param {boolean} isNext
+	 * @returns {?string} the id of the comment, so the interface can show it
+	 */
+	asc_docs_api.prototype.asc_GotoComment = function(isNext)
+	{
+		let oLogicDocument = this.private_GetLogicDocument();
+		return oLogicDocument ? oLogicDocument.GotoComment(!!isNext) : null;
+	};
 	asc_docs_api.prototype.asc_showComment = function(Id)
 	{
 		if (Id instanceof Array)
@@ -15386,6 +15396,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_removeComment']                         = asc_docs_api.prototype.asc_removeComment;
 	asc_docs_api.prototype['asc_changeComment']                         = asc_docs_api.prototype.asc_changeComment;
 	asc_docs_api.prototype['asc_selectComment']                         = asc_docs_api.prototype.asc_selectComment;
+	asc_docs_api.prototype['asc_GotoComment']                           = asc_docs_api.prototype.asc_GotoComment;
 	asc_docs_api.prototype['asc_showComment']                           = asc_docs_api.prototype.asc_showComment;
 	asc_docs_api.prototype['asc_GetCommentsReportByAuthors']            = asc_docs_api.prototype.asc_GetCommentsReportByAuthors;
 	asc_docs_api.prototype['can_AddQuotedComment']                      = asc_docs_api.prototype.can_AddQuotedComment;
