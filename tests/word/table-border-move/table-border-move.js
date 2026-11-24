@@ -254,4 +254,144 @@ $(function ()
 		logicDocument.FinalizeAction();
 		assert.true(Math.abs(table.TableGridCalc[0] - (grid[0] + 5)) < 0.1, "the first column is 5 mm wider (" + fmt(grid) + " -> " + fmt(table.TableGridCalc) + ")");
 	});
+
+	// The outer table (autofit, width 100 %) has two rows. The first row has the dragged table and another table
+	// (cells in percent), the second row has an unrelated table (cells in mm). The outer cells have widths in percent.
+	function setupAround()
+	{
+		AscTest.ClearDocument();
+		let sectPr = AscTest.GetFinalSection();
+		sectPr.SetPageSize(210, 297);
+		sectPr.SetPageMargins(25, 20, 25, 20);
+
+		let table = createTable(3, true, true);
+
+		let outer = AscTest.CreateTable(2, 1, [160]);
+		outer.Set_TableW(tblwidth_Pct, 100);
+		outer.SetTableLayout(tbllayout_AutoFit);
+		outer.GetRow(0).GetCell(0).SetW(new CTableMeasurement(tblwidth_Pct, 100));
+		outer.GetRow(1).GetCell(0).SetW(new CTableMeasurement(tblwidth_Pct, 100));
+
+		let sibling = AscTest.CreateTable(1, 2, [100, 59.6]);
+		sibling.Set_TableW(tblwidth_Pct, 100);
+		sibling.SetTableLayout(tbllayout_AutoFit);
+		sibling.GetRow(0).GetCell(0).SetW(new CTableMeasurement(tblwidth_Pct, 60));
+		sibling.GetRow(0).GetCell(1).SetW(new CTableMeasurement(tblwidth_Pct, 40));
+		AscTest.AddTextToParagraph(sibling.GetRow(0).GetCell(0).GetContent().GetElement(0), "Sibling table");
+
+		let other = AscTest.CreateTable(1, 3, [40, 60, 59.6]);
+		other.SetTableLayout(tbllayout_AutoFit);
+		AscTest.AddTextToParagraph(other.GetRow(0).GetCell(1).GetContent().GetElement(0), "Unrelated table");
+
+		let content0 = outer.GetRow(0).GetCell(0).GetContent();
+		content0.AddToContent(0, table);
+		content0.AddToContent(content0.GetElementsCount(), sibling);
+		let content1 = outer.GetRow(1).GetCell(0).GetContent();
+		content1.AddToContent(0, other);
+
+		logicDocument.PushToContent(outer);
+		// the autofit widths of the nested tables settle only in the second pass
+		AscTest.Recalculate();
+		AscTest.Recalculate();
+		return {table : table, outer : outer, sibling : sibling, other : other};
+	}
+
+	function cellWidths(table)
+	{
+		let res = [];
+		for (let r = 0; r < table.GetRowsCount(); ++r)
+		{
+			let row = table.GetRow(r);
+			for (let c = 0; c < row.GetCellsCount(); ++c)
+			{
+				let w = row.GetCell(c).GetW();
+				res.push((tblwidth_Pct === w.Type ? "pct " : tblwidth_Mm === w.Type ? "mm " : "auto ") + w.W.toFixed(2));
+			}
+		}
+		return res.join(", ");
+	}
+
+	function cellTypes(table)
+	{
+		return cellWidths(table).split(", ").map(function(w){return w.split(" ")[0];}).join(", ");
+	}
+
+	function tableState(table)
+	{
+		let pr = table.Get_CompiledPr(false).TablePr;
+		return {
+			grid   : fmt(table.TableGridCalc),
+			layout : pr.TableLayout,
+			tableW : (tblwidth_Pct === pr.TableW.Type ? "pct " : "") + pr.TableW.W.toFixed(2),
+			cells  : cellWidths(table),
+			types  : cellTypes(table)
+		};
+	}
+
+	QUnit.test("Only the tables that contain the dragged table get fixed column widths, the other tables keep their layout and percent widths", function (assert)
+	{
+		let t       = setupAround();
+		let outer   = tableState(t.outer);
+		let sibling = tableState(t.sibling);
+		let other   = tableState(t.other);
+
+		let before = checkMove(assert, t.table, 15, "nested next to other tables");
+
+		let newOuter = tableState(t.outer);
+		assert.strictEqual(newOuter.layout, tbllayout_Fixed, "the outer table has fixed column widths now");
+		assert.strictEqual(newOuter.grid, outer.grid, "the outer table keeps its columns");
+		assert.strictEqual(newOuter.tableW, outer.tableW, "the outer table keeps its width in percent");
+		assert.strictEqual(newOuter.types, outer.types, "the cells of the outer table keep their widths in percent (" + newOuter.cells + ")");
+
+		let newSibling = tableState(t.sibling);
+		assert.strictEqual(newSibling.layout, sibling.layout, "the other nested table keeps its layout");
+		assert.strictEqual(newSibling.grid, sibling.grid, "the other nested table keeps its columns");
+		assert.strictEqual(newSibling.tableW, sibling.tableW, "the other nested table keeps its width in percent");
+		assert.strictEqual(newSibling.types, sibling.types, "the cells of the other nested table keep their widths in percent (" + sibling.cells + " -> " + newSibling.cells + ")");
+
+		let newOther = tableState(t.other);
+		assert.strictEqual(newOther.layout, other.layout, "the table in the other outer cell keeps its layout");
+		assert.strictEqual(newOther.grid, other.grid, "the table in the other outer cell keeps its columns");
+		assert.strictEqual(newOther.types, other.types, "the cells of the table in the other outer cell keep their width type");
+
+		checkUndo(assert, t.table, before, "nested next to other tables");
+		assert.deepEqual(tableState(t.outer), outer, "undo restores the outer table");
+		assert.strictEqual(JSON.stringify(tableState(t.sibling)), JSON.stringify(sibling), "undo restores the other nested table");
+		assert.deepEqual(tableState(t.other), other, "undo restores the table in the other outer cell");
+	});
+
+	QUnit.test("The lock check covers every table that changes", function (assert)
+	{
+		let t = setupAround();
+		assert.deepEqual(t.table.GetTablesChangedByColumnResize(), [t.table, t.outer, t.sibling, t.other], "in an autofit table: the dragged table and all tables of the top table");
+
+		let lockData = null;
+		let isSelectionLocked = logicDocument.Document_Is_SelectionLocked;
+		logicDocument.Document_Is_SelectionLocked = function(checkType, additionalData)
+		{
+			lockData = additionalData;
+			return true;
+		};
+
+		let outer = tableState(t.outer);
+		let grid  = fmt(t.table.TableGridCalc);
+		try
+		{
+			dragBorder(t.table, 1, 1, 15);
+		}
+		finally
+		{
+			logicDocument.Document_Is_SelectionLocked = isSelectionLocked;
+		}
+
+		assert.true(!!lockData && AscCommon.changestype_2_ElementsArray_and_Type === lockData.Type, "the tables are checked as a list");
+		assert.true(!!lockData && Array.isArray(lockData.Elements) && -1 !== lockData.Elements.indexOf(t.table) && -1 !== lockData.Elements.indexOf(t.outer), "the dragged table and the outer table are checked");
+		assert.strictEqual(fmt(t.table.TableGridCalc), grid, "locked: the dragged table doesn't change");
+		assert.deepEqual(tableState(t.outer), outer, "locked: the outer table doesn't change");
+
+		let table = setup(true, true, true, false);
+		assert.deepEqual(table.GetTablesChangedByColumnResize(), [table], "in a fixed table: only the dragged table");
+		table = setup(false, true, true);
+		assert.deepEqual(table.GetTablesChangedByColumnResize(), [table], "a table on its own: only the dragged table");
+	});
 });

@@ -5247,9 +5247,10 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 				return;
 			}
 
+			// A nested table can change the tables around it too (see private_SetTopTableLayoutFixed)
 			if (false === LogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_None, {
-					Type      : AscCommon.changestype_2_Element_and_Type,
-					Element   : this,
+					Type      : AscCommon.changestype_2_ElementsArray_and_Type,
+					Elements  : true === this.Selection.Data2.bCol ? this.GetTablesChangedByColumnResize() : [this],
 					CheckType : AscCommon.changestype_Table_Properties
 				}))
 			{
@@ -17809,26 +17810,96 @@ CTable.prototype.private_SetTableLayoutFixedAndUpdateCellsWidth = function(nExce
 };
 /**
  * A nested table is laid out like its top table (see private_RecalculateGrid): if the top table fits its contents,
- * the columns of the nested table are calculated from the contents again and a moved border goes back to where it
- * was. So, as for a table on its own, the top table gets fixed column widths, and every table in it keeps the
- * widths it has now.
+ * the columns of every table in it are calculated from the contents again and a moved border goes back to where it
+ * was. So the top table has to get fixed column widths, and then every table in it is shown with its grid and its
+ * cell widths. To keep all tables as they look now:
+ * - this table and the tables that contain it get fixed column widths;
+ * - the other tables in the top table keep their own layout setting (and fit their contents again as soon as the top
+ *   table does);
+ * - in all of them the grid and the cell widths are set to the widths they are shown with now. A cell width keeps its
+ *   type: a width in percent stays in percent, an automatic width stays automatic.
+ * Check the lock of the tables from GetTablesChangedByColumnResize before.
  */
 CTable.prototype.private_SetTopTableLayoutFixed = function()
 {
-	var oTopTable = this.Parent ? this.Parent.IsInTable(true) : null;
-	if (!oTopTable || tbllayout_AutoFit !== oTopTable.Get_CompiledPr(false).TablePr.TableLayout)
+	var arrTables = this.GetTablesChangedByColumnResize();
+	if (arrTables.length <= 1)
 		return;
 
-	var arrTables = oTopTable.GetAllTables();
 	for (var nIndex = 0, nCount = arrTables.length; nIndex < nCount; ++nIndex)
 	{
 		var oTable = arrTables[nIndex];
-		oTable.SetTableGrid(oTable.private_CopyTableGridCalc());
-		for (var nCol = 0, nColsCount = oTable.TableGridCalc.length; nCol < nColsCount; ++nCol)
-			oTable.Internal_UpdateCellW(nCol);
+		oTable.private_SetCurrentColumns(oTable === this || -1 !== oTable.GetNestedTables().indexOf(this));
+	}
+};
+/**
+ * The tables that can change when a column of this table gets a new width with the mouse or the ruler: this table
+ * and, if it is nested in a table that fits its contents, all tables in that top table
+ * (see private_SetTopTableLayoutFixed).
+ * @returns {CTable[]} this table is the first one
+ */
+CTable.prototype.GetTablesChangedByColumnResize = function()
+{
+	var oTopTable = this.Parent ? this.Parent.IsInTable(true) : null;
+	if (!oTopTable || oTopTable === this || tbllayout_AutoFit !== oTopTable.Get_CompiledPr(false).TablePr.TableLayout)
+		return [this];
+
+	var arrResult = [this];
+	var arrTables = oTopTable.GetAllTables();
+	for (var nIndex = 0, nCount = arrTables.length; nIndex < nCount; ++nIndex)
+	{
+		if (arrTables[nIndex] !== this)
+			arrResult.push(arrTables[nIndex]);
 	}
 
-	oTopTable.SetTableLayout(tbllayout_Fixed);
+	return arrResult;
+};
+/**
+ * Sets the grid and the cell widths to the widths the table is shown with now. A cell width in mm or percent keeps its
+ * type (a percent width stays in percent), an automatic cell width stays automatic.
+ * @param {boolean} isSetFixed - the table also gets fixed column widths
+ */
+CTable.prototype.private_SetCurrentColumns = function(isSetFixed)
+{
+	var arrGrid = this.private_CopyTableGridCalc();
+
+	var isGridChanged = this.TableGrid.length !== arrGrid.length;
+	for (var nCol = 0, nColsCount = arrGrid.length; !isGridChanged && nCol < nColsCount; ++nCol)
+		isGridChanged = Math.abs(this.TableGrid[nCol] - arrGrid[nCol]) > 0.001;
+
+	if (isGridChanged)
+		this.SetTableGrid(arrGrid);
+
+	var nPctWidth = this.private_RecalculatePercentWidth();
+	for (var nCurRow = 0, nRowsCount = this.GetRowsCount(); nCurRow < nRowsCount; ++nCurRow)
+	{
+		var oRow     = this.GetRow(nCurRow);
+		var nGridCol = oRow.GetBefore().Grid;
+		for (var nCurCell = 0, nCellsCount = oRow.GetCellsCount(); nCurCell < nCellsCount; ++nCurCell)
+		{
+			var oCell     = oRow.GetCell(nCurCell);
+			var nGridSpan = oCell.GetGridSpan();
+			var oCellW    = oCell.GetW();
+
+			var nW = 0;
+			for (var nSpanCol = nGridCol; nSpanCol < nGridCol + nGridSpan && nSpanCol < arrGrid.length; ++nSpanCol)
+				nW += arrGrid[nSpanCol];
+
+			var nNewW = null;
+			if (tblwidth_Pct === oCellW.Type)
+				nNewW = nPctWidth > 0.01 ? nW / nPctWidth * 100 : null;
+			else if (tblwidth_Mm === oCellW.Type)
+				nNewW = nW;
+
+			if (null !== nNewW && Math.abs(nNewW - oCellW.W) > 0.001)
+				oCell.SetW(new CTableMeasurement(oCellW.Type, nNewW));
+
+			nGridCol += nGridSpan;
+		}
+	}
+
+	if (isSetFixed && tbllayout_AutoFit === this.Get_CompiledPr(false).TablePr.TableLayout)
+		this.SetTableLayout(tbllayout_Fixed);
 };
 CTable.prototype.GotoFootnoteRef = function(isNext, isCurrent, isStepFootnote, isStepEndnote)
 {

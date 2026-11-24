@@ -2372,7 +2372,13 @@ function CHorRuler()
 
     this.SetTableProperties = function()
     {
-        if ( false === this.m_oWordControl.m_oLogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_Table_Properties) )
+        // a nested table can change the tables around it too
+        var oTableLock = {
+            Type      : AscCommon.changestype_2_ElementsArray_and_Type,
+            Elements  : this.m_oTableMarkup.Table.GetTablesChangedByColumnResize(),
+            CheckType : AscCommon.changestype_Table_Properties
+        };
+        if ( false === this.m_oWordControl.m_oLogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_Table_Properties, oTableLock) )
         {
             this.m_oWordControl.m_oLogicDocument.StartAction(AscDFH.historydescription_Document_SetTableMarkup_Hor);
 
