@@ -94,6 +94,115 @@ $(function ()
 		assert.strictEqual(document.querySelectorAll("style").length, styles, "the normal cursor is back");
 	});
 
+	function pointerEvent(type, props)
+	{
+		return new PointerEvent(type, Object.assign({bubbles : true, cancelable : true, pointerType : "mouse"}, props));
+	}
+	// an element in place of the viewer canvas, which gets pointer and mouse events (viewer.js: onpointerup -> onMouseUp)
+	function createTarget()
+	{
+		let target = document.createElement("div");
+		document.body.appendChild(target);
+		target.received = [];
+		["pointerdown", "pointerup", "mouseup", "click", "auxclick", "contextmenu", "keydown"].forEach(function (type)
+		{
+			target.addEventListener(type, function (ev) {target.received.push(ev.type);});
+		});
+		return target;
+	}
+	// the events of one click, as the browser sends them; returns whether each one's default action was prevented
+	function sendRelease(target, button)
+	{
+		let prevented = {};
+		[
+			pointerEvent("pointerup", {button : button}),
+			mouseEvent("mouseup", {button : button}),
+			1 === button ? new PointerEvent("auxclick", {bubbles : true, cancelable : true, button : 1}) : new PointerEvent("click", {bubbles : true, cancelable : true, button : 0})
+		].forEach(function (ev)
+		{
+			target.dispatchEvent(ev);
+			prevented[ev.type] = ev.defaultPrevented;
+		});
+		return prevented;
+	}
+
+	QUnit.test("The click that stops the auto-scroll does nothing else", function (assert)
+	{
+		let done = assert.async();
+		let viewer = createViewer();
+		let target = createTarget();
+		CAutoScroll.start(viewer, 100, 100);
+		// the release of the starting middle click, without a move: the auto-scroll goes on until the next click
+		let prevented = sendRelease(target, 1);
+		assert.ok(viewer.autoScroll, "a middle click starts it and it goes on");
+		assert.deepEqual(target.received, [], "the release of the starting click doesn't reach the viewer");
+		assert.ok(prevented["mouseup"] && prevented["auxclick"], "its default action (e.g. a paste on Linux) is prevented");
+
+		setTimeout(function ()
+		{
+			let down = pointerEvent("pointerdown", {button : 0});
+			target.dispatchEvent(down);
+			assert.strictEqual(viewer.autoScroll, null, "a left click stops it");
+			assert.ok(down.defaultPrevented, "the press is prevented");
+
+			prevented = sendRelease(target, 0);
+			assert.deepEqual(target.received, [], "neither the press nor pointerup, mouseup or click reach the viewer");
+			assert.ok(prevented["pointerup"] && prevented["mouseup"] && prevented["click"], "and their default actions are prevented");
+
+			setTimeout(function ()
+			{
+				target.dispatchEvent(pointerEvent("pointerdown", {button : 0}));
+				sendRelease(target, 0);
+				assert.deepEqual(target.received, ["pointerdown", "pointerup", "mouseup", "click"], "the next click works as usual");
+				document.body.removeChild(target);
+				done();
+			}, 10);
+		}, 10);
+	});
+
+	QUnit.test("The middle click that stops the auto-scroll does nothing else", function (assert)
+	{
+		let done = assert.async();
+		let viewer = createViewer();
+		let target = createTarget();
+		CAutoScroll.start(viewer, 100, 100);
+		sendRelease(target, 1);
+
+		setTimeout(function ()
+		{
+			target.dispatchEvent(pointerEvent("pointerdown", {button : 1}));
+			assert.strictEqual(viewer.autoScroll, null, "a second middle click stops it");
+			let prevented = sendRelease(target, 1);
+			assert.deepEqual(target.received, [], "its release doesn't reach the viewer");
+			assert.ok(prevented["pointerup"] && prevented["mouseup"] && prevented["auxclick"], "no default action (no paste of the PRIMARY selection)");
+
+			setTimeout(function ()
+			{
+				document.body.removeChild(target);
+				done();
+			}, 10);
+		}, 10);
+	});
+
+	QUnit.test("Hold, move and release: the release does nothing else", function (assert)
+	{
+		let done = assert.async();
+		let viewer = createViewer();
+		let target = createTarget();
+		CAutoScroll.start(viewer, 100, 100);
+		document.dispatchEvent(mouseEvent("mousemove", {clientX : 100, clientY : 300}));
+		let prevented = sendRelease(target, 1);
+		assert.strictEqual(viewer.autoScroll, null, "the release stops it");
+		assert.deepEqual(target.received, [], "pointerup, mouseup and auxclick don't reach the viewer");
+		assert.ok(prevented["mouseup"] && prevented["auxclick"], "and have no default action");
+
+		setTimeout(function ()
+		{
+			document.body.removeChild(target);
+			done();
+		}, 10);
+	});
+
 	QUnit.test("Leaving the window stops", function (assert)
 	{
 		let viewer = createViewer();

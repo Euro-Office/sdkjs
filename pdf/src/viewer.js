@@ -583,6 +583,8 @@
 			ev.stopPropagation();
 			if (state.onButtonUp())
 				CAutoScroll.stop(viewer);
+			// the rest of this middle click (mouseup after pointerup, auxclick) has no other job either
+			CAutoScroll.swallowRestOfClick(true);
 		}
 		function onDown(ev)
 		{
@@ -591,6 +593,8 @@
 			ev.preventDefault();
 			ev.stopPropagation();
 			CAutoScroll.stop(viewer);
+			// the click only stops the auto-scroll: its release must not reach the viewer either
+			CAutoScroll.swallowRestOfClick(false);
 		}
 		function onKey(ev)
 		{
@@ -633,6 +637,45 @@
 			if (step.x && viewer.isVisibleHorScroll && viewer.m_oScrollHorApi)
 				viewer.m_oScrollHorApi.scrollBy(step.x, 0, false);
 		}, CAutoScroll.STEP_INTERVAL);
+	};
+	/**
+	 * Swallows the rest of a click that stopped (or started) the auto-scroll: pointerup, mouseup, click, auxclick
+	 * and contextmenu do not reach the viewer, and their default action (e.g. a context menu, or the paste of the
+	 * PRIMARY selection with the middle button on Linux) is prevented.
+	 * @param {boolean} isReleased - true if the button is already released (called from the pointerup handler):
+	 * then only the events of this release are swallowed; false (called on the press): until the release.
+	 * A new press ends it, in case the release happened outside the window and never came.
+	 */
+	CAutoScroll.swallowRestOfClick = function(isReleased)
+	{
+		const types = ["pointerup", "mouseup", "click", "auxclick", "contextmenu"];
+		let timer = null;
+		function swallow(ev)
+		{
+			ev.preventDefault();
+			ev.stopPropagation();
+			if ("pointerup" === ev.type || "mouseup" === ev.type)
+				endAfterRelease();
+		}
+		function remove()
+		{
+			if (null !== timer)
+				clearTimeout(timer);
+			timer = null;
+			types.forEach(function(type) {document.removeEventListener(type, swallow, true);});
+			document.removeEventListener("pointerdown", remove, true);
+		}
+		function endAfterRelease()
+		{
+			// the browser sends mouseup, click and auxclick right after pointerup, in the same task
+			if (null === timer)
+				timer = setTimeout(remove, 0);
+		}
+		types.forEach(function(type) {document.addEventListener(type, swallow, true);});
+		// added while the stopping press is being sent, so it is not called for that press itself
+		document.addEventListener("pointerdown", remove, true);
+		if (isReleased)
+			endAfterRelease();
 	};
 	/**
 	 * Stops the auto-scroll in the viewer and removes everything that start added.
