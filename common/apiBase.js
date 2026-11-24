@@ -68,6 +68,8 @@
 		this.DocInfo             = null;
 		this.documentId          = undefined;
 		this.documentUserId      = undefined;
+		// opt-in by the host: the user may set the author name of comments and changes (off: the logged-in user)
+		this.isAuthorOverride    = false;
 		this.documentUrl         = "null";
 		this.documentUrlChanges  = null;
 		this.documentTokenChanges  = null;
@@ -1047,6 +1049,37 @@
 		}
 	};
 	baseEditorsApi.prototype.asc_setLocale = function(val) {};
+	/**
+	 * Lets the user choose the author name of comments and tracked changes, for example a role name such as
+	 * "Reviewer 1". Off by default: the author is the logged-in user. The host switches it on with
+	 * editorConfig.customization.authorOverride.
+	 * @param {boolean} isAllow
+	 */
+	baseEditorsApi.prototype.asc_setAuthorOverride = function(isAllow)
+	{
+		this.isAuthorOverride = true === isAllow;
+	};
+	baseEditorsApi.prototype.asc_getAuthorOverride = function()
+	{
+		return this.isAuthorOverride;
+	};
+	/**
+	 * Changes the name of the current user, only with asc_setAuthorOverride(true). New comments and tracked changes
+	 * get this name, existing ones keep theirs. The user id stays, so the user can still edit their own comments.
+	 * @param {string} sName
+	 */
+	baseEditorsApi.prototype.asc_setLocalUserName = function(sName)
+	{
+		let oUserInfo = this.DocInfo ? this.DocInfo.asc_getUserInfo() : null;
+		if (!this.isAuthorOverride || !sName || !oUserInfo)
+			return;
+
+		oUserInfo.asc_putFullName(sName);
+		if (this.User)
+			this.User.setUserName(sName);
+
+		AscCommon.UserInfoParser.setCurrentName(sName);
+	};
 	baseEditorsApi.prototype.asc_getLocale = function() {};
 	/**
 	 * Gets LCID (Locale Identifier) for current locale
@@ -6243,6 +6276,9 @@
 	prot['asc_getFilePath'] = prot.asc_getFilePath;
 	prot['asc_getFormatCells'] = prot.asc_getFormatCells;
 	prot['asc_setLocale'] = prot.asc_setLocale;
+	prot['asc_setAuthorOverride'] = prot.asc_setAuthorOverride;
+	prot['asc_getAuthorOverride'] = prot.asc_getAuthorOverride;
+	prot['asc_setLocalUserName'] = prot.asc_setLocalUserName;
 	prot['asc_getLocale'] = prot.asc_getLocale;
 	prot['asc_getLocaleLCID'] = prot.asc_getLocaleLCID;
 	prot['asc_getLocaleExample'] = prot.asc_getLocaleExample;

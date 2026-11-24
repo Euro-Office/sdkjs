@@ -5511,6 +5511,52 @@ background-repeat: no-repeat;\
 		this.sendEvent("asc_onDeleteComment", Id, AscCommentData);
 	};
 
+	/**
+	 * Changes the author name of comments, as one undo step, only with asc_setAuthorOverride(true). The user ids stay,
+	 * so the comments can still be edited by their writer.
+	 * @param {string} sName the new name
+	 * @param {string[]} [arrIds] the comments to change, only their own author; without ids every comment and reply
+	 */
+	asc_docs_api.prototype.asc_ChangeCommentAuthor = function(sName, arrIds)
+	{
+		let oPresentation = this.WordControl && this.WordControl.m_oLogicDocument;
+		if (!this.isAuthorOverride || !oPresentation || !sName)
+			return;
+
+		let isAll = !arrIds;
+		let aEntries = oPresentation.GetAllComments().filter(function(oEntry) {
+			return oEntry.comment && oEntry.comment.Data && (isAll || arrIds.indexOf(oEntry.comment.Get_Id()) !== -1);
+		});
+		if (!aEntries.length)
+			return;
+		if (false !== oPresentation.Document_Is_SelectionLocked(AscCommon.changestype_MoveComment, aEntries, oPresentation.IsEditCommentsMode()))
+			return;
+
+		// the copy leaves out the user data, which is kept here
+		function rename(oCopy, oOrigin)
+		{
+			oCopy.m_sUserName = sName;
+			oCopy.m_sUserData = oOrigin.m_sUserData;
+			for (let nIndex = 0; nIndex < oCopy.m_aReplies.length; ++nIndex)
+			{
+				if (isAll)
+					rename(oCopy.m_aReplies[nIndex], oOrigin.m_aReplies[nIndex]);
+				else
+					oCopy.m_aReplies[nIndex].m_sUserData = oOrigin.m_aReplies[nIndex].m_sUserData;
+			}
+		}
+
+		oPresentation.StartAction(AscDFH.historydescription_Document_ChangeComment);
+		let t = this;
+		aEntries.forEach(function(oEntry) {
+			let oComment = oEntry.comment;
+			let oData = oComment.Data.createDuplicate(false);
+			rename(oData, oComment.Data);
+			oComment.Set_Data(oData);
+			t.sync_ChangeCommentData(oComment.Get_Id(), oData);
+		});
+		oPresentation.FinalizeAction(true);
+	};
 	asc_docs_api.prototype.asc_changeComment = function(Id, AscCommentData)
 	{
 		if (null == this.WordControl.m_oLogicDocument)
@@ -9820,6 +9866,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_ResolveAllComments']              = asc_docs_api.prototype.asc_ResolveAllComments;
 	asc_docs_api.prototype['asc_GetCommentLogicPosition']         = asc_docs_api.prototype.asc_GetCommentLogicPosition;
 	asc_docs_api.prototype['asc_changeComment']                   = asc_docs_api.prototype.asc_changeComment;
+	asc_docs_api.prototype['asc_ChangeCommentAuthor']             = asc_docs_api.prototype.asc_ChangeCommentAuthor;
 	asc_docs_api.prototype['asc_selectComment']                   = asc_docs_api.prototype.asc_selectComment;
 	asc_docs_api.prototype['asc_showComment']                     = asc_docs_api.prototype.asc_showComment;
 	asc_docs_api.prototype['can_AddQuotedComment']                = asc_docs_api.prototype.can_AddQuotedComment;

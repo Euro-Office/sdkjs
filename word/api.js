@@ -7512,6 +7512,52 @@ background-repeat: no-repeat;\
 		}
 	};
 
+	/**
+	 * Changes the author name of comments, as one undo step, only with asc_setAuthorOverride(true). The user ids stay,
+	 * so the comments can still be edited by their writer.
+	 * @param {string} sName the new name
+	 * @param {string[]} [arrIds] the comments to change, only their own author; without ids every comment and reply
+	 */
+	asc_docs_api.prototype.asc_ChangeCommentAuthor = function(sName, arrIds)
+	{
+		let oLogicDocument = this.private_GetLogicDocument();
+		if (!this.isAuthorOverride || !oLogicDocument || !sName)
+			return;
+
+		let oAll   = oLogicDocument.Comments.GetAllComments();
+		let isAll  = !arrIds;
+		let arrUse = (arrIds || Object.keys(oAll)).filter(function(sId) {return oAll[sId] && oAll[sId].GetData();});
+		if (!arrUse.length)
+			return;
+
+		for (let nIndex = 0; nIndex < arrUse.length; ++nIndex)
+		{
+			if (false !== oLogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_None, {
+				Type : AscCommon.changestype_2_Comment,
+				Id   : arrUse[nIndex]
+			}, false, oLogicDocument.IsEditCommentsMode()))
+				return;
+		}
+
+		function rename(oData)
+		{
+			oData.m_sUserName = sName;
+			oData.m_sInitials = "";
+			if (isAll)
+				oData.m_aReplies.forEach(rename);
+		}
+
+		oLogicDocument.StartAction(AscDFH.historydescription_Document_ChangeComment);
+		arrUse.forEach(function(sId) {
+			let oData = oAll[sId].GetData().Copy();
+			rename(oData);
+			oAll[sId].SetData(oData);
+		});
+		oLogicDocument.FinalizeAction();
+
+		let t = this;
+		arrUse.forEach(function(sId) {t.sync_ChangeCommentData(sId, oAll[sId].GetData());});
+	};
 	asc_docs_api.prototype.asc_changeComment = function(Id, AscCommentData)
 	{
 		var oLogicDocument = this.WordControl.m_oLogicDocument;
@@ -15385,6 +15431,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_addComment']                            = asc_docs_api.prototype.asc_addComment;
 	asc_docs_api.prototype['asc_removeComment']                         = asc_docs_api.prototype.asc_removeComment;
 	asc_docs_api.prototype['asc_changeComment']                         = asc_docs_api.prototype.asc_changeComment;
+	asc_docs_api.prototype['asc_ChangeCommentAuthor']                   = asc_docs_api.prototype.asc_ChangeCommentAuthor;
 	asc_docs_api.prototype['asc_selectComment']                         = asc_docs_api.prototype.asc_selectComment;
 	asc_docs_api.prototype['asc_showComment']                           = asc_docs_api.prototype.asc_showComment;
 	asc_docs_api.prototype['asc_GetCommentsReportByAuthors']            = asc_docs_api.prototype.asc_GetCommentsReportByAuthors;
