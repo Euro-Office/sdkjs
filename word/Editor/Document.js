@@ -11994,6 +11994,94 @@ CDocument.prototype.SplitTableCells = function(Cols, Rows)
 	this.UpdateSelection();
 	this.UpdateInterface();
 };
+/**
+ * Can the table at the cursor be split into two tables (like Word's Layout > Split Table)?
+ * Only a table directly in the main text, not a nested table or one in a header, footnote or text box.
+ * @returns {boolean}
+ */
+CDocument.prototype.CanSplitTable = function()
+{
+	let tables = this.GetCurrentTablesStack();
+	return (1 === tables.length && tables[0].GetParent() === this && -1 !== tables[0].GetIndex());
+};
+/**
+ * Splits the table at the cursor above the current row, with an empty paragraph between the two parts
+ * (the same result as Ctrl+Shift+Enter in a table). A selection is collapsed to its start first.
+ * In the first row nothing is split, an empty paragraph is added above the table.
+ * The cursor goes to the new paragraph.
+ * @returns {boolean}
+ */
+CDocument.prototype.SplitTable = function()
+{
+	if (!this.CanSplitTable() || this.IsSelectionLocked(AscCommon.changestype_Table_Properties, null, false, false))
+		return false;
+
+	this.StartAction(AscDFH.historydescription_Document_SplitTable);
+	if (this.IsSelectionUse())
+		this.MoveCursorLeft(false, false);
+
+	let table    = this.GetCurrentTablesStack()[0];
+	let tablePos = table.GetIndex();
+	let newPara  = new AscWord.Paragraph();
+	let newTable = table.Split();
+	if (newTable)
+	{
+		this.AddToContent(tablePos + 1, newPara);
+		this.AddToContent(tablePos + 2, newTable);
+		this.CurPos.ContentPos = tablePos + 1;
+	}
+	else
+	{
+		this.AddToContent(tablePos, newPara);
+		this.CurPos.ContentPos = tablePos;
+	}
+	newPara.MoveCursorToStartPos(false);
+
+	this.Recalculate();
+	this.UpdateSelection();
+	this.UpdateInterface();
+	this.FinalizeAction();
+	return true;
+};
+/**
+ * Can the table at the cursor be fitted to the margins (like Word's AutoFit Window)? The same tables as for splitting,
+ * and only a table in the text flow (not a floating one).
+ * @returns {boolean}
+ */
+CDocument.prototype.CanFitTableToMargins = function()
+{
+	return this.CanSplitTable() && this.GetCurrentTablesStack()[0].IsInline();
+};
+/**
+ * Is the table at the cursor already fitted between the margins (Fit table to margins would change nothing)?
+ * @returns {boolean}
+ */
+CDocument.prototype.IsTableFittedToMargins = function()
+{
+	return this.CanFitTableToMargins() && this.GetCurrentTablesStack()[0].IsFittedToMargins();
+};
+/**
+ * Fits the table at the cursor between the margins, like Word's AutoFit Window: preferred width 100%, indent 0,
+ * autofit layout. The columns keep their proportions. For tables from Word files that stick out of the page.
+ * A table that is already fitted is left as it is, without an undo step.
+ * @returns {boolean}
+ */
+CDocument.prototype.FitTableToMargins = function()
+{
+	if (!this.CanFitTableToMargins()
+		|| this.IsTableFittedToMargins()
+		|| this.IsSelectionLocked(AscCommon.changestype_Table_Properties, null, true, false))
+		return false;
+
+	let table = this.GetCurrentTablesStack()[0];
+	this.StartAction(AscDFH.historydescription_Document_ResizeTable);
+	let result = table.FitToMargins();
+	this.Recalculate();
+	this.UpdateSelection();
+	this.UpdateInterface();
+	this.FinalizeAction();
+	return result;
+};
 CDocument.prototype.RemoveTableCells = function()
 {
 	this.Controller.RemoveTableCells();

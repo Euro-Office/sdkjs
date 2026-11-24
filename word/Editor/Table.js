@@ -9267,6 +9267,10 @@ CTable.prototype.Split = function()
 	NewTable.Set_TableStyle2(this.TableStyle);
 	NewTable.Set_TableLook(this.TableLook.Copy());
 
+	// If the split row is in the middle of a vertically merged cell, the new table would start with a continued
+	// merge: start the merge again in its first row.
+	NewTable.CorrectVMerge();
+
 	// Сбросим селект и текущую позицию в таблицах
 	this.MoveCursorToStartPos(false);
 	NewTable.MoveCursorToStartPos(false);
@@ -18441,6 +18445,32 @@ CTable.prototype.Resize = function(nWidth, nHeight)
 				this.SetTableW(tblwidth_Auto, 0);
 		}
 	}
+};
+/**
+ * Fits the table between the margins like Word's AutoFit Window: the preferred table width becomes 100% of the width
+ * between the margins, the indent 0 and the layout autofit. The columns are scaled by the recalculation, so the table
+ * keeps fitting when the margins or the orientation change.
+ * @returns {boolean}
+ */
+CTable.prototype.FitToMargins = function()
+{
+	this.Set_TableW(tblwidth_Pct, 100);
+	this.Set_TableInd(0);
+	this.SetTableLayout(tbllayout_AutoFit);
+	return true;
+};
+/**
+ * Is the table already fitted between the margins, so that FitToMargins would change nothing?
+ * @returns {boolean}
+ */
+CTable.prototype.IsFittedToMargins = function()
+{
+	let tableW = this.GetTableW();
+	return (tableW
+		&& tblwidth_Pct === tableW.Type
+		&& Math.abs(tableW.W - 100) < 0.001
+		&& Math.abs(this.Get_TableInd()) < 0.001
+		&& tbllayout_AutoFit === this.GetTableLayout());
 };
 /**
  * Изменяем размер тширину и высоту таблицы в документе (создается точка в истории и запускается пересчет)

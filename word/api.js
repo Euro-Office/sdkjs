@@ -5482,6 +5482,31 @@ background-repeat: no-repeat;\
 		logicDocument.AddToParagraph(new AscWord.CRunBreak(AscWord.break_Column));
 		logicDocument.FinalizeAction();
 	};
+	asc_docs_api.prototype.asc_CanSplitTable             = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return !!(logicDocument && logicDocument.CanSplitTable());
+	};
+	asc_docs_api.prototype.asc_SplitTable                = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return !!(logicDocument && logicDocument.SplitTable());
+	};
+	asc_docs_api.prototype.asc_CanFitTableToMargins      = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return !!(logicDocument && logicDocument.CanFitTableToMargins());
+	};
+	asc_docs_api.prototype.asc_IsTableFittedToMargins    = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return !!(logicDocument && logicDocument.IsTableFittedToMargins());
+	};
+	asc_docs_api.prototype.asc_FitTableToMargins         = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		return !!(logicDocument && logicDocument.FitTableToMargins());
+	};
 	asc_docs_api.prototype.Update_ParaInd                = function(paraInd, isRtl)
 	{
 		let updateFlag = this.WordControl.m_oHorRuler.UpdateParaInd(paraInd, isRtl);
@@ -15277,6 +15302,11 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['get_DocumentHeight']                        = asc_docs_api.prototype.get_DocumentHeight;
 	asc_docs_api.prototype['put_AddPageBreak']                          = asc_docs_api.prototype.put_AddPageBreak;
 	asc_docs_api.prototype['put_AddColumnBreak']                        = asc_docs_api.prototype.put_AddColumnBreak;
+	asc_docs_api.prototype['asc_CanSplitTable']                         = asc_docs_api.prototype.asc_CanSplitTable;
+	asc_docs_api.prototype['asc_SplitTable']                            = asc_docs_api.prototype.asc_SplitTable;
+	asc_docs_api.prototype['asc_CanFitTableToMargins']                  = asc_docs_api.prototype.asc_CanFitTableToMargins;
+	asc_docs_api.prototype['asc_IsTableFittedToMargins']                = asc_docs_api.prototype.asc_IsTableFittedToMargins;
+	asc_docs_api.prototype['asc_FitTableToMargins']                     = asc_docs_api.prototype.asc_FitTableToMargins;
 	asc_docs_api.prototype['Update_ParaInd']                            = asc_docs_api.prototype.Update_ParaInd;
 	asc_docs_api.prototype['Internal_Update_Ind_FirstLine']             = asc_docs_api.prototype.Internal_Update_Ind_FirstLine;
 	asc_docs_api.prototype['Internal_Update_Ind_Left']                  = asc_docs_api.prototype.Internal_Update_Ind_Left;
