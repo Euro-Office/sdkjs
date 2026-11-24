@@ -77,7 +77,8 @@ $(function ()
 			{
 				return oDoc;
 			},
-			asc_InsertPagesFromBytes : AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromBytes
+			asc_InsertPagesFromBytes  : AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromBytes,
+			asc_GetInsertPagesMaxSize : AscCommon.PDFEditorApi.prototype.asc_GetInsertPagesMaxSize
 		};
 	}
 
@@ -106,14 +107,23 @@ $(function ()
 		return result;
 	}
 
-	let aBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+	function ToBytes(sText)
+	{
+		let aResult = new Uint8Array(sText.length);
+		for (let i = 0; i < sText.length; i++)
+			aResult[i] = sText.charCodeAt(i);
+		return aResult;
+	}
+
+	let aBytes = ToBytes("%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n");
+	let Result = Asc.c_oAscPdfInsertPagesResult;
 
 	QUnit.module("PDF: insert the pages of another PDF");
 
 	QUnit.test("All pages are inserted in one undo step", function (assert)
 	{
 		let oDoc = CreateDoc(8, true);
-		assert.strictEqual(InsertPages(oDoc, 2, aBytes), true, "Insert reports success");
+		assert.strictEqual(InsertPages(oDoc, 2, aBytes), Result.Ok, "Insert reports success");
 		assert.strictEqual(oDoc.actions.length, 1, "One history action");
 		assert.strictEqual(oDoc.actions[0], AscDFH.historydescription_Pdf_AddPage, "The action is described as adding pages");
 		assert.strictEqual(oDoc.merges.length, 1, "The file is merged once");
@@ -148,18 +158,18 @@ $(function ()
 	QUnit.test("Nothing is inserted", function (assert)
 	{
 		let oDoc = CreateDoc(8, true);
-		assert.strictEqual(InsertPages(oDoc, 2, new Uint8Array(0)), false, "Empty file");
-		assert.strictEqual(InsertPages(oDoc, 2, null), false, "No file");
+		assert.strictEqual(InsertPages(oDoc, 2, new Uint8Array(0)), Result.NoFile, "Empty file");
+		assert.strictEqual(InsertPages(oDoc, 2, null), Result.NoFile, "No file");
 		assert.strictEqual(oDoc.actions.length, 0, "No history action without a file");
 
 		oDoc = CreateDoc(8, true, true);
-		assert.strictEqual(InsertPages(oDoc, 2, aBytes), false, "Pages locked by another user");
+		assert.strictEqual(InsertPages(oDoc, 2, aBytes), Result.Locked, "Pages locked by another user");
 		assert.strictEqual(oDoc.actions.length, 0, "No history action while locked");
 
 		oDoc = CreateDoc(8, false);
-		assert.strictEqual(InsertPages(oDoc, 2, aBytes), false, "The engine could not read the file");
+		assert.strictEqual(InsertPages(oDoc, 2, aBytes), Result.Damaged, "The engine could not read the file");
 
-		assert.strictEqual(AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromBytes.call(CreateApi(null), 2, aBytes), false, "No document");
+		assert.strictEqual(AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromBytes.call(CreateApi(null), 2, aBytes), Result.NoFile, "No document");
 	});
 
 	QUnit.test("A file the engine can't read leaves no history record", function (assert)
@@ -167,8 +177,8 @@ $(function ()
 		WithHistory(function(oHistory)
 		{
 			let oDoc = CreateDoc(8, false);
-			let isDone = AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromBytes.call(CreateApi(oDoc), 2, aBytes);
-			assert.strictEqual(isDone, false, "Insert reports failure");
+			let nResult = AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromBytes.call(CreateApi(oDoc), 2, aBytes);
+			assert.strictEqual(nResult, Result.Damaged, "Insert reports failure");
 			assert.deepEqual(oHistory.Points[0].Items, ["Earlier"], "The merge record is dropped, earlier items stay");
 			assert.deepEqual(oDoc.mergedPagesData, [{mergeName : "Merged_0"}], "The merge data is dropped, the earlier merge stays");
 			assert.deepEqual(oDoc.Viewer.navigated, [], "No navigation");
@@ -221,9 +231,9 @@ $(function ()
 			let aResults = [];
 			WithHistory(function()
 			{
-				AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromFile.call(CreateApi(oDoc), 2, function(isDone)
+				AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromFile.call(CreateApi(oDoc), 2, function(isDone, nResult)
 				{
-					aResults.push(isDone);
+					aResults.push(isDone, nResult);
 				});
 			});
 			return aResults;
@@ -231,16 +241,101 @@ $(function ()
 		try
 		{
 			sData = aBytes.buffer;
-			assert.deepEqual(InsertFromFile(CreateDoc(8, true)), [true], "Inserted");
-			assert.deepEqual(InsertFromFile(CreateDoc(8, false)), [false], "Damaged or protected file");
+			assert.deepEqual(InsertFromFile(CreateDoc(8, true)), [true, Result.Ok], "Inserted");
+			assert.deepEqual(InsertFromFile(CreateDoc(8, false)), [false, Result.Damaged], "Damaged file");
+			assert.deepEqual(InsertFromFile(CreateDoc(8, true, true)), [false, Result.Locked], "Locked by another user");
 			sData = null;
-			assert.deepEqual(InsertFromFile(CreateDoc(8, true)), [false], "The file could not be read");
+			assert.deepEqual(InsertFromFile(CreateDoc(8, true)), [false, Result.NoFile], "The file could not be read");
 			sData = undefined;
 			assert.deepEqual(InsertFromFile(CreateDoc(8, true)), [], "No file chosen: no callback");
 		}
 		finally
 		{
 			window["AscDesktopEditor"] = oOldDesktop;
+		}
+	});
+
+	QUnit.test("The reason why nothing was inserted", function (assert)
+	{
+		assert.strictEqual(typeof AscCommon.PDFEditorApi.prototype["asc_GetInsertPagesMaxSize"], "function", "asc_GetInsertPagesMaxSize is exported");
+		assert.strictEqual(Asc["c_oAscPdfInsertPagesResult"]["Locked"], Result.Locked, "Asc.c_oAscPdfInsertPagesResult is exported");
+
+		let oDoc = CreateDoc(8, true, true);
+		assert.strictEqual(InsertPages(oDoc, 2, aBytes), Result.Locked, "A merge lock is not reported as a damaged file");
+		assert.strictEqual(oDoc.merges.length, 0, "The engine is not called while locked");
+
+		let aEncrypted = ToBytes("%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R /Encrypt 5 0 R >>\n%%EOF\n");
+		assert.strictEqual(InsertPages(CreateDoc(8, false), 2, aEncrypted), Result.Password, "Encrypted file the engine can't read");
+		assert.strictEqual(InsertPages(CreateDoc(8, true), 2, aEncrypted), Result.Ok, "An encrypted file the engine can read is inserted");
+
+		assert.strictEqual(InsertPages(CreateDoc(8, false), 2, aBytes), Result.Damaged, "Not encrypted, not readable: damaged");
+		assert.strictEqual(InsertPages(CreateDoc(8, false), 2, ToBytes("PK\u0003\u0004 /Encrypt")), Result.Damaged, "Not a PDF at all");
+
+		// a linearized file has its first trailer at the start; padding puts the end out of the search range
+		let sPadding = new Array(1100000).join(" ");
+		let aLinearized = ToBytes("%PDF-1.5\ntrailer\n<< /Encrypt 9 0 R >>\n" + sPadding + "%%EOF\n");
+		assert.strictEqual(InsertPages(CreateDoc(8, false), 2, aLinearized), Result.Password, "/Encrypt at the start");
+		let aAtEnd = ToBytes("%PDF-1.5\n" + sPadding + "trailer\n<< /Encrypt 9 0 R >>\n%%EOF\n");
+		assert.strictEqual(InsertPages(CreateDoc(8, false), 2, aAtEnd), Result.Password, "/Encrypt at the end");
+	});
+
+	QUnit.test("Files larger than the limit are refused", function (assert)
+	{
+		let nMax = 100 * 1024 * 1024;
+		let oApi = CreateApi(CreateDoc(8, true));
+		assert.strictEqual(oApi.asc_GetInsertPagesMaxSize(), nMax, "100 MB by default");
+		oApi.maxChangesSize = 10 * 1024 * 1024;
+		assert.strictEqual(oApi.asc_GetInsertPagesMaxSize(), 10 * 1024 * 1024, "The server's smaller limit for changes");
+		oApi.maxChangesSize = 500 * 1024 * 1024;
+		assert.strictEqual(oApi.asc_GetInsertPagesMaxSize(), nMax, "A larger server limit does not raise it");
+
+		// only the length is read before the engine gets the file
+		let oDoc = CreateDoc(8, true);
+		let oHuge = {length : nMax + 1};
+		assert.strictEqual(InsertPages(oDoc, 2, oHuge), Result.TooLarge, "One byte over the limit");
+		assert.strictEqual(oDoc.merges.length, 0, "The engine is not called");
+		assert.strictEqual(oDoc.actions.length, 0, "No history action");
+
+		oDoc = CreateDoc(8, true);
+		assert.strictEqual(InsertPages(oDoc, 2, {length : nMax}), Result.Ok, "Exactly the limit is fine");
+	});
+
+	QUnit.test("The browser file dialog does not read a file over the limit", function (assert)
+	{
+		let fOldCreate = document.createElement;
+		let oOldDesktop = window["AscDesktopEditor"];
+		let fOldReader = window.FileReader;
+		let nReads = 0;
+		let oInput = null;
+		window["AscDesktopEditor"] = undefined;
+		window.FileReader = function() { nReads++; this.readAsArrayBuffer = function() {}; };
+		document.createElement = function(sTag)
+		{
+			let oElement = fOldCreate.call(document, sTag);
+			if (sTag === "input")
+			{
+				oInput = oElement;
+				oElement.click = function() {};
+			}
+			return oElement;
+		};
+		try
+		{
+			let aResults = [];
+			AscCommon.PDFEditorApi.prototype.asc_InsertPagesFromFile.call(CreateApi(CreateDoc(8, true)), 2, function(isDone, nResult)
+			{
+				aResults.push(isDone, nResult);
+			});
+			Object.defineProperty(oInput, "files", {value : [{size : 100 * 1024 * 1024 + 1}]});
+			oInput.onchange();
+			assert.deepEqual(aResults, [false, Result.TooLarge], "Too large");
+			assert.strictEqual(nReads, 0, "The file is not read");
+		}
+		finally
+		{
+			document.createElement = fOldCreate;
+			window["AscDesktopEditor"] = oOldDesktop;
+			window.FileReader = fOldReader;
 		}
 	});
 });

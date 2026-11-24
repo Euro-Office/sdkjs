@@ -803,16 +803,94 @@
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
 	/**
+	 * The result of asc_InsertPagesFromBytes, also given to the callback of asc_InsertPagesFromFile.
+	 * @enum {number}
+	 */
+	const c_oAscPdfInsertPagesResult = {
+		Ok       : 0,
+		NoFile   : 1, // no file or an empty file, or no document is open
+		Locked   : 2, // pages are being inserted by another user (merge lock): try again later
+		TooLarge : 3, // larger than asc_GetInsertPagesMaxSize
+		Password : 4, // the engine could not read the file and it is encrypted (password or restrictions)
+		Damaged  : 5  // the engine could not read the file: damaged or not a PDF
+	};
+	window['Asc']['c_oAscPdfInsertPagesResult'] = window['Asc'].c_oAscPdfInsertPagesResult = c_oAscPdfInsertPagesResult;
+	c_oAscPdfInsertPagesResult['Ok']       = c_oAscPdfInsertPagesResult.Ok;
+	c_oAscPdfInsertPagesResult['NoFile']   = c_oAscPdfInsertPagesResult.NoFile;
+	c_oAscPdfInsertPagesResult['Locked']   = c_oAscPdfInsertPagesResult.Locked;
+	c_oAscPdfInsertPagesResult['TooLarge'] = c_oAscPdfInsertPagesResult.TooLarge;
+	c_oAscPdfInsertPagesResult['Password'] = c_oAscPdfInsertPagesResult.Password;
+	c_oAscPdfInsertPagesResult['Damaged']  = c_oAscPdfInsertPagesResult.Damaged;
+
+	// The inserted file is kept about three times in the editor (the bytes, the parts in the history, the engine)
+	// and is sent to every co-author as part of the changes. 100 MB is the default size limit of the document server
+	// for documents (AscCommon.c_oAscDocumentUploadProp.MaxFileSize), so a larger file could not be opened on its own.
+	const INSERT_PAGES_MAX_SIZE = 104857600;
+	// how far from the start and the end of the file the trailer with /Encrypt is looked for
+	const PDF_TRAILER_SEARCH_SIZE = 1048576;
+
+	/**
+	 * Whether the bytes contain the ASCII text in the given range.
+	 * @param {Uint8Array} aBytes
+	 * @param {string} sText
+	 * @param {number} nStart
+	 * @param {number} nEnd
+	 * @returns {boolean}
+	 */
+	function HasPdfToken(aBytes, sText, nStart, nEnd) {
+		let nFirst = sText.charCodeAt(0);
+		let nLast = Math.min(nEnd, aBytes.length) - sText.length;
+		for (let i = Math.max(0, nStart); i <= nLast; i++) {
+			if (aBytes[i] !== nFirst)
+				continue;
+			let j = 1;
+			while (j < sText.length && aBytes[i + j] === sText.charCodeAt(j))
+				j++;
+			if (j === sText.length)
+				return true;
+		}
+		return false;
+	}
+	/**
+	 * Why the engine could not read a PDF: an encrypted file has /Encrypt in its trailer (at the end of the file, or at
+	 * the start of a linearized file; the dictionary of an xref stream is not compressed).
+	 * @param {Uint8Array} aBytes
+	 * @returns {number} c_oAscPdfInsertPagesResult.Password or Damaged
+	 */
+	function GetPdfReadError(aBytes) {
+		if (!HasPdfToken(aBytes, "%PDF-", 0, 1024))
+			return c_oAscPdfInsertPagesResult.Damaged;
+		if (HasPdfToken(aBytes, "/Encrypt", 0, PDF_TRAILER_SEARCH_SIZE)
+			|| HasPdfToken(aBytes, "/Encrypt", aBytes.length - PDF_TRAILER_SEARCH_SIZE, aBytes.length))
+			return c_oAscPdfInsertPagesResult.Password;
+		return c_oAscPdfInsertPagesResult.Damaged;
+	}
+	/**
+	 * The largest file asc_InsertPagesFromBytes accepts, in bytes: 100 MB, or the server's limit for the changes of a
+	 * document (maxChangesSize) when that is smaller, because the file is sent to the co-authors as a change.
+	 * @returns {number}
+	 */
+	PDFEditorApi.prototype.asc_GetInsertPagesMaxSize = function() {
+		let nMaxChangesSize = this.maxChangesSize;
+		if (typeof nMaxChangesSize === "number" && nMaxChangesSize > 0 && nMaxChangesSize < INSERT_PAGES_MAX_SIZE)
+			return nMaxChangesSize;
+		return INSERT_PAGES_MAX_SIZE;
+	};
+	/**
 	 * Inserts all pages of another PDF (as bytes) at a position, with their annotations and form fields; one undo step.
 	 * Afterwards the first new page is shown and selected in the thumbnails.
 	 * @param {number} [nPos] the index of the first new page; default: at the end
 	 * @param {Uint8Array} aBytes
-	 * @returns {boolean} false if nothing was inserted (for example a damaged or password-protected file)
+	 * @returns {number} Asc.c_oAscPdfInsertPagesResult: Ok, or why nothing was inserted
 	 */
 	PDFEditorApi.prototype.asc_InsertPagesFromBytes = function(nPos, aBytes) {
 		let oDoc = this.getPDFDoc();
-		if (!oDoc || !aBytes || !aBytes.length || oDoc.IsMergeLock())
-			return false;
+		if (!oDoc || !aBytes || !aBytes.length)
+			return c_oAscPdfInsertPagesResult.NoFile;
+		if (oDoc.IsMergeLock())
+			return c_oAscPdfInsertPagesResult.Locked;
+		if (aBytes.length > this.asc_GetInsertPagesMaxSize())
+			return c_oAscPdfInsertPagesResult.TooLarge;
 		if (undefined === nPos || null === nPos || nPos < 0 || nPos > oDoc.GetPagesCount())
 			nPos = oDoc.GetPagesCount();
 
@@ -835,27 +913,31 @@
 			}
 		}, AscDFH.historydescription_Pdf_AddPage, this);
 
-		if (isDone) {
-			// The thumbnails lay out the new pages only when they are drawn next: lay them out now, so that they
-			// scroll to the first new page and select it when the page view shows it.
-			let oViewer = oDoc.Viewer;
-			let oThumbnails = oViewer ? oViewer.thumbnails : null;
-			if (oThumbnails && oThumbnails.isNeedResize())
-				oThumbnails.resize(false);
-			oViewer && oViewer.navigateToPage(nPos);
-		}
-		return isDone;
+		if (!isDone)
+			return GetPdfReadError(aBytes);
+
+		// The thumbnails lay out the new pages only when they are drawn next: lay them out now, so that they
+		// scroll to the first new page and select it when the page view shows it.
+		let oViewer = oDoc.Viewer;
+		let oThumbnails = oViewer ? oViewer.thumbnails : null;
+		if (oThumbnails && oThumbnails.isNeedResize())
+			oThumbnails.resize(false);
+		oViewer && oViewer.navigateToPage(nPos);
+		return c_oAscPdfInsertPagesResult.Ok;
 	};
 	/**
 	 * Asks for a PDF file and inserts its pages at a position
 	 * @param {number} [nPos] the index of the first new page; default: at the end
-	 * @param {function(boolean)} [fCallback] called after a file was chosen: false if no pages were inserted
+	 * @param {function(boolean, number)} [fCallback] called after a file was chosen: whether pages were inserted and
+	 * the Asc.c_oAscPdfInsertPagesResult
 	 */
 	PDFEditorApi.prototype.asc_InsertPagesFromFile = function(nPos, fCallback) {
 		let t = this;
+		let fDone = function(nResult) {
+			fCallback && fCallback(nResult === c_oAscPdfInsertPagesResult.Ok, nResult);
+		};
 		let fInsert = function(aBytes) {
-			let isDone = !!aBytes && t.asc_InsertPagesFromBytes(nPos, aBytes);
-			fCallback && fCallback(isDone);
+			fDone(aBytes ? t.asc_InsertPagesFromBytes(nPos, aBytes) : c_oAscPdfInsertPagesResult.NoFile);
 		};
 		let oDesktop = window["AscDesktopEditor"];
 		if (oDesktop && oDesktop["OpenFilenameDialog"] && oDesktop["loadLocalFile"]) {
@@ -878,6 +960,11 @@
 			let oFile = oInput.files && oInput.files[0];
 			if (!oFile)
 				return;
+			// do not read a file into memory that is refused anyway
+			if (oFile.size > t.asc_GetInsertPagesMaxSize()) {
+				fDone(c_oAscPdfInsertPagesResult.TooLarge);
+				return;
+			}
 			let oReader = new FileReader();
 			oReader.onload = function() {
 				fInsert(new Uint8Array(oReader.result));
@@ -5395,6 +5482,7 @@
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
 	PDFEditorApi.prototype['asc_InsertPagesFromBytes']     = PDFEditorApi.prototype.asc_InsertPagesFromBytes;
 	PDFEditorApi.prototype['asc_InsertPagesFromFile']      = PDFEditorApi.prototype.asc_InsertPagesFromFile;
+	PDFEditorApi.prototype['asc_GetInsertPagesMaxSize']    = PDFEditorApi.prototype.asc_GetInsertPagesMaxSize;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
