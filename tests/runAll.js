@@ -99,6 +99,7 @@ const allTests = [
 	'word/plugins/pluginsApi.html',
 	'word/revisions/document-content.html',
 	'word/revisions/paragraph.html',
+	'word/revisions/changes-list.html',
 	'word/merge-documents/mergeDocuments.html',
 	'word/math-autocorrection/math-autocorrection.html',
 	'word/math-ml/math-ml.html',
