@@ -1898,10 +1898,12 @@ background-repeat: no-repeat;\
 				{
 					Paragraph.SpellChecker.SpellCheckResponse(Obj["RecalcId"], Obj["usrCorrect"]);
 					Paragraph.ReDraw();
+					this.private_SendNextWordVariants(Paragraph);
 				}
 				else if ("suggest" === Type)
 				{
 					Paragraph.SpellChecker.SuggestResponse(Obj["RecalcId"], Obj["ElementId"], Obj["usrSuggest"][0]);
+					this.private_SendNextWordVariants(Paragraph);
 					this.sync_SpellCheckVariantsFound();
 				}
 			}
@@ -7131,8 +7133,24 @@ background-repeat: no-repeat;\
 		this.sendEvent("asc_onSpellCheckVariantsFound");
 	};
 
-	asc_docs_api.prototype.asc_replaceMisspelledWord = function(Word, SpellCheckProperty)
+	/**
+	 * @param {string} Word - The replacement
+	 * @param {AscCommon.asc_CSpellCheckProperty} SpellCheckProperty - The misspelled word
+	 * @param {boolean} [bAll=false] - Replace this misspelled word everywhere in the document
+	 * @returns {{Replaced: number, Skipped: number}|undefined} with bAll, how many words were replaced and how many
+	 * were skipped because they cannot be edited (locked content control, paragraph locked by another user)
+	 */
+	asc_docs_api.prototype.asc_replaceMisspelledWord = function(Word, SpellCheckProperty, bAll)
 	{
+		if (true === bAll)
+		{
+			let result = this.WordControl.m_oLogicDocument.ReplaceAllMisspelledWords(SpellCheckProperty.Word, Word);
+			return {
+				"Replaced" : result.Replaced,
+				"Skipped"  : result.Skipped
+			};
+		}
+
 		var ParaId = SpellCheckProperty.ParaId;
 
 		var Paragraph = g_oTableId.Get_ById(ParaId);
@@ -7149,6 +7167,127 @@ background-repeat: no-repeat;\
 			this.WordControl.m_oLogicDocument.UpdateSelection();
 			this.WordControl.m_oLogicDocument.FinalizeAction();
 		}
+	};
+
+	/**
+	 * Selects the next misspelled word after the cursor, like asc_nextWord of the spreadsheet editor.
+	 * The suggestions for the word are sent with asc_onSpellCheckVariantsFound(asc_CSpellCheckProperty): at once if
+	 * they are known, otherwise when the spellchecker has answered.
+	 * Only words that the background check has already marked are found. If there is none, the word at the cursor
+	 * is checked at once, the background check leaves it for later.
+	 * @returns {boolean} false if the document has no misspelled words (yet)
+	 */
+	asc_docs_api.prototype.asc_nextWord = function()
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		let found = logicDocument ? logicDocument.SelectNextMisspelledWord() : null;
+		if (logicDocument && !found)
+			logicDocument.Spelling.CheckCurrentWord(logicDocument.GetCurrentParagraph(false, false));
+		this.spellNextWord = found ? {Paragraph : found.Paragraph, Element : found.Element, Word : found.Element.GetWord()} : null;
+		this.private_SendNextWordVariants(null);
+		return !!found;
+	};
+
+	/**
+	 * Sends the suggestions for the word selected by asc_nextWord, or asks the spellchecker for them
+	 * @param {?AscWord.Paragraph} paragraph - The paragraph the spellchecker has just answered for
+	 */
+	asc_docs_api.prototype.private_SendNextWordVariants = function(paragraph)
+	{
+		let nextWord = this.spellNextWord;
+		if (!nextWord || (paragraph && paragraph !== nextWord.Paragraph))
+			return;
+
+		let spellChecker = nextWord.Paragraph.SpellChecker;
+		let element      = nextWord.Element;
+		if (-1 === spellChecker.GetIndexByElement(element))
+		{
+			// The paragraph was checked again meanwhile and has new elements: take the word that is still selected
+			element = this.private_GetSelectedMisspelledElement(nextWord.Paragraph);
+			if (!element || element.GetWord() !== nextWord.Word)
+			{
+				this.spellNextWord = null;
+				return;
+			}
+			nextWord.Element = element;
+		}
+
+		// The answer for the paragraph comes first, then this is called again
+		if (spellChecker.GetDocumentSpellChecker().IsWaitingParagraph(nextWord.Paragraph))
+			return;
+
+		if (!element.IsWrong())
+		{
+			this.spellNextWord = null;
+			return;
+		}
+
+		let variants = element.GetVariants();
+		if (!variants)
+		{
+			if (spellChecker.HaveDictionary(element.GetLang()))
+			{
+				spellChecker.CheckVariants(element);
+				return;
+			}
+			variants = [];
+		}
+
+		this.spellNextWord = null;
+		this.sendEvent("asc_onSpellCheckVariantsFound", new AscCommon.asc_CSpellCheckProperty(element.GetWord(), false, variants, nextWord.Paragraph.GetId(), element));
+	};
+
+	/**
+	 * @param {AscWord.Paragraph} paragraph
+	 * @returns {?AscWord.CParagraphSpellCheckerElement} the misspelled word at the selection of the paragraph
+	 */
+	asc_docs_api.prototype.private_GetSelectedMisspelledElement = function(paragraph)
+	{
+		let startPos, endPos;
+		if (paragraph.IsSelectionUse())
+		{
+			startPos = paragraph.Get_ParaContentPos(true, true);
+			endPos   = paragraph.Get_ParaContentPos(true, false);
+		}
+		else
+		{
+			startPos = endPos = paragraph.Get_ParaContentPos(false, false);
+		}
+		return paragraph.SpellChecker.GetElementByRange(startPos, endPos);
+	};
+
+	/**
+	 * The progress of the background spellcheck. The progress is also sent with
+	 * asc_onSpellCheckProgress(checked, total, isComplete, isStopped) while the check runs, so there is no need to poll.
+	 * @param {boolean} [withLanguages=false] - Also list the text languages without a dictionary (walks the document)
+	 * @returns {?{Checked: number, Total: number, IsComplete: boolean, IsStopped: boolean, MissingLanguages: number[]}}
+	 */
+	asc_docs_api.prototype.asc_GetSpellCheckState = function(withLanguages)
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		if (!logicDocument)
+			return null;
+
+		let state = logicDocument.GetSpellCheckState(withLanguages);
+		return {
+			"Checked"          : state.Checked,
+			"Total"            : state.Total,
+			"IsComplete"       : state.IsComplete,
+			"IsStopped"        : state.IsStopped,
+			"MissingLanguages" : state.MissingLanguages
+		};
+	};
+
+	/**
+	 * By default the background check stops after 2000 errors. The spellcheck panel turns this limit off while it
+	 * is open, so that it can step through all the errors of the document.
+	 * @param {boolean} isLimit
+	 */
+	asc_docs_api.prototype.asc_setSpellCheckErrorsLimit = function(isLimit)
+	{
+		let logicDocument = this.private_GetLogicDocument();
+		if (logicDocument)
+			logicDocument.Spelling.SetErrorsLimit(false !== isLimit);
 	};
 
 	asc_docs_api.prototype.asc_ignoreMisspelledWord = function(SpellCheckProperty, bAll)
@@ -15371,6 +15510,9 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['sync_SpellCheckVariantsFound']              = asc_docs_api.prototype.sync_SpellCheckVariantsFound;
 	asc_docs_api.prototype['asc_replaceMisspelledWord']                 = asc_docs_api.prototype.asc_replaceMisspelledWord;
 	asc_docs_api.prototype['asc_ignoreMisspelledWord']                  = asc_docs_api.prototype.asc_ignoreMisspelledWord;
+	asc_docs_api.prototype['asc_nextWord']                              = asc_docs_api.prototype.asc_nextWord;
+	asc_docs_api.prototype['asc_GetSpellCheckState']                    = asc_docs_api.prototype.asc_GetSpellCheckState;
+	asc_docs_api.prototype['asc_setSpellCheckErrorsLimit']              = asc_docs_api.prototype.asc_setSpellCheckErrorsLimit;
     asc_docs_api.prototype['asc_spellCheckAddToDictionary']       		= asc_docs_api.prototype.asc_spellCheckAddToDictionary;
     asc_docs_api.prototype['asc_spellCheckClearDictionary']       		= asc_docs_api.prototype.asc_spellCheckClearDictionary;
 	asc_docs_api.prototype['asc_setDefaultLanguage']                    = asc_docs_api.prototype.asc_setDefaultLanguage;

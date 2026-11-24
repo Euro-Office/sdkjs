@@ -45,6 +45,9 @@
 		this.Use          = true;
 		this.Active       = 1;
 		this.ErrorsExceed = false;
+		this.ErrorsLimit  = true;  // Stop the check after DOCUMENT_SPELLING_MAX_ERRORS errors
+		this.PassTotal    = 0;     // Paragraphs in the current check pass, for the progress
+		this.Progress     = null;  // The progress last sent to the interface
 		this.Paragraphs  = {}; // Параграфы, в которых есть ошибки в орфографии (объект с ключом - Id параграфа)
 		this.Words       = {}; // Слова, которые пользователь решил пропустить(нажал "пропустить все") при проверке орфографии
 		this.CheckPara   = {}; // Параграфы, в которых нужно запустить проверку орфографии
@@ -86,6 +89,17 @@
 	CDocumentSpellChecker.prototype.IsErrorsExceed = function()
 	{
 		return this.ErrorsExceed;
+	};
+	/**
+	 * Turns the limit of DOCUMENT_SPELLING_MAX_ERRORS errors on or off. Without the limit the whole document is
+	 * checked, which the spellcheck panel needs to step through all the errors.
+	 * @param {boolean} isLimit
+	 */
+	CDocumentSpellChecker.prototype.SetErrorsLimit = function(isLimit)
+	{
+		this.ErrorsLimit = isLimit;
+		if (!isLimit)
+			this.ErrorsExceed = false;
 	};
 	CDocumentSpellChecker.prototype.AddParagraphWithErrors = function(oParagraph)
 	{
@@ -169,6 +183,70 @@
 			oParagraph.SpellChecker.ResetElementsWithCurrentState();
 			oParagraph.SpellChecker.Check();
 		}
+
+		this.private_SendProgress();
+	};
+	/**
+	 * The paragraphs that are not checked yet: queued for a check, waiting for the answer of the spellchecker,
+	 * or with a word at the cursor left for later
+	 * @returns {number}
+	 */
+	CDocumentSpellChecker.prototype.GetPendingParagraphsCount = function()
+	{
+		let ids   = {};
+		let count = 0;
+		[this.CheckPara, this.WaitingParagraphs, this.CurPara].forEach(function(paragraphs)
+		{
+			for (let id in paragraphs)
+			{
+				if (!ids[id])
+				{
+					ids[id] = true;
+					++count;
+				}
+			}
+		});
+		return count;
+	};
+	/**
+	 * The progress of the current check pass. Total is the largest number of pending paragraphs since the last
+	 * complete check, so the document is not walked to count its paragraphs.
+	 * @returns {{Checked: number, Total: number, IsComplete: boolean, IsStopped: boolean}}
+	 */
+	CDocumentSpellChecker.prototype.GetProgress = function()
+	{
+		let pending = this.GetPendingParagraphsCount();
+		if (!pending)
+			this.PassTotal = 0;
+		else if (pending > this.PassTotal)
+			this.PassTotal = pending;
+
+		return {
+			Checked    : this.PassTotal - pending,
+			Total      : this.PassTotal,
+			IsComplete : 0 === pending,
+			IsStopped  : !this.Use || !this.IsOn()
+		};
+	};
+	/**
+	 * Sends asc_onSpellCheckProgress(checked, total, isComplete, isStopped) when the progress has changed
+	 */
+	CDocumentSpellChecker.prototype.private_SendProgress = function()
+	{
+		let progress = this.GetProgress();
+		let last     = this.Progress;
+		if (last
+			&& last.Checked === progress.Checked
+			&& last.Total === progress.Total
+			&& last.IsComplete === progress.IsComplete
+			&& last.IsStopped === progress.IsStopped)
+			return;
+
+		this.Progress = progress;
+
+		let api = Asc.editor || window.editor;
+		if (api && api.sendEvent)
+			api.sendEvent("asc_onSpellCheckProgress", progress.Checked, progress.Total, progress.IsComplete, progress.IsStopped);
 	};
 	CDocumentSpellChecker.prototype.private_HaveWaitingParagraphs = function()
 	{
@@ -182,7 +260,7 @@
 	CDocumentSpellChecker.prototype.private_CheckErrorsExceed = function()
 	{
 		// TODO: Послать сообщение
-		if (this.GetErrorsCount() > DOCUMENT_SPELLING_MAX_ERRORS)
+		if (this.ErrorsLimit && this.GetErrorsCount() > DOCUMENT_SPELLING_MAX_ERRORS)
 			this.ErrorsExceed = true;
 	};
 	CDocumentSpellChecker.prototype.AddCurrentParagraph = function(oParagraph)
@@ -204,6 +282,32 @@
 			delete this.CurPara[sId];
 			oParagraph.SpellChecker.ResetElementsWithCurrentState();
 			oParagraph.SpellChecker.Check(undefined, true);
+		}
+	};
+	/**
+	 * Checks the paragraph at once, also the word at the cursor. The background check leaves the word at the cursor
+	 * for later because it may still be typed, and keeps the paragraph pending until the cursor leaves the word.
+	 * The spellcheck panel needs this when it finds no more words: the word it has just changed has the cursor, so
+	 * otherwise the check never completes.
+	 * @param {AscWord.Paragraph} paragraph
+	 */
+	CDocumentSpellChecker.prototype.CheckCurrentWord = function(paragraph)
+	{
+		if (!this.IsOn() || !paragraph)
+			return;
+
+		let id = paragraph.GetId();
+		if (this.CheckPara[id])
+		{
+			delete this.CheckPara[id];
+			paragraph.ContinueSpellCheck(true);
+		}
+
+		if (this.CurPara[id])
+		{
+			delete this.CurPara[id];
+			paragraph.SpellChecker.ResetElementsWithCurrentState();
+			paragraph.SpellChecker.Check(undefined, true);
 		}
 	};
 	CDocumentSpellChecker.prototype.AddWaitingParagraph = function(oParagraph, RecalcId, Words, Langs)

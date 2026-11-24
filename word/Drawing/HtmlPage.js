@@ -1756,7 +1756,15 @@ function CEditorPage(api)
 		}
 	};
 
-	this.ScrollToAbsolutePosition = function(x, y, page, isBottom)
+	/**
+	 * Scrolls the view so that the given position is at the top of the screen
+	 * @param {number} x
+	 * @param {number} y
+	 * @param {number} page
+	 * @param {boolean} [isBottom=false] - at the bottom of the screen instead
+	 * @param {boolean} [isCenter=false] - in the middle of the screen instead
+	 */
+	this.ScrollToAbsolutePosition = function(x, y, page, isBottom, isCenter)
 	{
 		let pos = this.m_oDrawingDocument.ConvertCoordsToCursor(x, y, page);
 		if (pos.Error)
@@ -1764,6 +1772,8 @@ function CEditorPage(api)
 
 		if (true === isBottom)
 			pos.Y -= AscCommon.AscBrowser.convertToRetinaValue(this.m_oEditor.HtmlElement.height);
+		else if (true === isCenter)
+			pos.Y -= AscCommon.AscBrowser.convertToRetinaValue(this.m_oEditor.HtmlElement.height) / 2;
 
 		// TODO: X position?
 		if (0 !== pos.Y)
