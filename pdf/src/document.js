@@ -7510,9 +7510,12 @@ var CPresentation = CPresentation || function(){};
             return a - b;
         });
 
-        let aUint8Array = this.Viewer.file.nativeFile["SplitPages"](aOriginIndexes, oDoc.Viewer.SaveForSplit()); 
-        let base64 = AscCommon.Base64.encode(aUint8Array, 0, aUint8Array.length);
-        return bytesToBase64 != false ? base64 : aUint8Array;
+        let aUint8Array = this.Viewer.file.nativeFile["SplitPages"](aOriginIndexes, oDoc.Viewer.SaveForSplit());
+        // base64 is about 4/3 of the bytes as a JS string (2 bytes per char): only make it when it is asked for
+        if (bytesToBase64 == false)
+            return aUint8Array;
+
+        return AscCommon.Base64.encode(aUint8Array, 0, aUint8Array.length);
     };
     CPDFDoc.prototype.MergePagesBinary = function(nInsertPos, aUint8Array) {
         let oFile = this.Viewer.file;
