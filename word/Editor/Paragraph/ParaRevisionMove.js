@@ -53,7 +53,7 @@ function CParaRevisionMove(isStart, isFrom, sName, oInfo)
 	}
 
 	// Добавляем данный класс в таблицу Id (обязательно в конце конструктора)
-	g_oTableId.Add(this, this.Id);
+	AscCommon.g_oTableId.Add(this, this.Id);
 }
 
 CParaRevisionMove.prototype = Object.create(CParagraphContentBase.prototype);
@@ -146,6 +146,22 @@ CParaRevisionMove.prototype.CheckRevisionsChanges = function(oChecker, oContentP
 CParaRevisionMove.prototype.GetReviewInfo = function()
 {
 	return this.ReviewInfo;
+};
+/**
+ * Replaces the author info of the mark, recorded as a change for undo, saving and co-editing
+ * @param {AscWord.ReviewInfo} oReviewInfo
+ */
+CParaRevisionMove.prototype.SetReviewInfo = function(oReviewInfo)
+{
+	AscCommon.History.Add(new CChangesParaRevisionMoveReviewInfo(this, this.ReviewInfo, oReviewInfo));
+	this.ReviewInfo = oReviewInfo;
+	this.private_UpdateTrackRevisions();
+};
+CParaRevisionMove.prototype.private_UpdateTrackRevisions = function()
+{
+	let oParagraph = this.GetParagraph();
+	if (oParagraph)
+		oParagraph.updateTrackRevisions();
 };
 CParaRevisionMove.prototype.PreDelete = function()
 {
@@ -339,6 +355,36 @@ CRunRevisionMove.prototype.RemoveThisMarkFromDocument = function()
 	var oRun = this.GetRun();
 	if (oRun)
 		oRun.RemoveElement(this);
+};
+
+AscDFH.changesFactory[AscDFH.historyitem_ParaRevisionMove_ReviewInfo]     = CChangesParaRevisionMoveReviewInfo;
+AscDFH.changesRelationMap[AscDFH.historyitem_ParaRevisionMove_ReviewInfo] = [AscDFH.historyitem_ParaRevisionMove_ReviewInfo];
+
+/**
+ * Author info of a move mark
+ * @constructor
+ * @extends {AscDFH.CChangesBaseObjectProperty}
+ */
+function CChangesParaRevisionMoveReviewInfo(Class, Old, New, Color)
+{
+	AscDFH.CChangesBaseObjectProperty.call(this, Class, Old, New, Color);
+}
+CChangesParaRevisionMoveReviewInfo.prototype = Object.create(AscDFH.CChangesBaseObjectProperty.prototype);
+CChangesParaRevisionMoveReviewInfo.prototype.constructor = CChangesParaRevisionMoveReviewInfo;
+CChangesParaRevisionMoveReviewInfo.prototype.Type = AscDFH.historyitem_ParaRevisionMove_ReviewInfo;
+CChangesParaRevisionMoveReviewInfo.prototype.private_CreateObject = function()
+{
+	return new AscWord.ReviewInfo();
+};
+CChangesParaRevisionMoveReviewInfo.prototype.private_IsCreateEmptyObject = function()
+{
+	return false;
+};
+CChangesParaRevisionMoveReviewInfo.prototype.private_SetValue = function(Value)
+{
+	let oMark = this.Class;
+	oMark.ReviewInfo = Value;
+	oMark.private_UpdateTrackRevisions();
 };
 
 //--------------------------------------------------------export----------------------------------------------------

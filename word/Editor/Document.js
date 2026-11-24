@@ -14256,9 +14256,9 @@ CDocument.prototype.RemovePersonalInformation = function(sName)
 		for (let nIndex = 0, nCount = arrContent ? arrContent.length : 0; nIndex < nCount; ++nIndex)
 		{
 			let oItem = arrContent[nIndex];
-			// move marks have no change of their own, their info is replaced directly
+			// the start marks keep the author of a move, the end marks inside runs have no author in the file
 			if (para_RevisionMove === oItem.Type && oItem.ReviewInfo)
-				oItem.ReviewInfo = anonymizeReviewInfo(oItem.ReviewInfo);
+				oItem.SetReviewInfo(anonymizeReviewInfo(oItem.ReviewInfo));
 			else if (oItem.Content && para_Run !== oItem.Type)
 				anonymizeMoveMarks(oItem.Content);
 		}

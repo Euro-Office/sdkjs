@@ -3376,6 +3376,11 @@
 	window['AscDFH'].historyitem_CoreProperties = window['AscDFH'].historyitem_type_Core | 1;
 
 	//------------------------------------------------------------------------------------------------------------------
+	// Types of changes of CParaRevisionMove
+	//------------------------------------------------------------------------------------------------------------------
+	window['AscDFH'].historyitem_ParaRevisionMove_ReviewInfo = window['AscDFH'].historyitem_type_ParaRevisionMove | 1;
+
+	//------------------------------------------------------------------------------------------------------------------
 	// Типы изменений класса CSlicerView
 	//------------------------------------------------------------------------------------------------------------------
 	window['AscDFH'].historyitem_SlicerViewName = window['AscDFH'].historyitem_type_SlicerView | 1;

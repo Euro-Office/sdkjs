@@ -325,4 +325,58 @@ $(function ()
 		assert.strictEqual(lastParagraph.GetParaEndRun().GetReviewInfo().GetUserName(), "Bob", "Undo brings the author of the last paragraph mark back");
 		assert.strictEqual(cellParagraph.GetParaEndRun().GetReviewInfo().GetUserName(), "Alice", "Undo brings the author of the cell paragraph mark back");
 	});
+
+	QUnit.test("The author of moved text is replaced by a recorded change", function (assert)
+	{
+		// the change is what the save, the co-authors and undo see
+		AscTest.ClearDocument();
+
+		let paragraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(paragraph);
+		let moveStart = new AscCommon.CParaRevisionMove(true, true, "move1", createInfo("Alice", 1000));
+		paragraph.AddToContent(0, moveStart);
+		paragraph.AddToContentToEnd(createRun("moved", reviewtype_Remove, "Alice"));
+		let moveEnd = new AscCommon.CParaRevisionMove(false, true, "move1", createInfo("Alice", 1000));
+		paragraph.AddToContentToEnd(moveEnd);
+
+		AscCommon.History.Clear();
+		logicDocument.StartAction(AscDFH.historydescription_Document_RemovePersonalInformation);
+		logicDocument.RemovePersonalInformation("Author");
+		logicDocument.FinalizeAction();
+
+		let info = moveStart.GetReviewInfo();
+		assert.strictEqual(info.GetUserName() + "|" + info.GetUserId() + "|" + info.GetDateTime(), "Author||1000", "The move mark has the new author and keeps its date");
+
+		let change = null;
+		AscCommon.History.Points[AscCommon.History.Index].Items.forEach(function(item)
+		{
+			if (AscDFH.historyitem_ParaRevisionMove_ReviewInfo === item.Data.Type && moveStart === item.Data.Class)
+				change = item.Data;
+		});
+		assert.ok(change, "The new author of the move mark is recorded as a change");
+		if (change)
+		{
+			// replay onto the mark as it was opened from the original file
+			let writer = AscTest.GetBinaryWriter();
+			writer.WriteString2(change.Class.Get_Id());
+			writer.WriteLong(change.Type);
+			change.WriteToBinary(writer);
+
+			moveStart.ReviewInfo = createInfo("Alice", 1000);
+
+			let reader   = AscTest.GetBinaryReader(writer);
+			let classId  = reader.GetString2();
+			let type     = reader.GetLong();
+			let replayed = new AscDFH.changesFactory[type](AscCommon.g_oTableId.Get_ById(classId));
+			replayed.ReadFromBinary(reader);
+			replayed.Redo();
+			assert.strictEqual(moveStart.GetReviewInfo().GetUserName() + "|" + moveStart.GetReviewInfo().GetDateTime(), "Author|1000", "The replayed change gives the move mark the new author");
+		}
+
+		logicDocument.Document_Undo();
+		assert.strictEqual(moveStart.GetReviewInfo().GetUserName(), "Alice", "Undo brings the author of the move mark back");
+		assert.strictEqual(moveEnd.GetReviewInfo().GetUserName(), "Alice", "Undo brings the author of the end mark back");
+		logicDocument.Document_Redo();
+		assert.strictEqual(moveStart.GetReviewInfo().GetUserName(), "Author", "Redo replaces it again");
+	});
 });
