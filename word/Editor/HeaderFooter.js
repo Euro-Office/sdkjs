@@ -134,6 +134,55 @@ CHeaderFooter.prototype =
 		return this.RecalcInfo.CurPage;
 	},
 
+	/**
+	 * The header/footer is now shown on the given page (for example after "Link to previous"), but it was calculated
+	 * for another page. Make the given page the current one as soon as it is calculated
+	 * @param {number} pageAbs
+	 */
+	RequestPage : function(pageAbs)
+	{
+		this.RecalcInfo.RequestedPage = pageAbs;
+	},
+
+	/**
+	 * Go back to the page that was current before the header/footer was used on another page for a moment (drawing,
+	 * floating objects). While the document is being recalculated that page may not be there yet; then the edited
+	 * header/footer waits for it, otherwise it would stay on the other page.
+	 * @param {number} pageAbs
+	 */
+	RestorePage : function(pageAbs)
+	{
+		if (-1 === pageAbs)
+			return;
+
+		this.Set_Page(pageAbs);
+		if (pageAbs !== this.RecalcInfo.CurPage
+			&& -1 === this.RecalcInfo.RequestedPage
+			&& this.IsThisElementCurrent())
+			this.RequestPage(pageAbs);
+	},
+
+	/**
+	 * The requested page was not calculated again (nothing has changed there), so switch to it here
+	 * @param {number} pageAbs
+	 */
+	ApplyRequestedPage : function(pageAbs)
+	{
+		let recalcObj = this.RecalcInfo.RecalcObj[pageAbs];
+		if (pageAbs !== this.RecalcInfo.RequestedPage || !recalcObj)
+			return;
+
+		if (pageAbs !== this.RecalcInfo.CurPage)
+		{
+			this.RecalcInfo.CurPage = pageAbs;
+			this.Content.LoadRecalculateObject(recalcObj);
+		}
+
+		this.RecalcInfo.RequestedPage = -1;
+		if (docpostype_HdrFtr === this.LogicDocument.GetDocPosType())
+			this.LogicDocument.NeedUpdateTarget = true;
+	},
+
 	Is_NeedRecalculate : function(PageAbs)
 	{
 		var PageNumInfo = this.LogicDocument.Get_SectionPageNumInfo(PageAbs);
@@ -480,19 +529,39 @@ CHeaderFooter.prototype =
     
     Get_DividingLine : function(PageIndex)
     {
-        var OldPage = this.RecalcInfo.CurPage;
-        
-        this.Set_Page( PageIndex );
-        var Bounds = this.Get_Bounds();
-        
-        if ( -1 !== OldPage )
-            this.Set_Page( OldPage );
-        
-        if ( hdrftr_Footer === this.Type )
-            return Bounds.Top;
-        else
-            return Bounds.Bottom;
+		// Read the bounds calculated for the given page without making that page the current one. Switching back to
+		// the edited page can fail while the document is being recalculated (the edited page is not there yet), and
+		// then the header/footer the user is editing jumps to the page that was only measured here.
+		let bounds;
+		if (PageIndex !== this.RecalcInfo.CurPage && this.private_CanUsePage(PageIndex))
+			bounds = this.RecalcInfo.RecalcObj[PageIndex].Get_PageBounds(0);
+		else
+			bounds = this.Get_Bounds();
+
+		if (hdrftr_Footer === this.Type)
+			return bounds.Top;
+		else
+			return bounds.Bottom;
     },
+
+	/**
+	 * Can the calculation of the given page be used (the same checks as in Set_Page)?
+	 * @param {number} pageAbs
+	 * @returns {boolean}
+	 */
+	private_CanUsePage : function(pageAbs)
+	{
+		if (this.IsRecalculateInProgress()
+			|| pageAbs > this.RecalcInfo.LastPage
+			|| undefined === this.LogicDocument.Pages[pageAbs])
+			return false;
+
+		let hdrFtrPage = this.Parent.Pages[pageAbs];
+		if (!hdrFtrPage || (this !== hdrFtrPage.Header && this !== hdrFtrPage.Footer))
+			return false;
+
+		return undefined !== this.RecalcInfo.RecalcObj[pageAbs];
+	},
 
     Is_PointInDrawingObjects : function(X, Y)
     {
@@ -1243,13 +1312,31 @@ CHeaderFooter.prototype =
 
     Refresh_RecalcData2 : function()
     {
+		// The header/footer is shared by several pages. While the user edits it on one page, that page has to stay
+		// the current one after the recalculation (otherwise the cursor and the view jump to the first page where
+		// this header/footer is used)
+		// A page that is still waiting wins over the current page: one action can bring several changes, and the
+		// recalculation runs in timer steps, so a new change can come after the first step has made the first page of
+		// the section the current one but before the recalculation has reached the edited page.
+		let editedPage = -1;
+		if (this.IsThisElementCurrent())
+		{
+			let requestedPage = this.RecalcInfo.RequestedPage;
+			// No check against the number of pages: while the recalculation runs in timer steps, the pages after the
+			// step that is being calculated are not there yet
+			if (-1 !== requestedPage)
+				editedPage = requestedPage;
+			else
+				editedPage = this.RecalcInfo.CurPage;
+		}
+
         // Сохраняем пересчитаные страницы в старый пересчет, а текущий обнуляем
         this.RecalcInfo.PageNumInfo   = {};
         this.RecalcInfo.SectPr        = {};
         this.RecalcInfo.CurPage       = -1;
 		this.RecalcInfo.NeedRecalc    = {};
 		this.RecalcInfo.LastPage      = -1;
-		this.RecalcInfo.RequestedPage = -1;
+		this.RecalcInfo.RequestedPage = editedPage;
         
         History.RecalcData_Add( { Type : AscDFH.historyitem_recalctype_HdrFtr, Data : this } );
     },
@@ -1761,6 +1848,8 @@ CHeaderFooterController.prototype =
             {
                if ( -1 === Header.RecalcInfo.CurPage )
                     Header.Set_Page(PageIndex);
+               else
+                    Header.ApplyRequestedPage(PageIndex);
             }
             HeaderDrawings = Header.Content.GetAllDrawingObjects([]);
             HeaderTables = Header.Content.GetAllFloatElements();
@@ -1789,6 +1878,8 @@ CHeaderFooterController.prototype =
             {
                 if ( -1 === Footer.RecalcInfo.CurPage )
                     Footer.Set_Page(PageIndex);
+                else
+                    Footer.ApplyRequestedPage(PageIndex);
             }
             FooterDrawings = Footer.Content.GetAllDrawingObjects([]);
             FooterTables = Footer.Content.GetAllFloatElements();
@@ -1843,10 +1934,10 @@ CHeaderFooterController.prototype =
         this.LogicDocument.DrawingObjects.mergeDrawings(nPageIndex, arrHeaderDrawings, arrHeaderTables, arrFooterDrawings, arrFooterTables);
 
         if (null !== nOldHeaderCurPage)
-            oHeader.Set_Page(nOldHeaderCurPage);
+            oHeader.RestorePage(nOldHeaderCurPage);
 
         if (null !== nOldFooterCurPage)
-            oFooter.Set_Page(nOldFooterCurPage);
+            oFooter.RestorePage(nOldFooterCurPage);
     },
 
     // Отрисовка колонтитулов на данной странице
@@ -1881,10 +1972,10 @@ CHeaderFooterController.prototype =
         this.LogicDocument.DrawingObjects.drawBeforeObjectsHdrFtr(nPageIndex, pGraphics);
 
         if (null !== nOldHeaderCurPage)
-            oHeader.Set_Page(nOldHeaderCurPage);
+            oHeader.RestorePage(nOldHeaderCurPage);
 
         if (null !== nOldFooterCurPage)
-            oFooter.Set_Page(nOldFooterCurPage);
+            oFooter.RestorePage(nOldFooterCurPage);
     },
 
     CheckRange : function(X0, Y0, X1, Y1, _Y0, _Y1, X_lf, X_rf, PageIndex, bMathWrap)
@@ -2747,6 +2838,14 @@ CHeaderFooterController.prototype =
 	{
 		var HdrFtrState       = {};
 		HdrFtrState.CurHdrFtr = this.CurHdrFtr;
+		HdrFtrState.CurPage   = -1;
+		if (this.CurHdrFtr)
+		{
+			// While a recalculation is still on its way to the edited page, another page can be current for the moment:
+			// Undo/Redo must go back to the page that is waiting
+			let recalcInfo      = this.CurHdrFtr.RecalcInfo;
+			HdrFtrState.CurPage = -1 !== recalcInfo.RequestedPage ? recalcInfo.RequestedPage : recalcInfo.CurPage;
+		}
 
 		var State = null;
 		if (null != this.CurHdrFtr)
@@ -2768,7 +2867,16 @@ CHeaderFooterController.prototype =
 		this.CurHdrFtr  = HdrFtrState.CurHdrFtr;
 
 		if (null != this.CurHdrFtr)
+		{
 			this.CurHdrFtr.Content.SetSelectionState(State, StateIndex - 1);
+
+			// Undo/Redo: go back to the page where the header/footer was edited, also when "Link to previous" has
+			// changed the header/footer of that page
+			if (undefined !== HdrFtrState.CurPage
+				&& -1 !== HdrFtrState.CurPage
+				&& HdrFtrState.CurPage !== this.CurHdrFtr.RecalcInfo.CurPage)
+				this.CurHdrFtr.RequestPage(HdrFtrState.CurPage);
+		}
 	},
 //-----------------------------------------------------------------------------------
 // Функции для работы с гиперссылками
