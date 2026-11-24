@@ -803,27 +803,45 @@
         }, AscDFH.historydescription_Pdf_RemovePage, this, aPages);
 	};
 	/**
-	 * Asks for one or more PDF files on the user's computer and reads them. Uses the file dialog of the desktop
-	 * app, otherwise a file input of the browser. The callback is not called if the user cancels.
+	 * Asks for one or more PDF files on the user's computer. Uses the file dialog of the desktop app, otherwise a
+	 * file input of the browser. The callback is not called if the user cancels.
+	 * Without isLazy all files are read before the callback: {name, path, bytes}. With isLazy nothing is read yet:
+	 * each file is {name, path, getBytes(function(?Uint8Array))}, so a search can read one file at a time and does
+	 * not keep all of them in memory.
 	 * @param {boolean} isMulti
-	 * @param {function({name: string, path: string, bytes: Uint8Array}[])} fCallback
+	 * @param {function({name: string, path: string, bytes: ?Uint8Array, getBytes: ?function})[]} fCallback
+	 * @param {boolean} [isLazy=false]
 	 */
-	PDFEditorApi.prototype.asc_PickPdfFiles = function(isMulti, fCallback) {
+	PDFEditorApi.prototype.asc_PickPdfFiles = function(isMulti, fCallback, isLazy) {
+		let fGiveFiles = function(aFiles) {
+			if (!aFiles.length)
+				return;
+			if (isLazy) {
+				fCallback(aFiles);
+				return;
+			}
+			let aResult = [];
+			let nLeft = aFiles.length;
+			aFiles.forEach(function(oFile, nIndex) {
+				oFile.getBytes(function(aBytes) {
+					aResult[nIndex] = aBytes ? {name: oFile.name, path: oFile.path, bytes: aBytes} : null;
+					if (0 === --nLeft)
+						fCallback(aResult.filter(Boolean));
+				});
+			});
+		};
+
 		let oDesktop = window["AscDesktopEditor"];
 		if (oDesktop && oDesktop["OpenFilenameDialog"] && oDesktop["loadLocalFile"]) {
 			oDesktop["OpenFilenameDialog"]("PDF (*.pdf)", !!isMulti, function(files) {
 				files = (Array.isArray(files) ? files : [files]).filter(Boolean);
-				let aResult = [];
-				let nLeft = files.length;
-				if (!nLeft)
-					return;
-				files.forEach(function(sPath, nIndex) {
-					oDesktop["loadLocalFile"](sPath, function(data) {
-						aResult[nIndex] = data ? {name: sPath.split(/[\\/]/).pop(), path: sPath, bytes: new Uint8Array(data)} : null;
-						if (0 === --nLeft)
-							fCallback(aResult.filter(Boolean));
-					});
-				});
+				fGiveFiles(files.map(function(sPath) {
+					return {name: sPath.split(/[\\/]/).pop(), path: sPath, getBytes: function(fDone) {
+						oDesktop["loadLocalFile"](sPath, function(data) {
+							fDone(data ? new Uint8Array(data) : null);
+						});
+					}};
+				}));
 			});
 			return;
 		}
@@ -836,22 +854,18 @@
 		oInput.multiple = !!isMulti;
 		oInput.accept = ".pdf,application/pdf";
 		oInput.onchange = function() {
-			let aFiles = Array.prototype.slice.call(oInput.files || []);
-			let aResult = [];
-			let nLeft = aFiles.length;
-			let fDone = function() {
-				if (0 === --nLeft)
-					fCallback(aResult.filter(Boolean));
-			};
-			aFiles.forEach(function(oFile, nIndex) {
-				let oReader = new FileReader();
-				oReader.onload = function() {
-					aResult[nIndex] = {name: oFile.name, path: oFile.name, bytes: new Uint8Array(oReader.result)};
-					fDone();
-				};
-				oReader.onerror = fDone;
-				oReader.readAsArrayBuffer(oFile);
-			});
+			fGiveFiles(Array.prototype.slice.call(oInput.files || []).map(function(oFile) {
+				return {name: oFile.name, path: oFile.name, getBytes: function(fDone) {
+					let oReader = new FileReader();
+					oReader.onload = function() {
+						fDone(new Uint8Array(oReader.result));
+					};
+					oReader.onerror = function() {
+						fDone(null);
+					};
+					oReader.readAsArrayBuffer(oFile);
+				}};
+			}));
 		};
 		oInput.click();
 	};
@@ -972,18 +986,24 @@
 	 * @returns {{page: number, text: string, key: string}[]}
 	 */
 	PDFEditorApi.prototype.getPdfSentences = function(aLines) {
+		// A sentence ends at . ! ? : ; followed by a space or the end of the line, or at a full-width sentence end
+		// (Chinese / Japanese 。！？．｡, which has no space after it), together with closing quotes or brackets
+		// after it (」』）〉》”’).
+		let oSplit = /([.!?:;](?=\s|$)|[\u3002\uFF01\uFF1F\uFF0E\uFF61]+[\u300D\u300F\uFF09\u3009\u300B\u201D\u2019]*)\s*/;
+		// no space is added where a line break is next to CJK text (it has no spaces between words)
+		let oCjk = /[\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]/;
 		let aResult = [];
 		let oCurrent = null;
 		aLines.forEach(function(oLine) {
-			// a sentence ends at . ! ? : ; followed by a space or the end of the line
-			let aParts = oLine.text.split(/([.!?:;])(?:\s|$)/);
+			let aParts = oLine.text.split(oSplit);
 			for (let nIndex = 0; nIndex < aParts.length; nIndex += 2) {
 				let sPart = aParts[nIndex] + (aParts[nIndex + 1] || "");
 				if (!oCurrent && !sPart.trim())
 					continue;
 				if (!oCurrent)
 					oCurrent = {page: oLine.page, text: ""};
-				oCurrent.text += (oCurrent.text ? " " : "") + sPart;
+				let isJoinCjk = oCjk.test(oCurrent.text.trim().slice(-1)) || oCjk.test(sPart.trim().charAt(0));
+				oCurrent.text += (oCurrent.text && !isJoinCjk ? " " : "") + sPart;
 				if (aParts[nIndex + 1] !== undefined) {
 					aResult.push(oCurrent);
 					oCurrent = null;
@@ -996,11 +1016,13 @@
 		}).filter(function(oSentence) { return !!oSentence.key; });
 	};
 	/**
-	 * Compares two lists of sentences with Myers' diff (shortest edit script)
+	 * Compares two lists of sentences with Myers' diff (shortest edit script). Its time and memory grow with the
+	 * number of differences, so it stops after nMaxDiff of them; then the coarse comparison below is used instead and
+	 * coarse is true. This way very different files still give a result instead of nothing.
 	 * @param {{page: number, text: string, key: string}[]} aA
 	 * @param {{page: number, text: string, key: string}[]} aB
-	 * @param {number} [nMaxDiff=3000] the search stops after this many differences
-	 * @returns {{removed: {page: number, text: string}[], added: {page: number, text: string}[], tooMany: boolean}}
+	 * @param {number} [nMaxDiff=3000] the exact search stops after this many differences
+	 * @returns {{removed: {page: number, text: string}[], added: {page: number, text: string}[], coarse: boolean}}
 	 * removed = only in aA, added = only in aB
 	 */
 	PDFEditorApi.prototype.comparePdfSentences = function(aA, aB, nMaxDiff) {
@@ -1030,8 +1052,10 @@
 				}
 			}
 		}
-		if (nFoundD < 0)
-			return {removed: [], added: [], tooMany: true};
+		if (nFoundD < 0) {
+			aTrace = null;
+			return this.comparePdfSentencesCoarse(aA, aB);
+		}
 
 		// walk back through the trace
 		let aRemoved = [], aAdded = [];
@@ -1054,12 +1078,38 @@
 			nY = nPrevY;
 		}
 		let fOut = function(oSentence) { return {page: oSentence.page, text: oSentence.text}; };
-		return {removed: aRemoved.map(fOut), added: aAdded.map(fOut), tooMany: false};
+		return {removed: aRemoved.map(fOut), added: aAdded.map(fOut), coarse: false};
+	};
+	/**
+	 * A coarse comparison in linear time for files with too many differences for the exact one: a sentence counts as
+	 * removed if it is not in aB (as often as in aA), as added if it is not in aA. It does not see sentences that were
+	 * only moved, and a sentence that is in both files is never listed.
+	 * @param {{page: number, text: string, key: string}[]} aA
+	 * @param {{page: number, text: string, key: string}[]} aB
+	 * @returns {{removed: {page: number, text: string}[], added: {page: number, text: string}[], coarse: boolean}}
+	 */
+	PDFEditorApi.prototype.comparePdfSentencesCoarse = function(aA, aB) {
+		let fOnlyIn = function(aFrom, aOther) {
+			let oCount = new Map();
+			aOther.forEach(function(oSentence) {
+				oCount.set(oSentence.key, (oCount.get(oSentence.key) || 0) + 1);
+			});
+			let aOnly = [];
+			aFrom.forEach(function(oSentence) {
+				let nCount = oCount.get(oSentence.key) || 0;
+				if (nCount > 0)
+					oCount.set(oSentence.key, nCount - 1);
+				else
+					aOnly.push({page: oSentence.page, text: oSentence.text});
+			});
+			return aOnly;
+		};
+		return {removed: fOnlyIn(aA, aB), added: fOnlyIn(aB, aA), coarse: true};
 	};
 	/**
 	 * Runs one text reading of other PDFs at a time (the engine must not have two of them open in turn)
 	 * @param {function(function(): void)} fWork gets the function to call when it is done
-	 * @returns {boolean} false if another one is still running
+	 * @returns {boolean} false if another one is still running (fWork is not called then)
 	 */
 	PDFEditorApi.prototype.runPdfTextReading = function(fWork) {
 		if (this.isPdfTextReading)
@@ -1072,14 +1122,24 @@
 		return true;
 	};
 	/**
+	 * Whether a comparison or search is running. asc_ComparePdfText and asc_SearchInPdfFiles do nothing and return
+	 * false then, so the UI can check this before it asks for files, and tell the user to wait.
+	 * @returns {boolean}
+	 */
+	PDFEditorApi.prototype.asc_IsPdfTextReading = function() {
+		return !!this.isPdfTextReading;
+	};
+	/**
 	 * Compares the text of the open PDF with another PDF sentence by sentence, so a different line wrapping does
 	 * not matter. Only the text layer of the files is compared (not edits made in the editor and not yet saved).
 	 * removed = only in the open PDF, added = only in the other PDF; openHasText / otherHasText are false for a file
-	 * without any text (a scanned PDF).
+	 * without any text (a scanned PDF); coarse is true if the files differ too much for the exact comparison (see
+	 * comparePdfSentences).
 	 * @param {Uint8Array} aOtherBytes
-	 * @param {function(?{removed: {page: number, text: string}[], added: {page: number, text: string}[], tooMany: boolean, openHasText: boolean, otherHasText: boolean})} fCallback
+	 * @param {function(?{removed: {page: number, text: string}[], added: {page: number, text: string}[], coarse: boolean, openHasText: boolean, otherHasText: boolean})} fCallback
 	 * null if a file can't be read
-	 * @returns {boolean} false if a comparison or search is still running (the callback is not called then)
+	 * @returns {boolean} false if a comparison or search is still running: nothing is done and the callback is not
+	 * called (see asc_IsPdfTextReading)
 	 */
 	PDFEditorApi.prototype.asc_ComparePdfText = function(aOtherBytes, fCallback) {
 		let t = this;
@@ -1105,42 +1165,78 @@
 			});
 		});
 	};
+	// The search stops after this many hits: more are not useful in a list, and the search text is too general then
+	const PDF_SEARCH_MAX_RESULTS = 500;
 	/**
-	 * Searches a text in PDFs given as bytes, line by line; spaces and case are ignored
+	 * Searches a text in PDFs, line by line; spaces and case are ignored. The files are read one at a time (read,
+	 * search, let go, next file), so only one of them is in memory. A file is {name, path, bytes} or, as
+	 * asc_PickPdfFiles gives it with isLazy, {name, path, getBytes(function(?Uint8Array))}.
+	 * The search stops after nMaxResults hits (the files after that one are not read); info.capped tells this.
 	 * @param {string} sText
-	 * @param {{name: string, path: string, bytes: Uint8Array}[]} aFiles
-	 * @param {function({name: string, path: string, page: number, text: string}[])} fCallback a file that can't be
-	 * read has one entry with page -1, a file without any text (a scanned PDF) one with page -2
-	 * @returns {boolean} false if a comparison or search is still running (the callback is not called then)
+	 * @param {{name: string, path: string, bytes: ?Uint8Array, getBytes: ?function}[]} aFiles
+	 * @param {function({name: string, path: string, page: number, text: string}[], {capped: boolean, maxResults: number, searchedFiles: number})} fCallback
+	 * a file that can't be read has one entry with page -1, a file without any text (a scanned PDF) one with page -2
+	 * @param {number} [nMaxResults=500]
+	 * @returns {boolean} false if a comparison or search is still running: nothing is done and the callback is not
+	 * called (see asc_IsPdfTextReading)
 	 */
-	PDFEditorApi.prototype.asc_SearchInPdfFiles = function(sText, aFiles, fCallback) {
+	PDFEditorApi.prototype.asc_SearchInPdfFiles = function(sText, aFiles, fCallback, nMaxResults) {
 		let t = this;
+		let nMax = nMaxResults > 0 ? nMaxResults : PDF_SEARCH_MAX_RESULTS;
 		let sNeedle = sText.replace(/\s+/g, "").toLowerCase();
 		if (!sNeedle) {
-			fCallback([]);
+			fCallback([], {capped: false, maxResults: nMax, searchedFiles: 0});
 			return true;
 		}
 		return this.runPdfTextReading(function(fDone) {
 			let aResult = [];
+			let nHits = 0;
+			// The next file is started only after the call stack of the last one has ended (also when its reading
+			// called back at once), so nothing on the stack still holds the bytes of the last file.
+			let nNextFile = -1, isRunning = false;
 			let fNext = function(nFile) {
-				if (nFile >= aFiles.length) {
+				nNextFile = nFile;
+				if (isRunning)
+					return;
+				isRunning = true;
+				while (nNextFile >= 0) {
+					let nCurrent = nNextFile;
+					nNextFile = -1;
+					fFile(nCurrent);
+				}
+				isRunning = false;
+			};
+			let fFile = function(nFile) {
+				if (nFile >= aFiles.length || nHits >= nMax) {
 					fDone();
-					fCallback(aResult);
+					fCallback(aResult, {capped: nHits >= nMax, maxResults: nMax, searchedFiles: nFile});
 					return;
 				}
 				let oFile = aFiles[nFile];
-				t.getPdfLinesFromBytes(oFile.bytes, function(aLines) {
-					let isText = false;
-					(aLines || []).forEach(function(oLine) {
-						let sLine = oLine.text.replace(/\s+/g, "").toLowerCase();
-						isText = isText || !!sLine;
-						if (sLine.indexOf(sNeedle) !== -1)
-							aResult.push({name: oFile.name, path: oFile.path, page: oLine.page, text: oLine.text});
-					});
-					if (!aLines || !isText)
-						aResult.push({name: oFile.name, path: oFile.path, page: aLines ? -2 : -1, text: ""});
-					fNext(nFile + 1);
-				});
+				let fSearch = function(aBytes) {
+					let fLines = function(aLines) {
+						let isText = false;
+						(aLines || []).forEach(function(oLine) {
+							let sLine = oLine.text.replace(/\s+/g, "").toLowerCase();
+							isText = isText || !!sLine;
+							if (nHits < nMax && sLine.indexOf(sNeedle) !== -1) {
+								aResult.push({name: oFile.name, path: oFile.path, page: oLine.page, text: oLine.text});
+								++nHits;
+							}
+						});
+						if (!aLines || !isText)
+							aResult.push({name: oFile.name, path: oFile.path, page: aLines ? -2 : -1, text: ""});
+						fNext(nFile + 1);
+					};
+					if (aBytes)
+						t.getPdfLinesFromBytes(aBytes, fLines);
+					else
+						fLines(null);
+				};
+				if (oFile.bytes || !oFile.getBytes)
+					fSearch(oFile.bytes);
+				else
+					oFile.getBytes(fSearch);
 			};
 			fNext(0);
 		});
@@ -5652,6 +5748,7 @@
 	PDFEditorApi.prototype['asc_PickPdfFiles']             = PDFEditorApi.prototype.asc_PickPdfFiles;
 	PDFEditorApi.prototype['asc_ComparePdfText']           = PDFEditorApi.prototype.asc_ComparePdfText;
 	PDFEditorApi.prototype['asc_SearchInPdfFiles']         = PDFEditorApi.prototype.asc_SearchInPdfFiles;
+	PDFEditorApi.prototype['asc_IsPdfTextReading']         = PDFEditorApi.prototype.asc_IsPdfTextReading;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;

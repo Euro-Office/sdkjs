@@ -85,7 +85,7 @@ $(function ()
 		let aA = Sentences(["One. Two. Three. Four."]);
 
 		let oResult = api.comparePdfSentences(aA, Sentences(["One. Two. Three. Four."]));
-		assert.deepEqual([oResult.removed, oResult.added, oResult.tooMany], [[], [], false], "Same text: no differences");
+		assert.deepEqual([oResult.removed, oResult.added, oResult.coarse], [[], [], false], "Same text: no differences");
 
 		oResult = api.comparePdfSentences(aA, Sentences(["One. Two changed. Three. Four. Five."]));
 		assert.deepEqual(Texts(oResult.removed), ["Two."], "Changed sentence is removed");
@@ -103,16 +103,60 @@ $(function ()
 		oResult = api.comparePdfSentences(aA, []);
 		assert.deepEqual([Texts(oResult.removed), Texts(oResult.added)], [["One.", "Two.", "Three.", "Four."], []], "Empty second file");
 		oResult = api.comparePdfSentences([], []);
-		assert.deepEqual([oResult.removed, oResult.added, oResult.tooMany], [[], [], false], "Both empty");
+		assert.deepEqual([oResult.removed, oResult.added, oResult.coarse], [[], [], false], "Both empty");
 
 		oResult = api.comparePdfSentences(Sentences(["A. B. C. D."]), Sentences(["E. F. G. H."]), 7);
-		assert.strictEqual(oResult.tooMany, true, "Stops after the limit of differences");
+		assert.strictEqual(oResult.coarse, true, "Over the limit of differences the coarse comparison is used");
+		assert.deepEqual([Texts(oResult.removed), Texts(oResult.added)], [["A.", "B.", "C.", "D."], ["E.", "F.", "G.", "H."]], "and still lists the differences");
 		oResult = api.comparePdfSentences(Sentences(["A. B. C. D."]), Sentences(["E. F. G. H."]), 8);
-		assert.strictEqual(oResult.tooMany, false, "Within the limit");
+		assert.strictEqual(oResult.coarse, false, "Within the limit");
 		assert.strictEqual(oResult.removed.length + oResult.added.length, 8, "All sentences differ");
 
 		oResult = api.comparePdfSentences(aA, Sentences(["One. Two. Three. Four."]));
 		assert.deepEqual(Object.keys(oResult.removed.concat(oResult.added)[0] || {page : 0, text : ""}).sort(), ["page", "text"], "Results have page and text only");
+	});
+
+	QUnit.test("Sentences in Chinese and Japanese", function (assert)
+	{
+		// made-up text; full-width sentence ends have no space after them
+		assert.deepEqual(Texts(Sentences(["今天天气很好。我们去公园散步吧！你想一起来吗？"])),
+			["今天天气很好。", "我们去公园散步吧！", "你想一起来吗？"], "Split at 。！？");
+		assert.deepEqual(Texts(Sentences(["第一个句子．第二个句子｡第三个"])), ["第一个句子．", "第二个句子｡", "第三个"], "Split at ．and ｡");
+		assert.deepEqual(Texts(Sentences(["「こんにちは。」と先生は言いました。元気ですか？！"])),
+			["「こんにちは。」", "と先生は言いました。", "元気ですか？！"], "A closing bracket stays with its sentence, ？！ is one end");
+		assert.deepEqual(Texts(Sentences(["这是一个很长的句子，", "分成两行。下一句。"])),
+			["这是一个很长的句子，分成两行。", "下一句。"], "A sentence over a line break is one sentence, without a space in CJK text");
+		assert.deepEqual(Texts(Sentences(["English first. 中文第二。Third one"])), ["English first.", "中文第二。", "Third one"], "Mixed text");
+
+		let aBase = [];
+		for (let i = 0; i < 20; ++i)
+			aBase.push("这是第" + i + "个测试句子。");
+		let aChanged = aBase.slice();
+		aChanged[7] = "这是被修改过的句子。";
+		let oResult = api.comparePdfSentences(Sentences([aBase.join("")]), Sentences([aChanged.join("")]));
+		assert.deepEqual([Texts(oResult.removed), Texts(oResult.added)], [["这是第7个测试句子。"], ["这是被修改过的句子。"]],
+			"One changed sentence in a CJK text marks only that sentence");
+	});
+
+	QUnit.test("Very different files still give a result", function (assert)
+	{
+		let aA = [], aB = [];
+		for (let i = 0; i < 2000; ++i)
+		{
+			aA.push("Sentence " + i + ".");
+			aB.push(i < 1501 ? "Changed sentence " + i + "." : "Sentence " + i + ".");
+		}
+		// 1501 changed sentences are 3002 edits, more than the default limit of 3000
+		let oResult = api.comparePdfSentences(Sentences([aA.join(" ")]), Sentences([aB.join(" ")]));
+		assert.strictEqual(oResult.coarse, true, "Coarse comparison over the limit");
+		assert.strictEqual(oResult.removed.length, 1501, "All changed sentences are removed");
+		assert.strictEqual(oResult.added.length, 1501, "All changed sentences are added");
+		assert.deepEqual([oResult.removed[0].text, oResult.added[1500].text], ["Sentence 0.", "Changed sentence 1500."], "In document order");
+
+		oResult = api.comparePdfSentences(Sentences(["A. B. C."]), Sentences(["C. A. B."]), 0);
+		assert.deepEqual([oResult.coarse, oResult.removed, oResult.added], [true, [], []], "Coarse: moved sentences are not listed");
+		oResult = api.comparePdfSentences(Sentences(["X. X. Y."]), Sentences(["X. Y. Z."]), 0);
+		assert.deepEqual([Texts(oResult.removed), Texts(oResult.added)], [["X."], ["Z."]], "Coarse: a sentence counts as often as it is there");
 	});
 
 	QUnit.test("Diff is a shortest edit script", function (assert)
@@ -174,7 +218,7 @@ $(function ()
 		let oApi = CreateApi(aOpen, {"other" : Lines(["First sentence. Second sentence.", "Third sentence. Fourth."], 0), "bad" : null, "scan" : Lines(["", " "], 0)});
 
 		assert.deepEqual(CallSync(oApi, "asc_ComparePdfText", "other"),
-			{removed : [], added : [{page : 0, text : "Fourth."}], tooMany : false, openHasText : true, otherHasText : true}, "Only the new sentence");
+			{removed : [], added : [{page : 0, text : "Fourth."}], coarse : false, openHasText : true, otherHasText : true}, "Only the new sentence");
 		assert.strictEqual(CallSync(oApi, "asc_ComparePdfText", "bad"), null, "Unreadable file gives null");
 
 		let oResult = CallSync(oApi, "asc_ComparePdfText", "scan");
@@ -220,6 +264,160 @@ $(function ()
 		fPending(null);
 		assert.deepEqual(aResults, [null], "Only the first callback is called");
 		assert.strictEqual(oApi.asc_ComparePdfText("z", function() {}), true, "After the end a new comparison starts");
+	});
+
+	QUnit.test("Busy status for the UI", function (assert)
+	{
+		let oApi = CreateApi([], {});
+		let fPending = null;
+		oApi.getPdfLinesFromBytes = function(aBytes, fCallback)
+		{
+			fPending = fCallback;
+		};
+		assert.strictEqual(oApi.asc_IsPdfTextReading(), false, "Nothing runs at the start");
+		oApi.asc_SearchInPdfFiles("a", [{name : "a", path : "a", bytes : "a"}], function() {});
+		assert.strictEqual(oApi.asc_IsPdfTextReading(), true, "A search runs");
+		let isCalled = false;
+		assert.strictEqual(oApi.asc_SearchInPdfFiles("b", [{name : "b", path : "b", bytes : "b"}], function() { isCalled = true; }), false,
+			"A second search returns false");
+		fPending([]);
+		assert.strictEqual(isCalled, false, "The callback of the refused search is not called");
+		assert.strictEqual(oApi.asc_IsPdfTextReading(), false, "Nothing runs after the end");
+	});
+
+	QUnit.test("Search results are capped", function (assert)
+	{
+		let oApi = CreateApi([], {
+			"a" : Lines(["hit 1", "hit 2", "other", "hit 3"], 0),
+			"b" : Lines(["hit 4", "hit 5"], 1),
+			"c" : Lines(["hit 6"], 0)
+		});
+		let aRead = [];
+		let fOldRead = oApi.getPdfLinesFromBytes;
+		oApi.getPdfLinesFromBytes = function(aBytes, fCallback)
+		{
+			aRead.push(aBytes);
+			fOldRead.call(this, aBytes, fCallback);
+		};
+		let aFiles = [{name : "a", path : "a", bytes : "a"}, {name : "b", path : "b", bytes : "b"}, {name : "c", path : "c", bytes : "c"}];
+		let aResult = null, oInfo = null;
+		oApi.asc_SearchInPdfFiles("hit", aFiles, function(aFound, oFoundInfo) { aResult = aFound; oInfo = oFoundInfo; }, 4);
+		assert.deepEqual(Texts(aResult), ["hit 1", "hit 2", "hit 3", "hit 4"], "Stops at the limit");
+		assert.deepEqual(oInfo, {capped : true, maxResults : 4, searchedFiles : 2}, "Tells that the result is capped");
+		assert.deepEqual(aRead, ["a", "b"], "The files after the limit are not read");
+
+		oApi.asc_SearchInPdfFiles("hit", aFiles, function(aFound, oFoundInfo) { aResult = aFound; oInfo = oFoundInfo; });
+		assert.strictEqual(aResult.length, 6, "All hits within the default limit");
+		assert.deepEqual(oInfo, {capped : false, maxResults : 500, searchedFiles : 3}, "Not capped");
+
+		let aMany = [];
+		for (let i = 0; i < 600; ++i)
+			aMany.push("hit " + i);
+		oApi = CreateApi([], {"many" : Lines(aMany, 0)});
+		oApi.asc_SearchInPdfFiles("hit", [{name : "m", path : "m", bytes : "many"}], function(aFound, oFoundInfo) { aResult = aFound; oInfo = oFoundInfo; });
+		assert.deepEqual([aResult.length, oInfo.capped, oInfo.maxResults], [500, true, 500], "Default limit of 500 hits");
+	});
+
+	QUnit.test("Search reads one file at a time", function (assert)
+	{
+		let aLog = [];
+		let oApi = CreateApi([], {"A" : Lines(["find me"], 0), "B" : Lines(["nothing"], 0), "C" : Lines(["find me too"], 3)});
+		let fOldRead = oApi.getPdfLinesFromBytes;
+		oApi.getPdfLinesFromBytes = function(aBytes, fCallback)
+		{
+			aLog.push("read " + aBytes);
+			fOldRead.call(this, aBytes, fCallback);
+			aLog.push("released " + aBytes);
+		};
+		function LazyFile(sName, sBytes)
+		{
+			return {name : sName, path : sName, getBytes : function(fDone)
+			{
+				aLog.push("load " + sName);
+				fDone(sBytes);
+			}};
+		}
+		let aResult = null;
+		oApi.asc_SearchInPdfFiles("find me", [LazyFile("a", "A"), LazyFile("b", "B"), LazyFile("x", null), LazyFile("c", "C")], function(aFound) { aResult = aFound; });
+		assert.deepEqual(aLog, ["load a", "read A", "released A", "load b", "read B", "released B", "load x", "load c", "read C", "released C"],
+			"Each file is loaded only after the last one is read and its call has ended");
+		assert.deepEqual(aResult, [
+			{name : "a", path : "a", page : 0, text : "find me"},
+			{name : "x", path : "x", page : -1, text : ""},
+			{name : "c", path : "c", page : 3, text : "find me too"}
+		], "Hits of the lazy files; a file that can't be loaded has page -1");
+	});
+
+	QUnit.test("Search reads one file at a time (loading in the background)", function (assert)
+	{
+		let done = assert.async();
+		let aLog = [];
+		let nLoading = 0, nMaxLoading = 0;
+		let oApi = CreateApi([], {"A" : Lines(["word"], 0), "B" : Lines(["word"], 1)});
+		let fOldRead = oApi.getPdfLinesFromBytes;
+		oApi.getPdfLinesFromBytes = function(aBytes, fCallback)
+		{
+			aLog.push("read " + aBytes);
+			setTimeout(function()
+			{
+				--nLoading;
+				fOldRead.call(oApi, aBytes, fCallback);
+			}, 5);
+		};
+		function LazyFile(sName, sBytes)
+		{
+			return {name : sName, path : sName, getBytes : function(fDone)
+			{
+				aLog.push("load " + sName);
+				nMaxLoading = Math.max(nMaxLoading, ++nLoading);
+				setTimeout(function() { fDone(sBytes); }, 5);
+			}};
+		}
+		let isStarted = oApi.asc_SearchInPdfFiles("word", [LazyFile("a", "A"), LazyFile("b", "B")], function(aFound)
+		{
+			assert.deepEqual(aLog, ["load a", "read A", "load b", "read B"], "In order");
+			assert.strictEqual(nMaxLoading, 1, "Never two files in memory at once");
+			assert.strictEqual(aFound.length, 2, "Both hits");
+			done();
+		});
+		assert.strictEqual(isStarted, true, "The search starts");
+	});
+
+	QUnit.test("Picking files without reading them yet (desktop app)", function (assert)
+	{
+		let oOldDesktop = window["AscDesktopEditor"];
+		let aLoaded = [];
+		window["AscDesktopEditor"] = {
+			"OpenFilenameDialog" : function(sFilter, isMulti, fCallback) { fCallback(["C:/docs/one.pdf", "D:\\two.pdf"]); },
+			"loadLocalFile"      : function(sPath, fCallback)
+			{
+				aLoaded.push(sPath);
+				fCallback(sPath === "D:\\two.pdf" ? null : [37, 80]);
+			}
+		};
+		try
+		{
+			let aFiles = null;
+			api.asc_PickPdfFiles(true, function(aPicked) { aFiles = aPicked; }, true);
+			assert.deepEqual(aFiles.map(function(oFile) { return [oFile.name, oFile.path, oFile.bytes]; }),
+				[["one.pdf", "C:/docs/one.pdf", undefined], ["two.pdf", "D:\\two.pdf", undefined]], "Lazy: names and paths only");
+			assert.deepEqual(aLoaded, [], "Lazy: nothing is read yet");
+			let aBytes = "not called";
+			aFiles[0].getBytes(function(aData) { aBytes = aData; });
+			assert.deepEqual([aLoaded, Array.from(aBytes)], [["C:/docs/one.pdf"], [37, 80]], "getBytes reads the file");
+			aFiles[1].getBytes(function(aData) { aBytes = aData; });
+			assert.strictEqual(aBytes, null, "getBytes gives null for a file that can't be read");
+
+			aLoaded = [];
+			api.asc_PickPdfFiles(true, function(aPicked) { aFiles = aPicked; });
+			assert.deepEqual(aLoaded, ["C:/docs/one.pdf", "D:\\two.pdf"], "Not lazy: all files are read");
+			assert.deepEqual(aFiles.map(function(oFile) { return [oFile.name, Array.from(oFile.bytes)]; }), [["one.pdf", [37, 80]]],
+				"Not lazy: bytes of the readable files");
+		}
+		finally
+		{
+			window["AscDesktopEditor"] = oOldDesktop;
+		}
 	});
 
 	QUnit.test("Pages whose fonts are still loading are read again", function (assert)
