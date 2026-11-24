@@ -45,6 +45,7 @@ AscDFH.changesFactory[AscDFH.historyitem_Pdf_Document_Start_Redact]     = CChang
 AscDFH.changesFactory[AscDFH.historyitem_Pdf_Document_Part_Redact]      = CChangesPDFDocumentPartRedact;
 AscDFH.changesFactory[AscDFH.historyitem_Pdf_Document_End_Redact]       = CChangesPDFDocumentEndRedact;
 AscDFH.changesFactory[AscDFH.historyitem_Pdf_Embed_Fonts_Map]       	= CChangesEmbedFontsMap;
+AscDFH.changesFactory[AscDFH.historyitem_Pdf_Document_Full_Rewrite]	= CChangesPDFDocumentFullRewrite;
 
 function CChangesPDFArrayOfDoubleProperty(Class, Old, New) {
 	AscDFH.CChangesBaseProperty.call(this, Class, Old, New);
@@ -1620,4 +1621,21 @@ CChangesEmbedFontsMap.prototype.ReadFromBinary = function(Reader) {
 		this.Old = undefined;
 	else
 		this.Old = Reader.GetString2();
+};
+
+/**
+ * The file is written as a new file on save, not as an incremental update (see CPDFDoc.SetNeedFullRewrite).
+ * @constructor
+ * @extends {AscDFH.CChangesBaseBoolProperty}
+ */
+function CChangesPDFDocumentFullRewrite(Class, Old, New, Color)
+{
+	AscDFH.CChangesBaseBoolProperty.call(this, Class, Old, New, Color);
+}
+CChangesPDFDocumentFullRewrite.prototype = Object.create(AscDFH.CChangesBaseBoolProperty.prototype);
+CChangesPDFDocumentFullRewrite.prototype.constructor = CChangesPDFDocumentFullRewrite;
+CChangesPDFDocumentFullRewrite.prototype.Type = AscDFH.historyitem_Pdf_Document_Full_Rewrite;
+CChangesPDFDocumentFullRewrite.prototype.private_SetValue = function(Value)
+{
+	this.Class.needFullRewrite = !!Value;
 };

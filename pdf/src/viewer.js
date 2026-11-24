@@ -4542,7 +4542,7 @@
 
 		checkMemory();
 		
-		if (oDoc.HasAppliedRedact()) {
+		if (oDoc.IsNeedFullRewrite()) {
 			oMemory.WriteLong(1);
 			oMemory.WriteByte(AscPDF.CommandType.saveModeNew);
 		}

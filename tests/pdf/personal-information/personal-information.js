@@ -83,6 +83,7 @@ $(function ()
 		highlight.EditCommentData(data);
 
 		AscCommon.History.Clear();
+		pdfDoc.needFullRewrite = false;
 		changedComments.length = 0;
 		commentPanel = {};
 		return {note : note, reply : reply, highlight : highlight, panelReply : highlight.GetReply(0)};
@@ -221,5 +222,79 @@ $(function ()
 		assert.strictEqual(annots.highlight.GetReply(0).GetContents(), "Agreed", "the reply text is kept");
 		assert.strictEqual(annots.highlight.GetReply(0).IsChanged(), true, "the reply is written when the file is saved");
 		assert.deepEqual(commentPanel[annots.highlight.GetId()], ["Author|", "Author|"], "the comment panel of the other copy shows the new name for the reply");
+	});
+
+	QUnit.test("Co-authors don't get duplicate replies", function (assert)
+	{
+		let annots = createDocument();
+		let history = AscCommon.History;
+		[annots.note, annots.reply, annots.highlight].forEach(function(annot)
+		{
+			if (!AscCommon.g_oTableId.Get_ById(annot.GetId()))
+				AscCommon.g_oTableId.Add(annot, annot.GetId());
+		});
+
+		removePersonalInformation("Author");
+		let changes = writeChanges(history.Points[history.Index]);
+
+		// the other copy, with its own object for the reply written in the comment panel
+		history.Undo();
+		history.Clear();
+		history.StartNoHistoryMode();
+		let data = new AscCommon.CCommentData();
+		data.Read_FromAscCommentData(annots.highlight.GetAscCommentData());
+		data.m_aReplies[0].m_sUserData = "";
+		annots.highlight.EditCommentData(data);
+		history.EndNoHistoryMode();
+
+		applyChanges(changes);
+		assert.strictEqual(annots.note.GetReplies().length, 1, "the reply read from the file is there once");
+		assert.strictEqual(annots.note.GetReply(0), annots.reply, "and it is the same object");
+		assert.strictEqual(annots.highlight.GetReplies().length, 1, "the reply written in the comment panel is there once");
+		assert.deepEqual(commentPanel[annots.note.GetId()], ["Author|", "Author|"], "the comment panel shows the comment and one reply");
+		assert.deepEqual(commentPanel[annots.highlight.GetId()], ["Author|", "Author|"], "the comment panel shows the highlight comment and one reply");
+
+		// both users remove personal information: the second copy of the changes changes nothing
+		applyChanges(changes);
+		assert.strictEqual(annots.note.GetReplies().length, 1, "the changes received twice still leave one reply from the file");
+		assert.strictEqual(annots.highlight.GetReplies().length, 1, "and one reply from the comment panel");
+	});
+
+	QUnit.test("After removing personal information the file is saved as a new file", function (assert)
+	{
+		let annots = createDocument();
+		let history = AscCommon.History;
+		assert.strictEqual(pdfDoc.IsNeedFullRewrite(), false, "before, changes are saved as an incremental update");
+
+		removePersonalInformation("Author");
+		assert.strictEqual(pdfDoc.IsNeedFullRewrite(), true, "after removing personal information the whole file is written again");
+
+		history.Undo();
+		assert.strictEqual(pdfDoc.IsNeedFullRewrite(), false, "undo goes back to an incremental update");
+		history.Redo();
+		assert.strictEqual(pdfDoc.IsNeedFullRewrite(), true, "redo writes the whole file again");
+
+		// co-authors and the server that saves the file get it with the changes
+		if (!AscCommon.g_oTableId.Get_ById(pdfDoc.GetId()))
+			AscCommon.g_oTableId.Add(pdfDoc, pdfDoc.GetId());
+		let changes = writeChanges(history.Points[history.Index]);
+		history.Undo();
+		history.Clear();
+		assert.strictEqual(pdfDoc.IsNeedFullRewrite(), false, "the other copy starts with an incremental update");
+		applyChanges(changes);
+		assert.strictEqual(pdfDoc.IsNeedFullRewrite(), true, "the other copy writes the whole file too");
+
+		// the saved data starts with the command "save as a new file", as after an applied redaction
+		// (annotations read from a file have the number of their object in the file)
+		[annots.note, annots.reply, annots.highlight, annots.highlight.GetReply(0)].forEach(function(annot, index)
+		{
+			annot._apIdx = index + 1;
+		});
+		viewer.file.nativeFile = {
+			"getAnnotationsInfo" : function() { return []; },
+			"getInteractiveFormsInfo" : function() { return {}; }
+		};
+		let saved = viewer.Save();
+		assert.deepEqual(Array.from(saved.slice(0, 9)), [37, 80, 68, 70, 1, 0, 0, 0, AscPDF.CommandType.saveModeNew], "%PDF, then the command 'save as a new file'");
 	});
 });

@@ -489,6 +489,8 @@
 				oAnnot.SetAuthor(sName);
 				oAnnot.SetUserId("");
 			});
+			// otherwise the old names stay in the file, in the part before the incremental update
+			oDoc.SetNeedFullRewrite(true);
 		}, AscDFH.historydescription_Document_RemovePersonalInformation, this, aAll.map(function(oAnnot) {return oAnnot.GetId();}));
 
 		let t = this;

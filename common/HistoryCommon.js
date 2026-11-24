@@ -4288,6 +4288,7 @@
 	window['AscDFH'].historyitem_Pdf_Document_Part_Redact		= window['AscDFH'].historyitem_type_PDF_Document | 16;
 	window['AscDFH'].historyitem_Pdf_Document_End_Redact		= window['AscDFH'].historyitem_type_PDF_Document | 17;
 	window['AscDFH'].historyitem_Pdf_Embed_Fonts_Map			= window['AscDFH'].historyitem_type_PDF_Document | 18;
+	window['AscDFH'].historyitem_Pdf_Document_Full_Rewrite	= window['AscDFH'].historyitem_type_PDF_Document | 19;
 
 
 	AscDFH.historyitem_CustomPropertiesAddProperty = AscDFH.historyitem_type_CustomProperties | 0;
