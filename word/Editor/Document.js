@@ -14217,12 +14217,6 @@ CDocument.prototype.GetSelectionAnchorPos = function()
 	return {X0 : Coords0.X, X1 : Coords1.X, Y : Coords0.Y};
 };
 /**
- * Получаем все комментарии по заданным параметрам
- * @param isMine {boolean} удаляем только все свои комментарии
- * @param isCurrent {boolean} удаляем только все комментарии, находящиеся в текущей позиции
- * @returns {Array.string}
- */
-/**
  * Replaces the author of every comment, reply and tracked change with one name and removes the document properties,
  * custom properties included, and the company, manager and hyperlink base, like the document inspector of Word.
  * The dates of comments and changes and the template are kept.
@@ -14291,7 +14285,8 @@ CDocument.prototype.RemovePersonalInformation = function(sName)
 		oParagraph.CheckRunContent(function(oRun)
 		{
 			if (reviewtype_Common !== oRun.GetReviewType())
-				oRun.SetReviewTypeWithInfo(oRun.GetReviewType(), anonymizeReviewInfo(oRun.GetReviewInfo()));
+				// false: the mark of the last paragraph of the document or of a table cell has its own author too
+				oRun.SetReviewTypeWithInfo(oRun.GetReviewType(), anonymizeReviewInfo(oRun.GetReviewInfo()), false);
 
 			if (oRun.HavePrChange())
 				oRun.SetPrChange(oRun.Pr.PrChange, anonymizeReviewInfo(oRun.Pr.ReviewInfo));
@@ -14379,6 +14374,12 @@ CDocument.prototype.RemovePersonalInformation = function(sName)
 
 	return arrCommentIds;
 };
+/**
+ * Получаем все комментарии по заданным параметрам
+ * @param isMine {boolean} удаляем только все свои комментарии
+ * @param isCurrent {boolean} удаляем только все комментарии, находящиеся в текущей позиции
+ * @returns {Array.string}
+ */
 CDocument.prototype.GetAllComments = function(isMine, isCurrent)
 {
 	var arrCommentsId = [];

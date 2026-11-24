@@ -294,4 +294,35 @@ $(function ()
 
 		logicDocument.App = app;
 	});
+
+	QUnit.test("The mark of the last paragraph of the document and of a table cell gets the new author", function (assert)
+	{
+		// Word keeps an author on these marks too, e.g. when the paragraph was inserted with tracked changes
+		AscTest.ClearDocument();
+
+		let table = AscTest.CreateTable(1, 1);
+		logicDocument.PushToContent(table);
+		let cellParagraph = table.GetRow(0).GetCell(0).GetContent().GetElement(0);
+		cellParagraph.GetParaEndRun().SetReviewTypeWithInfo(reviewtype_Add, createInfo("Alice", 1000), false);
+
+		let lastParagraph = AscTest.CreateParagraph();
+		logicDocument.PushToContent(lastParagraph);
+		lastParagraph.GetParaEndRun().SetReviewTypeWithInfo(reviewtype_Add, createInfo("Bob", 2000), false);
+
+		assert.strictEqual(lastParagraph.GetParaEndRun().GetReviewInfo().GetUserName(), "Bob", "The last paragraph mark has its author");
+
+		AscCommon.History.Clear();
+		logicDocument.StartAction(AscDFH.historydescription_Document_RemovePersonalInformation);
+		logicDocument.RemovePersonalInformation("Author");
+		logicDocument.FinalizeAction();
+
+		let lastInfo = lastParagraph.GetParaEndRun().GetReviewInfo();
+		assert.strictEqual(lastInfo.GetUserName() + "|" + lastInfo.GetUserId() + "|" + lastInfo.GetDateTime(), "Author||2000", "The mark of the last paragraph of the document has the new author and keeps its date");
+		let cellInfo = cellParagraph.GetParaEndRun().GetReviewInfo();
+		assert.strictEqual(cellInfo.GetUserName() + "|" + cellInfo.GetDateTime(), "Author|1000", "The mark of the last paragraph of the table cell has the new author");
+
+		logicDocument.Document_Undo();
+		assert.strictEqual(lastParagraph.GetParaEndRun().GetReviewInfo().GetUserName(), "Bob", "Undo brings the author of the last paragraph mark back");
+		assert.strictEqual(cellParagraph.GetParaEndRun().GetReviewInfo().GetUserName(), "Alice", "Undo brings the author of the cell paragraph mark back");
+	});
 });
