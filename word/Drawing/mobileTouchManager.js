@@ -680,7 +680,13 @@
 					_markup.Cols[this.TableCurrentMovePos] += (this.TableCurrentMoveValue - this.TableCurrentMoveValueOld);
 					_markup.Cols[this.TableCurrentMovePos] = Math.max(_markup.Cols[this.TableCurrentMovePos], 1);
 
-					if ( false === HtmlPage.m_oLogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_Table_Properties) )
+					// a nested table can change the tables around it too
+					var oTableLock = {
+						Type      : AscCommon.changestype_2_ElementsArray_and_Type,
+						Elements  : _markup.Table.GetTablesChangedByColumnResize(),
+						CheckType : AscCommon.changestype_Table_Properties
+					};
+					if ( false === HtmlPage.m_oLogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_Table_Properties, oTableLock) )
 					{
 						HtmlPage.m_oLogicDocument.StartAction(AscDFH.historydescription_Document_SetTableMarkup_Hor);
 						_markup.Table.Update_TableMarkupFromRuler(_markup, true, this.TableCurrentMovePos + 1);
