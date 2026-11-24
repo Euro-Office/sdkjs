@@ -97,6 +97,32 @@ $(function ()
 		assert.close(xfrm.offY + xfrm.extY / 2, doc.GetPageHeightMM(1) / 2, 0.001, "centred vertically");
 	});
 
+	QUnit.test("On a rotated page the picture is turned back and fits the page as shown", function (assert)
+	{
+		let doc = resetDocument();
+		// page 1 (612 x 792 pt) has /Rotate 90, so it shows as a landscape page of 792 x 612 pt
+		viewer.file.pages[0].Rotate = 90;
+		try
+		{
+			addWatermark(doc, 400, 200);
+		}
+		finally
+		{
+			viewer.file.pages[0].Rotate = 0;
+		}
+
+		let xfrm = getDrawings(doc, 0)[0].getXfrm();
+		assert.close(xfrm.rot, -Math.PI / 2, 0.0001, "turned by -90 degrees, so it reads upright on screen");
+		assert.close(xfrm.offX + xfrm.extX / 2, doc.GetPageWidthMM(0) / 2, 0.001, "centred horizontally");
+		assert.close(xfrm.offY + xfrm.extY / 2, doc.GetPageHeightMM(0) / 2, 0.001, "centred vertically");
+		// as shown, the page is 792 pt wide: 80 % of that, not of 612 pt
+		assert.close(xfrm.extX, 0.8 * 792 * PT_TO_MM, 0.001, "80 % of the shown page width");
+		assert.close(xfrm.extX / xfrm.extY, 2, 0.001, "the proportions are kept");
+
+		let other = getDrawings(doc, 1)[0].getXfrm();
+		assert.ok(!other.rot, "the page without /Rotate gets an unturned picture");
+	});
+
 	QUnit.test("All pages are one undo step", function (assert)
 	{
 		let doc = resetDocument();

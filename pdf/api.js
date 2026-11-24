@@ -3954,13 +3954,19 @@
 					else if (oOptionObject.isWatermark) {
 						// the same picture centred on every page, at most 80 % of the page; one undo step.
 						// It replaces a watermark added before.
+						// On a page with /Rotate the picture is turned back (as CPDFDoc.AddImages does), so it reads
+						// upright on screen, and it fits the page as shown (width and height swapped at 90 and 270 degrees).
 						oDoc.BlurActiveObject();
 						oDoc.DoAction(function() {
 							removeWatermarkPictures(oDoc);
 							for (let nPage = 0, nCount = oDoc.GetPagesCount(); nPage < nCount; ++nPage) {
 								let nPageW = oDoc.GetPageWidthMM(nPage);
 								let nPageH = oDoc.GetPageHeightMM(nPage);
-								let nK = Math.min(0.8 * nPageW / oImage.Image.width, 0.8 * nPageH / oImage.Image.height);
+								let nRotAngle = oDoc.Viewer ? oDoc.Viewer.getPageRotate(nPage) : 0;
+								let isSideways = (nRotAngle % 180) !== 0;
+								let nShownW = isSideways ? nPageH : nPageW;
+								let nShownH = isSideways ? nPageW : nPageH;
+								let nK = Math.min(0.8 * nShownW / oImage.Image.width, 0.8 * nShownH / oImage.Image.height);
 								let nW = oImage.Image.width * nK;
 								let nH = oImage.Image.height * nK;
 								let oPicture = new AscPDF.CPdfImage();
@@ -3968,6 +3974,9 @@
 								let oXfrm = oPicture.getXfrm();
 								oXfrm.setOffX((nPageW - nW) / 2);
 								oXfrm.setOffY((nPageH - nH) / 2);
+								// the rotation turns the picture around its centre, so it stays centred on the page
+								if (nRotAngle !== 0)
+									oXfrm.setRot(-nRotAngle * Math.PI / 180);
 								oDoc.AddDrawing(oPicture, nPage);
 								oPicture.getUniNvProps().cNvPr.setName(WATERMARK_PICTURE_NAME);
 								oPicture.setLockValue(AscFormat.LOCKS_MASKS.noSelect, true);
