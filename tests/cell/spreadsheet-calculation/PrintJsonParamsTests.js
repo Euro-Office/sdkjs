@@ -370,4 +370,360 @@ $(function () {
 			ws.getRange3(r1, col, r2, col).cleanAll();
 		}
 	});
+
+	QUnit.test("Page numbers of a workbook from an ODS file run across the sheets", function (assert) {
+		let wsView = api.wb.getWorksheet(0);
+		let wb = api.wbModel;
+		let oldSourceFileType = wb.sourceFileType;
+		let getWorksheet = wb.getWorksheet;
+		let sheetsWithNumbers = function (sheets) {
+			return function (index) {
+				let number = sheets[index];
+				return index < sheets.length ? {PagePrintOptions: {pageSetup: {useFirstPageNumber: number !== null, firstPageNumber: number}}} : null;
+			};
+		};
+		// the printed pages as calcPagesPrint returns them in arrPages: the sheet of each page
+		let printJob = function (pages) {
+			return pages.map(function (sheet) {
+				return {indexWorksheet: sheet};
+			});
+		};
+		// sheets: the first page number of each sheet's page style (null = continue); pages: the sheet of each printed page;
+		// jobSheets: the printed sheets of the job as calcPagesPrint records them in CPrintPagesData.jobSheets
+		let numbering = function (sheets, pages, jobSheets) {
+			wb.getWorksheet = sheetsWithNumbers(sheets);
+			try {
+				let printPages = printJob(pages);
+				return printPages.map(function (page, index) {
+					let res = wsView._getOdfPrintPageNumbering(printPages, index, jobSheets);
+					return res && [res.index, res.firstPageNumber];
+				});
+			} finally {
+				wb.getWorksheet = getWorksheet;
+			}
+		};
+		let pageNumberText = function (indexPrintPage, opt_firstPageNumber) {
+			let parser = new AscCommonExcel.HeaderFooterParser();
+			parser.parse("&P");
+			parser.calculateTokens(wsView, indexPrintPage, 10, true, opt_firstPageNumber);
+			let text = null;
+			parser.tokens.forEach(function (portion) {
+				portion && portion.forEach(function (token) {
+					if (token && token.getField && token.getField() === Asc.c_oAscHeaderFooterField.pageNumber) {
+						text = token._calculatedText;
+					}
+				});
+			});
+			return text;
+		};
+		try {
+			wb.sourceFileType = Asc.c_oAscFileType.XLSX;
+			assert.deepEqual(numbering([null, 5], [0, 1], [0, 1]), [null, null], "XLSX: every sheet starts again (Excel), no ODF numbering");
+			wb.sourceFileType = null;
+			assert.deepEqual(numbering([null, 5], [0, 1], [0, 1]), [null, null], "unknown source: no ODF numbering");
+
+			wb.sourceFileType = Asc.c_oAscFileType.ODS;
+			assert.deepEqual(numbering([null, null, null], [0, 0, 1, 2], [0, 1, 2]), [[0, 1], [1, 1], [2, 1], [3, 1]],
+				"ODS: the pages are numbered across the sheets");
+			assert.deepEqual(numbering([null, 5, null], [0, 0, 1, 1, 2], [0, 1, 2]), [[0, 1], [1, 1], [0, 5], [1, 5], [2, 5]],
+				"ODS: a sheet with a first page number starts again, the sheets after it continue");
+			assert.deepEqual(numbering([3, 3], [0, 0, 1], [0, 1]), [[0, 3], [1, 3], [0, 3]],
+				"ODS: every sheet with its own first page number starts again (page style names are not kept)");
+			assert.deepEqual(numbering([3, 7], [0, 1], [0, 1]), [[0, 3], [0, 7]], "ODS: another first page number starts again");
+			assert.deepEqual(numbering([null, 4, null], [0, 2], [0, 1, 2]), [[0, 1], [0, 4]],
+				"ODS: a sheet without printed pages still starts the numbers again");
+			assert.deepEqual(numbering([null, 0], [0, 1], [0, 1]), [[0, 1], [1, 1]], "ODS: first page number 0 continues");
+			assert.deepEqual(numbering([null, 5, null], [1, 2], [1, 2]), [[0, 5], [1, 5]],
+				"ODS, the job starts at a sheet with a first page number: the next sheet continues from it");
+			assert.deepEqual(numbering([5, null], [1, 1], [0, 1]), [[0, 5], [1, 5]],
+				"ODS, whole workbook: a first sheet without printed pages still passes on its number");
+			assert.deepEqual(numbering([5, null], [1, 1], [1]), [[0, 1], [1, 1]],
+				"ODS, one sheet printed: no number is taken over from a sheet that is not printed");
+			assert.deepEqual(numbering([null, 5], [0, 1]), [null, null],
+				"ODS, pages without the sheets of the job (not from calcPagesPrint): no ODF numbering");
+			assert.deepEqual(numbering([null, 5, null], [0, 0, 2, 2], [0, 2]), [[0, 1], [1, 1], [2, 1], [3, 1]],
+				"ODS, sheets 1 and 3 printed: the numbered sheet between them is not in the job and passes nothing on");
+			assert.deepEqual(numbering([null, 5, null], [0, 2], [0, 2]), [[0, 1], [1, 1]],
+				"ODS, whole workbook with a hidden numbered sheet 2 (calcPagesPrint leaves it out of jobSheets): sheet 3 continues from sheet 1");
+			assert.deepEqual(numbering([5, null, null], [2, 2, 0, 0], [2, 0]), [[0, 1], [1, 1], [0, 5], [1, 5]],
+				"ODS, selected tabs in the order 3, 1: numbered in print order, sheet 3 takes no number from sheet 1 printed after it");
+			wb.sourceFileType = Asc.c_oAscFileType.FODS;
+			assert.deepEqual(numbering([null, null], [0, 1], [0, 1]), [[0, 1], [1, 1]], "flat ODS: numbered across the sheets");
+			wb.sourceFileType = Asc.c_oAscFileType.OTS;
+			assert.deepEqual(numbering([null, null], [0, 1], [0, 1]), [[0, 1], [1, 1]], "ODS template: numbered across the sheets");
+
+			assert.strictEqual(pageNumberText(2, 5), "7", "page number field: index 2 of a run that starts at 5");
+
+			// drawForPrint hands the index and the run's first number to the header/footer (blank page path, no drawing)
+			let calls = [];
+			let hadStringRender = wsView.hasOwnProperty("stringRender");
+			let stringRender = wsView.stringRender;
+			wsView.drawHeaderFooter = function (drawingCtx, printPagesData, indexPrintPage, countPrintPages, opt_firstPageNumber) {
+				calls.push([indexPrintPage, opt_firstPageNumber]);
+			};
+			wsView.getZoom = function () {
+				return 1;
+			};
+			if (!wsView.stringRender) {
+				wsView.stringRender = {};
+			}
+			let sheets = [null, 5];
+			wb.getWorksheet = function (index) {
+				return sheetsWithNumbers(sheets)(index);
+			};
+			try {
+				let printPages = printJob([0, 0, 1, 1]);
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages, [0, 1]);
+				}
+				assert.deepEqual(calls, [[0, 1], [1, 1], [0, 5], [1, 5]], "ODS, drawForPrint: index since the restart and the run's first number");
+				calls = [];
+				sheets = [null, null];
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages, [0, 1]);
+				}
+				assert.deepEqual(calls, [[0, 1], [1, 1], [2, 1], [3, 1]], "ODS, drawForPrint: the index runs on across the sheets");
+				sheets = [null, 5];
+				calls = [];
+				wb.sourceFileType = Asc.c_oAscFileType.XLSX;
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages, [0, 1]);
+				}
+				assert.deepEqual(calls, [[0, null], [1, null], [0, null], [1, null]], "XLSX, drawForPrint: per sheet index, no run number");
+				wb.sourceFileType = Asc.c_oAscFileType.ODS;
+				calls = [];
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages);
+				}
+				assert.deepEqual(calls, [[0, null], [1, null], [0, null], [1, null]],
+					"ODS, drawForPrint without the sheets of the job: per sheet index, no run number");
+			} finally {
+				wb.getWorksheet = getWorksheet;
+				delete wsView.drawHeaderFooter;
+				delete wsView.getZoom;
+				if (hadStringRender) {
+					wsView.stringRender = stringRender;
+				} else {
+					delete wsView.stringRender;
+				}
+			}
+
+			// drawForPrint with a printed page, as printing and the print preview call it: the cells, the drawings and the
+			// fonts are stubbed, the page number reaches the header/footer the same way
+			calls = [];
+			let objectRender = wsView.objectRender;
+			let page = function (sheet) {
+				return {
+					indexWorksheet: sheet, pageRange: new Asc.Range(0, 0, 0, 0), pageWidth: 210, pageHeight: 297, scale: 1,
+					pageClipRectLeft: 0, pageClipRectTop: 0, pageClipRectWidth: 100, pageClipRectHeight: 100,
+					leftFieldInPx: 0, topFieldInPx: 0, startOffsetPx: 0, titleWidth: 0, titleHeight: 0
+				};
+			};
+			let drawnPages = [];
+			wsView.drawHeaderFooter = function (drawingCtx, printPagesData, indexPrintPage, countPrintPages, opt_firstPageNumber) {
+				calls.push([indexPrintPage, opt_firstPageNumber]);
+			};
+			wsView.getZoom = function () {
+				return 1;
+			};
+			wsView.stringRender = {
+				resetTransform: function () {
+				}
+			};
+			wsView.objectRender = {
+				print: function () {
+				},
+				updateDrawingsTransform: function () {
+				}
+			};
+			wsView._setDefaultFont = function () {
+			};
+			wsView._drawCellsAndBorders = function (drawingCtx, range) {
+				drawnPages.push(range.r1);
+			};
+			wsView._RemoveClipRect = function () {
+			};
+			// no drawing context of the sheet here
+			wsView._getPPIX = wsView._getPPIY = function () {
+				return 96;
+			};
+			wb.getWorksheet = sheetsWithNumbers([null, 5]);
+			try {
+				let printPages = [page(0), page(0), page(1), page(1)];
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({DocumentRenderer: {}}, printPages[i], i, printPages, [0, 1]);
+				}
+				assert.strictEqual(drawnPages.length, 4, "ODS, drawForPrint with printed pages: the cells of every page are drawn (stubbed)");
+				assert.deepEqual(calls, [[0, 1], [1, 1], [0, 5], [1, 5]],
+					"ODS, drawForPrint with printed pages: index since the restart and the run's first number");
+			} finally {
+				wb.getWorksheet = getWorksheet;
+				delete wsView.drawHeaderFooter;
+				delete wsView.getZoom;
+				delete wsView._setDefaultFont;
+				delete wsView._drawCellsAndBorders;
+				delete wsView._RemoveClipRect;
+				delete wsView._getPPIX;
+				delete wsView._getPPIY;
+				wsView.objectRender = objectRender;
+				if (hadStringRender) {
+					wsView.stringRender = stringRender;
+				} else {
+					delete wsView.stringRender;
+				}
+			}
+			assert.strictEqual(pageNumberText(2), "3", "page number field: without a start number the sheet's own setting (1)");
+
+			// the real drawHeaderFooter (only the drawing stubbed): the page number text and the first/odd/even choice
+			// follow the run, as drawForPrint hands them over
+			let drawn = [];
+			let getPrintHeaderFooterFromJson = api.wb.getPrintHeaderFooterFromJson;
+			let headerFooter = new Asc.CHeaderFooter(null);
+			headerFooter.setDifferentFirst(true);
+			headerFooter.setDifferentOddEven(true);
+			headerFooter.setFirstHeader("F&P");
+			headerFooter.setOddHeader("O&P");
+			headerFooter.setEvenHeader("E&P");
+			headerFooter.setFirstFooter("f&P");
+			headerFooter.setOddFooter("o&P");
+			headerFooter.setEvenFooter("e&P");
+			api.wb.getPrintHeaderFooterFromJson = function () {
+				return headerFooter;
+			};
+			wsView._drawHeaderFooter = function (drawingCtx, printPagesData, curHeader, indexPrintPage, countPrintPages, bFooter) {
+				let text = "";
+				curHeader.parser.tokens.forEach(function (portion) {
+					portion && portion.forEach(function (token) {
+						text += [].concat(token._calculatedText).join("");
+					});
+				});
+				drawn.push(text);
+			};
+			wb.getWorksheet = sheetsWithNumbers([null, 5]);
+			try {
+				let printPages = printJob([0, 0, 1, 1, 1]);
+				let pageTexts = function () {
+					let res = [];
+					for (let i = 0; i < printPages.length; i++) {
+						let odf = wsView._getOdfPrintPageNumbering(printPages, i, [0, 1]);
+						drawn = [];
+						wsView.drawHeaderFooter({}, {}, odf.index, printPages.length, odf.firstPageNumber);
+						res.push(drawn.join(" "));
+					}
+					return res;
+				};
+				// LibreOffice 24.2 prints the same: the even header on page "6" of a count that starts at 5
+				assert.deepEqual(pageTexts(), ["F1 f1", "E2 e2", "F5 f5", "E6 e6", "O7 o7"],
+					"ODS, drawHeaderFooter: page numbers of the run, first page header at the start of each run, then even/odd");
+				drawn = [];
+				wsView.drawHeaderFooter({}, {}, 2, 5, null);
+				assert.deepEqual(drawn, ["O3", "o3"], "drawHeaderFooter without a run number: the sheet's own numbering");
+			} finally {
+				wb.getWorksheet = getWorksheet;
+				api.wb.getPrintHeaderFooterFromJson = getPrintHeaderFooterFromJson;
+				delete wsView._drawHeaderFooter;
+			}
+
+			// print preview: the page settings of the preview win over the sheet's own
+			let printPreviewState = api.wb.printPreviewState;
+			let preview = function (started, pageOptionsMap) {
+				return {
+					isStart: function () {
+						return started;
+					},
+					getActivePageSetup: function () {
+						return null;
+					},
+					advancedOptions: {pageOptionsMap: pageOptionsMap}
+				};
+			};
+			let previewSetup = function (number) {
+				return {pageSetup: {useFirstPageNumber: number !== null, firstPageNumber: number}};
+			};
+			try {
+				api.wb.printPreviewState = preview(true, {1: previewSetup(null)});
+				assert.deepEqual(numbering([null, 5, null], [0, 1, 2], [0, 1, 2]), [[0, 1], [1, 1], [2, 1]],
+					"ODS, print preview: a first page number cleared in the preview continues");
+				api.wb.printPreviewState = preview(true, {2: previewSetup(9)});
+				assert.deepEqual(numbering([null, 5, null], [0, 1, 2], [0, 1, 2]), [[0, 1], [0, 5], [0, 9]],
+					"ODS, print preview: a first page number set in the preview starts again");
+				api.wb.printPreviewState = preview(false, {1: previewSetup(null), 2: previewSetup(9)});
+				assert.deepEqual(numbering([null, 5, null], [0, 1, 2], [0, 1, 2]), [[0, 1], [0, 5], [1, 5]],
+					"ODS, print preview not started: the sheets' own settings");
+			} finally {
+				api.wb.printPreviewState = printPreviewState;
+			}
+		} finally {
+			wb.getWorksheet = getWorksheet;
+			wb.sourceFileType = oldSourceFileType;
+		}
+	});
+
+	QUnit.test("calcPagesPrint records the sheets of the print job", function (assert) {
+		let wbView = api.wb;
+		// no layout: sheet 1 has no pages, the others one each; a sheet in hidden is not printed
+		let hidden = [];
+		wbView.model.getWorksheet = function (index) {
+			return {
+				PagePrintOptions: null, getHidden: function () {
+					return hidden.indexOf(index) !== -1;
+				}
+			};
+		};
+		wbView.getWorksheet = function (index) {
+			return {
+				calcPagesPrint: function (pageOptions, onlySelection, indexWorksheet, arrPages) {
+					if (indexWorksheet !== 1) {
+						arrPages.push({indexWorksheet: indexWorksheet});
+					}
+				}
+			};
+		};
+		// no drawing context here: the zoom is read and set around the page layout
+		wbView.getZoom = function () {
+			return 1;
+		};
+		wbView.changeZoom = function () {
+		};
+		wbView.model.getWorksheetCount = function () {
+			return 3;
+		};
+		wbView.model.getActive = function () {
+			return 2;
+		};
+		let jobSheets = function (printType, opt_activeSheets) {
+			let adjustPrint = new Asc.asc_CAdjustPrint();
+			adjustPrint.asc_setPrintType(printType);
+			if (opt_activeSheets) {
+				adjustPrint.asc_setActiveSheetsArray(opt_activeSheets);
+			}
+			let printPagesData = wbView.calcPagesPrint(adjustPrint);
+			assert.notOk(printPagesData.arrPages.hasOwnProperty("jobSheets"), "the sheets of the job are not kept on the page array");
+			return [printPagesData.jobSheets, printPagesData.arrPages.map(function (page) {
+				return page.indexWorksheet;
+			})];
+		};
+		try {
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.EntireWorkbook), [[0, 1, 2], [0, 2]],
+				"whole workbook: every sheet, also the one without pages");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets, [0, 1]), [[0, 1], [0]], "selected sheets");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets, [2, 0]), [[2, 0], [2, 0]],
+				"selected sheets keep the order they were selected in");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets), [[2], [2]], "active sheet");
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.Selection), [[2], [2]], "selection of the active sheet");
+			hidden = [1];
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.EntireWorkbook), [[0, 2], [0, 2]],
+				"whole workbook: a hidden sheet is not printed and not one of the sheets of the job");
+			hidden = [0];
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.EntireWorkbook), [[1, 2], [2]],
+				"whole workbook: a hidden first sheet is left out, the sheet without pages stays");
+		} finally {
+			delete wbView.model.getWorksheet;
+			delete wbView.getWorksheet;
+			delete wbView.getZoom;
+			delete wbView.changeZoom;
+			delete wbView.model.getWorksheetCount;
+			delete wbView.model.getActive;
+		}
+	});
 });

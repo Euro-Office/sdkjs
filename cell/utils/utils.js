@@ -3224,6 +3224,8 @@
 		function CPrintPagesData() {
 			this.arrPages = [];
 			this.currentIndex = 0;
+			// the printed sheets of the job in print order, also those without printed pages (set by calcPagesPrint)
+			this.jobSheets = null;
 
 			return this;
 		}
