@@ -3971,7 +3971,7 @@
 					  ws = t.getWorksheet(indexWorksheetTmp);
 					  indexWorksheet = indexWorksheetTmp;
 				  }
-				  ws.drawForPrint(pdfPrinter, printPagesData.arrPages[i], i, printPagesData.arrPages);
+				  ws.drawForPrint(pdfPrinter, printPagesData.arrPages[i], i, printPagesData.arrPages, printPagesData.jobSheets);
 			  }
 		  }
 	  });
@@ -4140,7 +4140,8 @@
 			ws.drawForPrint(printPreviewContext, null);
 		} else {
 			ws = this.getWorksheet(page.indexWorksheet);
-			ws.drawForPrint(printPreviewContext, page, index, printPreviewState.pages && printPreviewState.pages.arrPages);
+			ws.drawForPrint(printPreviewContext, page, index, printPreviewState.pages && printPreviewState.pages.arrPages,
+				printPreviewState.pages && printPreviewState.pages.jobSheets);
 		}
 	};
 
@@ -4152,6 +4153,7 @@
 	}
 	return {firstEmptyPage: null, skippedCount: 0, limitReached: false};
   };
+  // Returns true when the sheet is printed (hidden sheets are not), also when it has no printed pages
   WorkbookView.prototype._calcPagesPrintSheet = function (index, printPagesData, onlySelection, adjustPrint, skipEmptyPages) {
   	var ws = this.model.getWorksheet(index);
   	var wsView = this.getWorksheet(index);
@@ -4159,7 +4161,9 @@
 		var pageOptionsMap = adjustPrint ? adjustPrint.asc_getPageOptionsMap() : null;
   		var pagePrintOptions = pageOptionsMap && pageOptionsMap[index] ? pageOptionsMap[index] : ws.PagePrintOptions;
   		wsView.calcPagesPrint(pagePrintOptions, onlySelection, index, printPagesData.arrPages, null, adjustPrint, null, skipEmptyPages);
+  		return true;
   	}
+  	return false;
   };
   WorkbookView.prototype.calcPagesPrint = function (adjustPrint) {
   	if (!adjustPrint) {
@@ -4193,12 +4197,14 @@
 				if(adjustPrint.isOnlyFirstPage && i !== 0) {
 					break;
 				}
-				this._calcPagesPrintSheet(activeSheetsArray[i], printPagesData, false, adjustPrint, skipEmptyPages);
-				jobSheets.push(activeSheetsArray[i]);
+				if (this._calcPagesPrintSheet(activeSheetsArray[i], printPagesData, false, adjustPrint, skipEmptyPages)) {
+					jobSheets.push(activeSheetsArray[i]);
+				}
 			}
 		} else {
-			this._calcPagesPrintSheet(nActive, printPagesData, false, adjustPrint, skipEmptyPages);
-			jobSheets.push(nActive);
+			if (this._calcPagesPrintSheet(nActive, printPagesData, false, adjustPrint, skipEmptyPages)) {
+				jobSheets.push(nActive);
+			}
 		}
     } else if (printType === Asc.c_oAscPrintType.EntireWorkbook) {
       // Колличество листов
@@ -4207,18 +4213,21 @@
       	if(adjustPrint.isOnlyFirstPage && i !== 0) {
       		break;
 		}
-      	this._calcPagesPrintSheet(i, printPagesData, false, adjustPrint, skipEmptyPages);
-      	jobSheets.push(i);
+      	// hidden sheets are not printed, so they take no part in the page numbers either
+      	if (this._calcPagesPrintSheet(i, printPagesData, false, adjustPrint, skipEmptyPages)) {
+      		jobSheets.push(i);
+      	}
       }
     } else if (printType === Asc.c_oAscPrintType.Selection) {
 		let _activeSheetsArray = adjustPrint && adjustPrint.asc_getActiveSheetsArray && adjustPrint.asc_getActiveSheetsArray();
 		let activeSheet = _activeSheetsArray && _activeSheetsArray[0] != null ? _activeSheetsArray[0] : null;
 		let selectionSheet = activeSheet != null ? activeSheet : nActive;
-		this._calcPagesPrintSheet(selectionSheet, printPagesData, true, adjustPrint, skipEmptyPages);
-		jobSheets.push(selectionSheet);
+		if (this._calcPagesPrintSheet(selectionSheet, printPagesData, true, adjustPrint, skipEmptyPages)) {
+			jobSheets.push(selectionSheet);
+		}
     }
-    // the sheets of the job, also those without printed pages (ODF page numbers, see _getOdfPrintPageNumbering)
-    printPagesData.arrPages.jobSheets = jobSheets;
+    // the printed sheets of the job, also those without printed pages (ODF page numbers, see _getOdfPrintPageNumbering)
+    printPagesData.jobSheets = jobSheets;
 
     // Nothing but empty pages: print the first of them, as before
     if (skipEmptyPages && 0 === printPagesData.arrPages.length && skipEmptyPages.firstEmptyPage) {

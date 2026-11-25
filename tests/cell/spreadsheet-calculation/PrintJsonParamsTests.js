@@ -300,24 +300,20 @@ $(function () {
 				return index < sheets.length ? {PagePrintOptions: {pageSetup: {useFirstPageNumber: number !== null, firstPageNumber: number}}} : null;
 			};
 		};
-		// the printed pages as calcPagesPrint returns them: the sheet of each page, and the sheets of the job in print order
-		let printJob = function (pages, jobSheets) {
-			let printPages = pages.map(function (sheet) {
+		// the printed pages as calcPagesPrint returns them in arrPages: the sheet of each page
+		let printJob = function (pages) {
+			return pages.map(function (sheet) {
 				return {indexWorksheet: sheet};
 			});
-			if (jobSheets) {
-				printPages.jobSheets = jobSheets;
-			}
-			return printPages;
 		};
 		// sheets: the first page number of each sheet's page style (null = continue); pages: the sheet of each printed page;
-		// jobSheets: the sheets of the print job as calcPagesPrint records them
+		// jobSheets: the printed sheets of the job as calcPagesPrint records them in CPrintPagesData.jobSheets
 		let numbering = function (sheets, pages, jobSheets) {
 			wb.getWorksheet = sheetsWithNumbers(sheets);
 			try {
-				let printPages = printJob(pages, jobSheets);
+				let printPages = printJob(pages);
 				return printPages.map(function (page, index) {
-					let res = wsView._getOdfPrintPageNumbering(printPages, index);
+					let res = wsView._getOdfPrintPageNumbering(printPages, index, jobSheets);
 					return res && [res.index, res.firstPageNumber];
 				});
 			} finally {
@@ -365,6 +361,8 @@ $(function () {
 				"ODS, pages without the sheets of the job (not from calcPagesPrint): no ODF numbering");
 			assert.deepEqual(numbering([null, 5, null], [0, 0, 2, 2], [0, 2]), [[0, 1], [1, 1], [2, 1], [3, 1]],
 				"ODS, sheets 1 and 3 printed: the numbered sheet between them is not in the job and passes nothing on");
+			assert.deepEqual(numbering([null, 5, null], [0, 2], [0, 2]), [[0, 1], [1, 1]],
+				"ODS, whole workbook with a hidden numbered sheet 2 (calcPagesPrint leaves it out of jobSheets): sheet 3 continues from sheet 1");
 			assert.deepEqual(numbering([5, null, null], [2, 2, 0, 0], [2, 0]), [[0, 1], [1, 1], [0, 5], [1, 5]],
 				"ODS, selected tabs in the order 3, 1: numbered in print order, sheet 3 takes no number from sheet 1 printed after it");
 			wb.sourceFileType = Asc.c_oAscFileType.FODS;
@@ -392,29 +390,100 @@ $(function () {
 				return sheetsWithNumbers(sheets)(index);
 			};
 			try {
-				let printPages = printJob([0, 0, 1, 1], [0, 1]);
+				let printPages = printJob([0, 0, 1, 1]);
 				for (let i = 0; i < printPages.length; i++) {
-					wsView.drawForPrint({}, null, i, printPages);
+					wsView.drawForPrint({}, null, i, printPages, [0, 1]);
 				}
 				assert.deepEqual(calls, [[0, 1], [1, 1], [0, 5], [1, 5]], "ODS, drawForPrint: index since the restart and the run's first number");
 				calls = [];
 				sheets = [null, null];
 				for (let i = 0; i < printPages.length; i++) {
-					wsView.drawForPrint({}, null, i, printPages);
+					wsView.drawForPrint({}, null, i, printPages, [0, 1]);
 				}
 				assert.deepEqual(calls, [[0, 1], [1, 1], [2, 1], [3, 1]], "ODS, drawForPrint: the index runs on across the sheets");
 				sheets = [null, 5];
 				calls = [];
 				wb.sourceFileType = Asc.c_oAscFileType.XLSX;
 				for (let i = 0; i < printPages.length; i++) {
-					wsView.drawForPrint({}, null, i, printPages);
+					wsView.drawForPrint({}, null, i, printPages, [0, 1]);
 				}
 				assert.deepEqual(calls, [[0, null], [1, null], [0, null], [1, null]], "XLSX, drawForPrint: per sheet index, no run number");
 				wb.sourceFileType = Asc.c_oAscFileType.ODS;
+				calls = [];
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({}, null, i, printPages);
+				}
+				assert.deepEqual(calls, [[0, null], [1, null], [0, null], [1, null]],
+					"ODS, drawForPrint without the sheets of the job: per sheet index, no run number");
 			} finally {
 				wb.getWorksheet = getWorksheet;
 				delete wsView.drawHeaderFooter;
 				delete wsView.getZoom;
+				if (hadStringRender) {
+					wsView.stringRender = stringRender;
+				} else {
+					delete wsView.stringRender;
+				}
+			}
+
+			// drawForPrint with a printed page, as printing and the print preview call it: the cells, the drawings and the
+			// fonts are stubbed, the page number reaches the header/footer the same way
+			calls = [];
+			let objectRender = wsView.objectRender;
+			let page = function (sheet) {
+				return {
+					indexWorksheet: sheet, pageRange: new Asc.Range(0, 0, 0, 0), pageWidth: 210, pageHeight: 297, scale: 1,
+					pageClipRectLeft: 0, pageClipRectTop: 0, pageClipRectWidth: 100, pageClipRectHeight: 100,
+					leftFieldInPx: 0, topFieldInPx: 0, startOffsetPx: 0, titleWidth: 0, titleHeight: 0
+				};
+			};
+			let drawnPages = [];
+			wsView.drawHeaderFooter = function (drawingCtx, printPagesData, indexPrintPage, countPrintPages, opt_firstPageNumber) {
+				calls.push([indexPrintPage, opt_firstPageNumber]);
+			};
+			wsView.getZoom = function () {
+				return 1;
+			};
+			wsView.stringRender = {
+				resetTransform: function () {
+				}
+			};
+			wsView.objectRender = {
+				print: function () {
+				},
+				updateDrawingsTransform: function () {
+				}
+			};
+			wsView._setDefaultFont = function () {
+			};
+			wsView._drawCellsAndBorders = function (drawingCtx, range) {
+				drawnPages.push(range.r1);
+			};
+			wsView._RemoveClipRect = function () {
+			};
+			// no drawing context of the sheet here
+			wsView._getPPIX = wsView._getPPIY = function () {
+				return 96;
+			};
+			wb.getWorksheet = sheetsWithNumbers([null, 5]);
+			try {
+				let printPages = [page(0), page(0), page(1), page(1)];
+				for (let i = 0; i < printPages.length; i++) {
+					wsView.drawForPrint({DocumentRenderer: {}}, printPages[i], i, printPages, [0, 1]);
+				}
+				assert.strictEqual(drawnPages.length, 4, "ODS, drawForPrint with printed pages: the cells of every page are drawn (stubbed)");
+				assert.deepEqual(calls, [[0, 1], [1, 1], [0, 5], [1, 5]],
+					"ODS, drawForPrint with printed pages: index since the restart and the run's first number");
+			} finally {
+				wb.getWorksheet = getWorksheet;
+				delete wsView.drawHeaderFooter;
+				delete wsView.getZoom;
+				delete wsView._setDefaultFont;
+				delete wsView._drawCellsAndBorders;
+				delete wsView._RemoveClipRect;
+				delete wsView._getPPIX;
+				delete wsView._getPPIY;
+				wsView.objectRender = objectRender;
 				if (hadStringRender) {
 					wsView.stringRender = stringRender;
 				} else {
@@ -450,11 +519,11 @@ $(function () {
 			};
 			wb.getWorksheet = sheetsWithNumbers([null, 5]);
 			try {
-				let printPages = printJob([0, 0, 1, 1, 1], [0, 1]);
+				let printPages = printJob([0, 0, 1, 1, 1]);
 				let pageTexts = function () {
 					let res = [];
 					for (let i = 0; i < printPages.length; i++) {
-						let odf = wsView._getOdfPrintPageNumbering(printPages, i);
+						let odf = wsView._getOdfPrintPageNumbering(printPages, i, [0, 1]);
 						drawn = [];
 						wsView.drawHeaderFooter({}, {}, odf.index, printPages.length, odf.firstPageNumber);
 						res.push(drawn.join(" "));
@@ -509,11 +578,23 @@ $(function () {
 
 	QUnit.test("calcPagesPrint records the sheets of the print job", function (assert) {
 		let wbView = api.wb;
-		// no layout: sheet 1 has no pages, the others one each
-		wbView._calcPagesPrintSheet = function (index, printPagesData) {
-			if (index !== 1) {
-				printPagesData.arrPages.push({indexWorksheet: index});
-			}
+		// no layout: sheet 1 has no pages, the others one each; a sheet in hidden is not printed
+		let hidden = [];
+		wbView.model.getWorksheet = function (index) {
+			return {
+				PagePrintOptions: null, getHidden: function () {
+					return hidden.indexOf(index) !== -1;
+				}
+			};
+		};
+		wbView.getWorksheet = function (index) {
+			return {
+				calcPagesPrint: function (pageOptions, onlySelection, indexWorksheet, arrPages) {
+					if (indexWorksheet !== 1) {
+						arrPages.push({indexWorksheet: indexWorksheet});
+					}
+				}
+			};
 		};
 		// no drawing context here: the zoom is read and set around the page layout
 		wbView.getZoom = function () {
@@ -533,8 +614,9 @@ $(function () {
 			if (opt_activeSheets) {
 				adjustPrint.asc_setActiveSheetsArray(opt_activeSheets);
 			}
-			let arrPages = wbView.calcPagesPrint(adjustPrint).arrPages;
-			return [arrPages.jobSheets, arrPages.map(function (page) {
+			let printPagesData = wbView.calcPagesPrint(adjustPrint);
+			assert.notOk(printPagesData.arrPages.hasOwnProperty("jobSheets"), "the sheets of the job are not kept on the page array");
+			return [printPagesData.jobSheets, printPagesData.arrPages.map(function (page) {
 				return page.indexWorksheet;
 			})];
 		};
@@ -546,8 +628,15 @@ $(function () {
 				"selected sheets keep the order they were selected in");
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.ActiveSheets), [[2], [2]], "active sheet");
 			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.Selection), [[2], [2]], "selection of the active sheet");
+			hidden = [1];
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.EntireWorkbook), [[0, 2], [0, 2]],
+				"whole workbook: a hidden sheet is not printed and not one of the sheets of the job");
+			hidden = [0];
+			assert.deepEqual(jobSheets(Asc.c_oAscPrintType.EntireWorkbook), [[1, 2], [2]],
+				"whole workbook: a hidden first sheet is left out, the sheet without pages stays");
 		} finally {
-			delete wbView._calcPagesPrintSheet;
+			delete wbView.model.getWorksheet;
+			delete wbView.getWorksheet;
 			delete wbView.getZoom;
 			delete wbView.changeZoom;
 			delete wbView.model.getWorksheetCount;

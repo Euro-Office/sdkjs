@@ -4141,7 +4141,7 @@ function isAllowPasteLink(pastedWb) {
 		oRangeSizes.height += 3;
 		return oRangeSizes;
 	};
-	WorksheetView.prototype.drawForPrint = function (drawingCtx, printPagesData, indexPrintPage, pages) {
+	WorksheetView.prototype.drawForPrint = function (drawingCtx, printPagesData, indexPrintPage, pages, opt_jobSheets) {
 		let t = this;
 		let countPrintPages = pages && pages.length;
 
@@ -4161,7 +4161,7 @@ function isAllowPasteLink(pastedWb) {
 		};
 		//ODF numbers the pages across the sheets, see _getOdfPrintPageNumbering
 		let firstPageNumber = null;
-		let odfNumbering = this._getOdfPrintPageNumbering(pages, indexPrintPage);
+		let odfNumbering = this._getOdfPrintPageNumbering(pages, indexPrintPage, opt_jobSheets);
 		if (odfNumbering) {
 			indexPrintPage = odfNumbering.index;
 			firstPageNumber = odfNumbering.firstPageNumber;
@@ -5473,9 +5473,10 @@ function isAllowPasteLink(pastedWb) {
 	 * Page numbering of a workbook printed from ODF. ODF numbers the printed pages across the whole
 	 * spreadsheet (LibreOffice ScPrintFuncCache): a sheet whose page style sets a first page number
 	 * starts the count again, the sheets after it continue from there. The first page and odd/even
-	 * headers follow the same count. Only the sheets of the print job count (pages.jobSheets, set by
-	 * calcPagesPrint; a sheet of the job without printed pages still passes on its number): printing
-	 * one sheet does not take over a number from a sheet before it.
+	 * headers follow the same count. Only the printed sheets of the job count (jobSheets, set by
+	 * calcPagesPrint; a sheet of the job without printed pages still passes on its number, a hidden
+	 * sheet is not printed and passes on nothing): printing one sheet does not take over a number from
+	 * a sheet before it.
 	 * The count follows the print order of the job: selected tabs print in the order they were
 	 * selected, which need not be the order of the sheets.
 	 * Known differences, as page style names are not kept here: LibreOffice continues when the next
@@ -5485,12 +5486,13 @@ function isAllowPasteLink(pastedWb) {
 	 * that is not printed; here such a sheet is skipped. LibreOffice prints and numbers selected sheets
 	 * in sheet order; here they are numbered in the order they print, which is the order they were
 	 * selected in.
-	 * @param {Array} pages printed pages of the job, in print order, with the sheets of the job in pages.jobSheets
+	 * @param {Array} pages printed pages of the job, in print order
 	 * @param {number} indexPrintPage index of the current page in pages
+	 * @param {?Array<number>} jobSheets the printed sheets of the job in print order (CPrintPagesData.jobSheets)
 	 * @returns {?{index: number, firstPageNumber: number}} page index since the last restart and the
-	 * number of the first page of that run; null when the workbook is not from ODF or pages has no jobSheets
+	 * number of the first page of that run; null when the workbook is not from ODF or there are no jobSheets
 	 */
-	WorksheetView.prototype._getOdfPrintPageNumbering = function (pages, indexPrintPage) {
+	WorksheetView.prototype._getOdfPrintPageNumbering = function (pages, indexPrintPage, jobSheets) {
 		let wb = this.model.workbook;
 		if (!(pages && pages[indexPrintPage] && wb && wb.isOpenDocumentSource())) {
 			return null;
@@ -5509,7 +5511,6 @@ function isAllowPasteLink(pastedWb) {
 
 		//the sheets of the job (also those without printed pages), in print order: the order of the selected tabs need not
 		//be the order of the sheets, so walk back by position in the job, not by sheet index
-		let jobSheets = pages.jobSheets;
 		let currentSheet = pages[indexPrintPage].indexWorksheet;
 		let pos = jobSheets ? jobSheets.indexOf(currentSheet) : -1;
 		if (pos === -1) {
