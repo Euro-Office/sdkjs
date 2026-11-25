@@ -2105,6 +2105,8 @@
 	window['AscDFH'].historyitem_TableCell_NoWrap        = window['AscDFH'].historyitem_type_TableCell | 13;
 	window['AscDFH'].historyitem_TableCell_HMerge        = window['AscDFH'].historyitem_type_TableCell | 14;
 	window['AscDFH'].historyitem_TableCell_PrChange      = window['AscDFH'].historyitem_type_TableCell | 15;
+	window['AscDFH'].historyitem_TableCell_Border_TL2BR  = window['AscDFH'].historyitem_type_TableCell | 16;
+	window['AscDFH'].historyitem_TableCell_Border_TR2BL  = window['AscDFH'].historyitem_type_TableCell | 17;
 	//------------------------------------------------------------------------------------------------------------------
 	// Типы изменений в классе CDocumentContent
 	//------------------------------------------------------------------------------------------------------------------

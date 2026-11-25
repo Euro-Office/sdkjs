@@ -6001,6 +6001,14 @@ background-repeat: no-repeat;\
 				{
 					obj.CellBorders.InsideV.Unifill = AscFormat.CreateUnifillFromAscColor(obj.CellBorders.InsideV.Color, 1);
 				}
+				if (obj.CellBorders.TL2BR && obj.CellBorders.TL2BR.Color)
+				{
+					obj.CellBorders.TL2BR.Unifill = AscFormat.CreateUnifillFromAscColor(obj.CellBorders.TL2BR.Color, 1);
+				}
+				if (obj.CellBorders.TR2BL && obj.CellBorders.TR2BL.Color)
+				{
+					obj.CellBorders.TR2BL.Unifill = AscFormat.CreateUnifillFromAscColor(obj.CellBorders.TR2BL.Color, 1);
+				}
 			}
 			if (obj.CellsBackground && obj.CellsBackground.Color)
 			{

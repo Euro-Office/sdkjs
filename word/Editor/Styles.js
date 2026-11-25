@@ -11860,7 +11860,9 @@ function CTableCellPr()
         Bottom : undefined,
         Left   : undefined,
         Right  : undefined,
-        Top    : undefined
+        Top    : undefined,
+        TL2BR  : undefined, // diagonal from top left to bottom right (w:tl2br)
+        TR2BL  : undefined  // diagonal from top right to bottom left (w:tr2bl)
     };
     this.TableCellW       = undefined;
     this.VAlign           = undefined;
@@ -11905,6 +11907,12 @@ CTableCellPr.prototype.Copy = function(bCopyPrChange)
 
 	if (undefined != this.TableCellBorders.Top)
 		CellPr.TableCellBorders.Top = this.TableCellBorders.Top.Copy();
+
+	if (undefined != this.TableCellBorders.TL2BR)
+		CellPr.TableCellBorders.TL2BR = this.TableCellBorders.TL2BR.Copy();
+
+	if (undefined != this.TableCellBorders.TR2BL)
+		CellPr.TableCellBorders.TR2BL = this.TableCellBorders.TR2BL.Copy();
 
 	if (undefined != this.TableCellW)
 		CellPr.TableCellW = this.TableCellW.Copy();
@@ -11957,6 +11965,12 @@ CTableCellPr.prototype.Merge = function(CellPr)
 	if (undefined != CellPr.TableCellBorders.Top)
 		this.TableCellBorders.Top = CellPr.TableCellBorders.Top.Copy();
 
+	if (undefined != CellPr.TableCellBorders.TL2BR)
+		this.TableCellBorders.TL2BR = CellPr.TableCellBorders.TL2BR.Copy();
+
+	if (undefined != CellPr.TableCellBorders.TR2BL)
+		this.TableCellBorders.TR2BL = CellPr.TableCellBorders.TR2BL.Copy();
+
 	if (undefined != CellPr.TableCellW)
 		this.TableCellW = CellPr.TableCellW.Copy();
 
@@ -11997,6 +12011,8 @@ CTableCellPr.prototype.Is_Equal = function(CellPr)
 		|| true !== IsEqualStyleObjects(this.TableCellBorders.Left, CellPr.TableCellBorders.Left)
 		|| true !== IsEqualStyleObjects(this.TableCellBorders.Right, CellPr.TableCellBorders.Right)
 		|| true !== IsEqualStyleObjects(this.TableCellBorders.Top, CellPr.TableCellBorders.Top)
+		|| true !== IsEqualStyleObjects(this.TableCellBorders.TL2BR, CellPr.TableCellBorders.TL2BR)
+		|| true !== IsEqualStyleObjects(this.TableCellBorders.TR2BL, CellPr.TableCellBorders.TR2BL)
 		|| true !== IsEqualStyleObjects(this.TableCellW, CellPr.TableCellW)
 		|| this.VAlign !== CellPr.VAlign
 		|| this.VMerge !== CellPr.VMerge
@@ -12016,6 +12032,8 @@ CTableCellPr.prototype.InitDefault = function(nCompatibilityMode)
 	this.TableCellBorders.Left   = undefined;
 	this.TableCellBorders.Right  = undefined;
 	this.TableCellBorders.Top    = undefined;
+	this.TableCellBorders.TL2BR  = undefined;
+	this.TableCellBorders.TR2BL  = undefined;
 	this.TableCellW              = new CTableMeasurement(tblwidth_Auto, 0);
 	this.VAlign                  = vertalignjc_Top;
 	this.VMerge                  = vmerge_Restart;
@@ -12099,6 +12117,22 @@ CTableCellPr.prototype.Set_FromObject = function(CellPr)
 		}
 		else
 			this.TableCellBorders.Top = undefined;
+
+		if (undefined != CellPr.TableCellBorders.TL2BR)
+		{
+			this.TableCellBorders.TL2BR = new CDocumentBorder();
+			this.TableCellBorders.TL2BR.Set_FromObject(CellPr.TableCellBorders.TL2BR);
+		}
+		else
+			this.TableCellBorders.TL2BR = undefined;
+
+		if (undefined != CellPr.TableCellBorders.TR2BL)
+		{
+			this.TableCellBorders.TR2BL = new CDocumentBorder();
+			this.TableCellBorders.TR2BL.Set_FromObject(CellPr.TableCellBorders.TR2BL);
+		}
+		else
+			this.TableCellBorders.TR2BL = undefined;
 	}
 	else
 	{
@@ -12106,6 +12140,8 @@ CTableCellPr.prototype.Set_FromObject = function(CellPr)
 		this.TableCellBorders.Left   = undefined;
 		this.TableCellBorders.Right  = undefined;
 		this.TableCellBorders.Top    = undefined;
+		this.TableCellBorders.TL2BR  = undefined;
+		this.TableCellBorders.TR2BL  = undefined;
 	}
 
 	if (undefined != CellPr.TableCellW)
@@ -12143,6 +12179,10 @@ CTableCellPr.prototype.Check_PresentationPr = function(Theme)
 	{
 		this.TableCellBorders.Top.Check_PresentationPr(Theme);
 	}
+	if (this.TableCellBorders.TL2BR)
+		this.TableCellBorders.TL2BR.Check_PresentationPr(Theme);
+	if (this.TableCellBorders.TR2BL)
+		this.TableCellBorders.TR2BL.Check_PresentationPr(Theme);
 };
 CTableCellPr.prototype.Write_ToBinary = function(Writer)
 {
@@ -12265,6 +12305,18 @@ CTableCellPr.prototype.Write_ToBinary = function(Writer)
 		Flags |= 262144;
 	}
 
+	if (undefined !== this.TableCellBorders.TL2BR)
+	{
+		this.TableCellBorders.TL2BR.Write_ToBinary(Writer);
+		Flags |= 524288;
+	}
+
+	if (undefined !== this.TableCellBorders.TR2BL)
+	{
+		this.TableCellBorders.TR2BL.Write_ToBinary(Writer);
+		Flags |= 1048576;
+	}
+
 	var EndPos = Writer.GetCurPosition();
 	Writer.Seek(StartPos);
 	Writer.WriteLong(Flags);
@@ -12366,6 +12418,18 @@ CTableCellPr.prototype.Read_FromBinary = function(Reader)
 		this.PrChange.ReadFromBinary(Reader);
 		this.ReviewInfo.ReadFromBinary(Reader);
 	}
+
+	if (524288 & Flags)
+	{
+		this.TableCellBorders.TL2BR = new CDocumentBorder();
+		this.TableCellBorders.TL2BR.Read_FromBinary(Reader);
+	}
+
+	if (1048576 & Flags)
+	{
+		this.TableCellBorders.TR2BL = new CDocumentBorder();
+		this.TableCellBorders.TR2BL.Read_FromBinary(Reader);
+	}
 };
 CTableCellPr.prototype.WriteToBinary = function(oWriter)
 {
@@ -12384,6 +12448,8 @@ CTableCellPr.prototype.Is_Empty = function()
 		|| undefined !== this.TableCellBorders.Left
 		|| undefined !== this.TableCellBorders.Right
 		|| undefined !== this.TableCellBorders.Top
+		|| undefined !== this.TableCellBorders.TL2BR
+		|| undefined !== this.TableCellBorders.TR2BL
 		|| undefined !== this.TableCellW
 		|| undefined !== this.VAlign
 		|| undefined !== this.VMerge

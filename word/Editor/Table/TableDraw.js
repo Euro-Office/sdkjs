@@ -101,6 +101,10 @@ CTable.prototype.Draw = function(CurPage, pGraphics, isDrawContent)
 			// 4. Рисуем границы всех ячеек таблицы
 			//-------------------------------------------------------------------------------------
 			this.private_DrawCellsBorders(pGraphics, CurPage, Row_start, Row_last);
+			//-------------------------------------------------------------------------------------
+			// 5. Diagonal borders of the cells (w:tl2br, w:tr2bl)
+			//-------------------------------------------------------------------------------------
+			this.private_DrawCellsDiagonals(pGraphics, CurPage, Row_start, Row_last);
 		}
 
     if (pGraphics.EndCheckTableDraw)
@@ -594,6 +598,105 @@ CTable.prototype.private_DrawCellsBackground = function(pGraphics, PNum, Row_sta
             }
         }
     }
+};
+/**
+ * Draws the diagonal borders of the cells on the given page. A merged cell gets one line from corner to corner.
+ */
+CTable.prototype.private_DrawCellsDiagonals = function(pGraphics, PNum, Row_start, Row_last)
+{
+	if (!pGraphics || !pGraphics._m || !pGraphics._l || !pGraphics.ds)
+		return;
+
+	var Page     = this.Pages[PNum];
+	var Theme    = this.Get_Theme();
+	var ColorMap = this.Get_ColorMap();
+
+	function drawCell(oCell, X0, Y0, X1, Y1)
+	{
+		for (var nIndex = 0; nIndex < 2; ++nIndex)
+		{
+			var isUp    = (1 === nIndex);
+			var oBorder = oCell.GetDiagonalBorder(isUp);
+			if (!oBorder || border_Single !== oBorder.Value)
+				continue;
+
+			var RGBA = oBorder.Get_Color2(Theme, ColorMap);
+			pGraphics.p_color(RGBA.r, RGBA.g, RGBA.b, 255);
+			pGraphics.p_width(oBorder.Size * 1000);
+			if (pGraphics._s)
+				pGraphics._s();
+
+			if (isUp)
+			{
+				pGraphics._m(X1, Y0);
+				pGraphics._l(X0, Y1);
+			}
+			else
+			{
+				pGraphics._m(X0, Y0);
+				pGraphics._l(X1, Y1);
+			}
+			pGraphics.ds();
+		}
+	}
+
+	var CurRow, Row, CellsCount, CurCell, Cell, GridSpan, CurGridCol, CellInfo, VMergeCount, Y, RealHeight;
+
+	if (this.HeaderInfo.Count > 0 && PNum > this.HeaderInfo.PageIndex && true === this.HeaderInfo.Pages[PNum].Draw)
+	{
+		var HeaderPage = this.HeaderInfo.Pages[PNum];
+		for (CurRow = 0; CurRow < this.HeaderInfo.Count; ++CurRow)
+		{
+			Row        = HeaderPage.Rows[CurRow];
+			CellsCount = Row.Get_CellsCount();
+			Y          = HeaderPage.RowsInfo[CurRow].Y;
+			for (CurCell = 0; CurCell < CellsCount; ++CurCell)
+			{
+				Cell = Row.Get_Cell(CurCell);
+				if (vmerge_Continue === Cell.GetVMerge())
+					continue;
+
+				GridSpan    = Cell.Get_GridSpan();
+				CellInfo    = Row.Get_CellInfo(CurCell);
+				CurGridCol  = CellInfo.StartGridCol;
+				VMergeCount = this.Internal_GetVertMergeCount(CurRow, CurGridCol, GridSpan);
+				RealHeight  = HeaderPage.RowsInfo[CurRow + VMergeCount - 1].Y + HeaderPage.RowsInfo[CurRow + VMergeCount - 1].H - Y;
+				drawCell(Cell, Page.X + CellInfo.X_cell_start, Y, Page.X + CellInfo.X_cell_end, Y + RealHeight);
+			}
+		}
+	}
+
+	for (CurRow = Row_start; CurRow <= Row_last; ++CurRow)
+	{
+		Row        = this.Content[CurRow];
+		CellsCount = Row.Get_CellsCount();
+		Y          = this.RowsInfo[CurRow].Y[PNum];
+		for (CurCell = 0; CurCell < CellsCount; ++CurCell)
+		{
+			Cell       = Row.Get_Cell(CurCell);
+			GridSpan   = Cell.Get_GridSpan();
+			CellInfo   = Row.Get_CellInfo(CurCell);
+			CurGridCol = CellInfo.StartGridCol;
+
+			if (vmerge_Continue === Cell.GetVMerge())
+			{
+				// A vertically merged cell that goes on onto this page: the diagonal belongs to its first cell
+				if (Row_start !== CurRow)
+					continue;
+
+				Cell = this.Internal_Get_StartMergedCell(CurRow, CurGridCol, GridSpan);
+				if (!Cell)
+					continue;
+			}
+
+			VMergeCount = this.private_GetVertMergeCountOnPage(PNum, CurRow, CurGridCol, GridSpan);
+			if (VMergeCount <= 0)
+				continue;
+
+			RealHeight = this.RowsInfo[CurRow + VMergeCount - 1].Y[PNum] + this.RowsInfo[CurRow + VMergeCount - 1].H[PNum] - Y;
+			drawCell(Cell, Page.X + CellInfo.X_cell_start, Y, Page.X + CellInfo.X_cell_end, Y + RealHeight);
+		}
+	}
 };
 CTable.prototype.private_DrawCellsContent = function(pGraphics, PNum, Row_start, Row_last)
 {

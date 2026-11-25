@@ -40,6 +40,8 @@ AscDFH.changesFactory[AscDFH.historyitem_TableCell_TextDirection] = CChangesTabl
 AscDFH.changesFactory[AscDFH.historyitem_TableCell_NoWrap]        = CChangesTableCellNoWrap;
 AscDFH.changesFactory[AscDFH.historyitem_TableCell_HMerge]        = CChangesTableCellHMerge;
 AscDFH.changesFactory[AscDFH.historyitem_TableCell_PrChange]      = CChangesTableCellPrChange;
+AscDFH.changesFactory[AscDFH.historyitem_TableCell_Border_TL2BR]  = CChangesTableCellBorderTL2BR;
+AscDFH.changesFactory[AscDFH.historyitem_TableCell_Border_TR2BL]  = CChangesTableCellBorderTR2BL;
 
 //----------------------------------------------------------------------------------------------------------------------
 // Карта зависимости изменений
@@ -99,7 +101,9 @@ AscDFH.changesRelationMap[AscDFH.historyitem_TableCell_Pr]            = [
 	AscDFH.historyitem_TableCell_TextDirection,
 	AscDFH.historyitem_TableCell_NoWrap,
 	AscDFH.historyitem_TableCell_HMerge,
-	AscDFH.historyitem_TableCell_PrChange
+	AscDFH.historyitem_TableCell_PrChange,
+	AscDFH.historyitem_TableCell_Border_TL2BR,
+	AscDFH.historyitem_TableCell_Border_TR2BL
 ];
 AscDFH.changesRelationMap[AscDFH.historyitem_TableCell_TextDirection] = [
 	AscDFH.historyitem_TableCell_TextDirection,
@@ -115,6 +119,14 @@ AscDFH.changesRelationMap[AscDFH.historyitem_TableCell_HMerge]        = [
 ];
 AscDFH.changesRelationMap[AscDFH.historyitem_TableCell_PrChange] = [
 	AscDFH.historyitem_TableCell_PrChange,
+	AscDFH.historyitem_TableCell_Pr
+];
+AscDFH.changesRelationMap[AscDFH.historyitem_TableCell_Border_TL2BR] = [
+	AscDFH.historyitem_TableCell_Border_TL2BR,
+	AscDFH.historyitem_TableCell_Pr
+];
+AscDFH.changesRelationMap[AscDFH.historyitem_TableCell_Border_TR2BL] = [
+	AscDFH.historyitem_TableCell_Border_TR2BL,
 	AscDFH.historyitem_TableCell_Pr
 ];
 /**
@@ -1144,3 +1156,47 @@ CChangesTableCellPrChange.prototype.Merge = function(oChange)
 	return true;
 };
 CChangesTableCellPrChange.prototype.CheckLock = private_TableChangesCheckLock;
+/**
+ * Diagonal border from the top left to the bottom right corner (w:tl2br)
+ * @constructor
+ * @extends {AscDFH.CChangesBaseProperty}
+ */
+function CChangesTableCellBorderTL2BR(Class, Old, New, Color)
+{
+	AscDFH.CChangesBaseProperty.call(this, Class, Old, New, Color);
+}
+CChangesTableCellBorderTL2BR.prototype = Object.create(AscDFH.CChangesBaseProperty.prototype);
+CChangesTableCellBorderTL2BR.prototype.constructor = CChangesTableCellBorderTL2BR;
+CChangesTableCellBorderTL2BR.prototype.Type = AscDFH.historyitem_TableCell_Border_TL2BR;
+CChangesTableCellBorderTL2BR.prototype.WriteToBinary = CChangesTableCellBorderLeft.prototype.WriteToBinary;
+CChangesTableCellBorderTL2BR.prototype.ReadFromBinary = CChangesTableCellBorderLeft.prototype.ReadFromBinary;
+CChangesTableCellBorderTL2BR.prototype.private_SetValue = function(Value)
+{
+	var oCell = this.Class;
+	oCell.Pr.TableCellBorders.TL2BR = Value;
+	oCell.Recalc_CompiledPr();
+};
+CChangesTableCellBorderTL2BR.prototype.Merge = private_TableCellChangesOnMergePr;
+CChangesTableCellBorderTL2BR.prototype.CheckLock = private_TableChangesCheckLock;
+/**
+ * Diagonal border from the top right to the bottom left corner (w:tr2bl)
+ * @constructor
+ * @extends {AscDFH.CChangesBaseProperty}
+ */
+function CChangesTableCellBorderTR2BL(Class, Old, New, Color)
+{
+	AscDFH.CChangesBaseProperty.call(this, Class, Old, New, Color);
+}
+CChangesTableCellBorderTR2BL.prototype = Object.create(AscDFH.CChangesBaseProperty.prototype);
+CChangesTableCellBorderTR2BL.prototype.constructor = CChangesTableCellBorderTR2BL;
+CChangesTableCellBorderTR2BL.prototype.Type = AscDFH.historyitem_TableCell_Border_TR2BL;
+CChangesTableCellBorderTR2BL.prototype.WriteToBinary = CChangesTableCellBorderLeft.prototype.WriteToBinary;
+CChangesTableCellBorderTR2BL.prototype.ReadFromBinary = CChangesTableCellBorderLeft.prototype.ReadFromBinary;
+CChangesTableCellBorderTR2BL.prototype.private_SetValue = function(Value)
+{
+	var oCell = this.Class;
+	oCell.Pr.TableCellBorders.TR2BL = Value;
+	oCell.Recalc_CompiledPr();
+};
+CChangesTableCellBorderTR2BL.prototype.Merge = private_TableCellChangesOnMergePr;
+CChangesTableCellBorderTR2BL.prototype.CheckLock = private_TableChangesCheckLock;

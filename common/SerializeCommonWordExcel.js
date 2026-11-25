@@ -263,6 +263,11 @@ BinaryCommonWriter.prototype.WriteBorders = function(Borders)
     //Between
     if(null != Borders.Between)
         this.WriteItem(c_oSerBordersType.between, function(){oThis.WriteBorder(Borders.Between);});
+    //Diagonals (table cells only)
+    if(null != Borders.TL2BR)
+        this.WriteItem(c_oSerBordersType.tl2br, function(){oThis.WriteBorder(Borders.TL2BR);});
+    if(null != Borders.TR2BL)
+        this.WriteItem(c_oSerBordersType.tr2bl, function(){oThis.WriteBorder(Borders.TR2BL);});
 };
 BinaryCommonWriter.prototype.WriteColor = function(type, color)
 {
