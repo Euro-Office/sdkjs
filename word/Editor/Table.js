@@ -551,6 +551,8 @@ CTable.prototype.Get_Props = function()
 			InsideH : null === Border_insideH ? null : Border_insideH.Copy(),
 			InsideV : null === Border_insideV ? null : Border_insideV.Copy()
 		};
+		Pr.CellBorders.TL2BR = this.private_GetCellsDiagonalForProps(false);
+		Pr.CellBorders.TR2BL = this.private_GetCellsDiagonalForProps(true);
 
 		if (null === CellShd)
 			Pr.CellsBackground = null;
@@ -738,6 +740,8 @@ CTable.prototype.Get_Props = function()
 			InsideH : null === Border_insideH ? null : Border_insideH.Copy(),
 			InsideV : null === Border_insideV ? null : Border_insideV.Copy()
 		};
+		Pr.CellBorders.TL2BR = this.private_GetCellsDiagonalForProps(false);
+		Pr.CellBorders.TR2BL = this.private_GetCellsDiagonalForProps(true);
 
 		var oRowH = this.CurCell.Row.GetHeight();
 		if (oRowH.IsAuto())
@@ -1537,7 +1541,10 @@ CTable.prototype.Set_Props = function(Props)
 	}
 
 	// CellBorders (границы ячеек)
-	if ("undefined" != typeof(Props.CellBorders) && null != Props.CellBorders)
+	// (the diagonals are handled below; with only diagonals given there is nothing to do here)
+	if ("undefined" != typeof(Props.CellBorders) && null != Props.CellBorders
+		&& (Props.CellBorders.Left || Props.CellBorders.Top || Props.CellBorders.Right || Props.CellBorders.Bottom
+			|| Props.CellBorders.InsideH || Props.CellBorders.InsideV))
 	{
 		var Cells_array = null;
 
@@ -1941,6 +1948,20 @@ CTable.prototype.Set_Props = function(Props)
 				}
 			}
 		}
+	}
+
+	// Diagonal borders of the cells (w:tl2br, w:tr2bl)
+	if (Props.CellBorders && (Props.CellBorders.TL2BR || Props.CellBorders.TR2BL))
+	{
+		var arrDiagCells = this.private_GetCellsForDiagonals();
+		for (var nDiagIndex = 0, nDiagCount = arrDiagCells.length; nDiagIndex < nDiagCount; ++nDiagIndex)
+		{
+			if (Props.CellBorders.TL2BR)
+				arrDiagCells[nDiagIndex].SetDiagonalBorder(Props.CellBorders.TL2BR, false);
+			if (Props.CellBorders.TR2BL)
+				arrDiagCells[nDiagIndex].SetDiagonalBorder(Props.CellBorders.TR2BL, true);
+		}
+		bRedraw = true;
 	}
 
 	// TableBackground  (заливка таблицы)
@@ -16114,6 +16135,68 @@ CTable.prototype.Internal_CompareBorders3 = function(Border1, Border2)
 		return false;
 
 	return true;
+};
+/**
+ * The cells that diagonal borders apply to: the selected cells, or the current cell.
+ * A vertically merged cell is returned once, as its first cell.
+ * @returns {CTableCell[]}
+ */
+CTable.prototype.private_GetCellsForDiagonals = function()
+{
+	var arrPos = [];
+	if (true === this.Selection.Use && table_Selection_Cell === this.Selection.Type && this.Selection.Data)
+		arrPos = this.Selection.Data;
+
+	// e.g. only the hidden part of a vertically merged cell is selected: then it is the current cell
+	if (!arrPos.length && this.CurCell)
+		arrPos = [{Row : this.CurCell.Row.Index, Cell : this.CurCell.Index}];
+
+	var arrCells = [];
+	for (var nIndex = 0, nCount = arrPos.length; nIndex < nCount; ++nIndex)
+	{
+		var oRow  = this.GetRow(arrPos[nIndex].Row);
+		var oCell = oRow ? oRow.GetCell(arrPos[nIndex].Cell) : null;
+		if (!oCell)
+			continue;
+
+		if (vmerge_Continue === oCell.GetVMerge())
+			oCell = this.Internal_Get_StartMergedCell(arrPos[nIndex].Row, oRow.GetCellInfo(arrPos[nIndex].Cell).StartGridCol, oCell.GetGridSpan());
+
+		if (oCell && -1 === arrCells.indexOf(oCell))
+			arrCells.push(oCell);
+	}
+	return arrCells;
+};
+/**
+ * The diagonal border of the selected cells for the table properties
+ * @param {boolean} isUp
+ * @returns {?CDocumentBorder} a border with Value none if no cell has it, null if the cells differ
+ */
+CTable.prototype.private_GetCellsDiagonalForProps = function(isUp)
+{
+	var arrCells = this.private_GetCellsForDiagonals();
+	var oResult  = undefined;
+	for (var nIndex = 0, nCount = arrCells.length; nIndex < nCount; ++nIndex)
+	{
+		var oBorder = arrCells[nIndex].GetDiagonalBorder(isUp);
+		if (!oBorder)
+		{
+			oBorder = new CDocumentBorder();
+			oBorder.Value = border_None;
+		}
+
+		if (undefined === oResult)
+			oResult = oBorder;
+		else if (!oResult.IsEqual(oBorder))
+			return null;
+	}
+
+	if (undefined === oResult)
+	{
+		oResult = new CDocumentBorder();
+		oResult.Value = border_None;
+	}
+	return oResult.Copy();
 };
 CTable.prototype.Internal_CheckNullBorder = function(Border)
 {

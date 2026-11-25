@@ -868,6 +868,9 @@
 			this.Bottom = (undefined != obj.Bottom && null != obj.Bottom) ? new Asc.asc_CTextBorder(obj.Bottom) : null;
 			this.InsideH = (undefined != obj.InsideH && null != obj.InsideH) ? new Asc.asc_CTextBorder(obj.InsideH) : null;
 			this.InsideV = (undefined != obj.InsideV && null != obj.InsideV) ? new Asc.asc_CTextBorder(obj.InsideV) : null;
+			// Diagonals of table cells: undefined - not given, null - the selected cells differ
+			this.TL2BR = (undefined != obj.TL2BR && null != obj.TL2BR) ? new Asc.asc_CTextBorder(obj.TL2BR) : (null === obj.TL2BR ? null : undefined);
+			this.TR2BL = (undefined != obj.TR2BL && null != obj.TR2BL) ? new Asc.asc_CTextBorder(obj.TR2BL) : (null === obj.TR2BL ? null : undefined);
 		}
 		//Все свойства класса CBorders должны быть undefined если они не изменялись
 		/*else
@@ -991,6 +994,30 @@
 		this.Flag = v;
 	};
 
+	/**
+	 * Diagonal from the top left to the bottom right corner of the cell (w:tl2br)
+	 * @returns {?asc_CTextBorder} undefined - not given, null - the selected cells differ, Value 0 - no diagonal
+	 */
+	CBorders.prototype.get_DiagonalDown = function ()
+	{
+		return this.TL2BR;
+	};
+	CBorders.prototype.put_DiagonalDown = function (v)
+	{
+		this.TL2BR = (v) ? new Asc.asc_CTextBorder(v) : undefined;
+	};
+	/**
+	 * Diagonal from the top right to the bottom left corner of the cell (w:tr2bl)
+	 * @returns {?asc_CTextBorder} undefined - not given, null - the selected cells differ, Value 0 - no diagonal
+	 */
+	CBorders.prototype.get_DiagonalUp = function ()
+	{
+		return this.TR2BL;
+	};
+	CBorders.prototype.put_DiagonalUp = function (v)
+	{
+		this.TR2BL = (v) ? new Asc.asc_CTextBorder(v) : undefined;
+	};
 	window['Asc']['CBorders'] = window['Asc'].CBorders = CBorders;
 	CBorders.prototype['get_Left'] = CBorders.prototype.get_Left;
 	CBorders.prototype['put_Left'] = CBorders.prototype.put_Left;
@@ -1004,6 +1031,10 @@
 	CBorders.prototype['put_InsideH'] = CBorders.prototype.put_InsideH;
 	CBorders.prototype['get_InsideV'] = CBorders.prototype.get_InsideV;
 	CBorders.prototype['put_InsideV'] = CBorders.prototype.put_InsideV;
+	CBorders.prototype['get_DiagonalDown'] = CBorders.prototype.get_DiagonalDown;
+	CBorders.prototype['put_DiagonalDown'] = CBorders.prototype.put_DiagonalDown;
+	CBorders.prototype['get_DiagonalUp']   = CBorders.prototype.get_DiagonalUp;
+	CBorders.prototype['put_DiagonalUp']   = CBorders.prototype.put_DiagonalUp;
 	window['Asc']['CMargins'] = window['Asc'].CMargins = CMargins;
 	CMargins.prototype['get_Left'] = CMargins.prototype.get_Left;
 	CMargins.prototype['put_Left'] = CMargins.prototype.put_Left;

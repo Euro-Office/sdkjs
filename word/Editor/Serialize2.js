@@ -9593,6 +9593,20 @@ function Binary_pPrReader(doc, oReadResult, stream)
             });
 			Borders.Between = oNewBorber;
         }
+        else if( c_oSerBordersType.tl2br === type )
+        {
+            res = this.bcr.Read2(length, function(t, l){
+                return oThis.ReadBorder(t, l, oNewBorber);
+            });
+			Borders.TL2BR = oNewBorber;
+        }
+        else if( c_oSerBordersType.tr2bl === type )
+        {
+            res = this.bcr.Read2(length, function(t, l){
+                return oThis.ReadBorder(t, l, oNewBorber);
+            });
+			Borders.TR2BL = oNewBorber;
+        }
         else
             res = c_oSerConstants.ReadUnknown;
         return res;

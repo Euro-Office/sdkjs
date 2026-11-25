@@ -1187,6 +1187,8 @@ CTableCell.prototype =
         this.Set_Border( undefined, 1 );
         this.Set_Border( undefined, 2 );
         this.Set_Border( undefined, 3 );
+        this.SetDiagonalBorder( undefined, false );
+        this.SetDiagonalBorder( undefined, true );
 
         if ( true === bClearMerge )
         {
@@ -2709,6 +2711,60 @@ CTableCell.prototype.GetBorders = function()
 		Bottom : this.GetBorder(2),
 		Left   : this.GetBorder(3)
 	};
+};
+/**
+ * Diagonal border of the cell
+ * @param {boolean} isUp - false: from the top left to the bottom right (w:tl2br), true: from the top right to the bottom left (w:tr2bl)
+ * @returns {?CDocumentBorder} undefined if there is no diagonal
+ */
+CTableCell.prototype.GetDiagonalBorder = function(isUp)
+{
+	var oBorders = this.Get_CompiledPr(false).TableCellBorders;
+	var oBorder  = isUp ? oBorders.TR2BL : oBorders.TL2BR;
+	if (!oBorder || border_Single !== oBorder.Value)
+		return undefined;
+
+	return oBorder;
+};
+/**
+ * Sets or removes a diagonal border of the cell
+ * @param {?CDocumentBorder | asc_CTextBorder} oBorder - undefined, null or a border without a line (Value none or nil, as the interface sends it) removes the diagonal
+ * @param {boolean} isUp - false: from the top left to the bottom right (w:tl2br), true: from the top right to the bottom left (w:tr2bl)
+ */
+CTableCell.prototype.SetDiagonalBorder = function(oBorder, isUp)
+{
+	var oOld = isUp ? this.Pr.TableCellBorders.TR2BL : this.Pr.TableCellBorders.TL2BR;
+	var oNew = undefined;
+
+	if (oBorder && (null === oBorder.Value || undefined === oBorder.Value || border_Single === oBorder.Value))
+	{
+		var oDef = oOld ? oOld : new CDocumentBorder();
+		oNew = new CDocumentBorder();
+
+		oNew.Value   = border_Single;
+		oNew.Size    = null != oBorder.Size ? oBorder.Size : oDef.Size;
+		oNew.Space   = 0;
+		oNew.Color.r = null != oBorder.Color ? oBorder.Color.r : oDef.Color.r;
+		oNew.Color.g = null != oBorder.Color ? oBorder.Color.g : oDef.Color.g;
+		oNew.Color.b = null != oBorder.Color ? oBorder.Color.b : oDef.Color.b;
+		oNew.Unifill = null != oBorder.Unifill ? oBorder.Unifill : oDef.Unifill;
+	}
+
+	if (oOld === oNew || (oOld && oNew && oOld.IsEqual(oNew)))
+		return;
+
+	this.private_AddPrChange();
+	if (isUp)
+	{
+		AscCommon.History.Add(new CChangesTableCellBorderTR2BL(this, oOld, oNew));
+		this.Pr.TableCellBorders.TR2BL = oNew;
+	}
+	else
+	{
+		AscCommon.History.Add(new CChangesTableCellBorderTL2BR(this, oOld, oNew));
+		this.Pr.TableCellBorders.TL2BR = oNew;
+	}
+	this.Recalc_CompiledPr();
 };
 CTableCell.prototype.CheckContentControlEditingLock = function()
 {
