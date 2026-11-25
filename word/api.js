@@ -13457,6 +13457,13 @@ background-repeat: no-repeat;\
 			}
 		}
 
+		// A document saved with the markup of its tracked insertions and deletions hidden
+		// (w:revisionView w:insDel="0", ODF ShowRedlineChanges false) is rendered as Final when it is
+		// converted (PDF, image, HTML), as Word and LibreOffice show it. Not in the mobile editor:
+		// there the document stays editable with its changes.
+		if (!window['IS_NATIVE_EDITOR'] && Document.Settings && false === Document.Settings.RevisionViewInsDel)
+			Document.AcceptAllRevisionChanges(true, false);
+
 		Document.MoveCursorToStartPos();
 
 		if (window['IS_NATIVE_EDITOR']) {

@@ -58,6 +58,8 @@
 		this.GutterAtTop     = false;
 		this.MirrorMargins   = false;
 		this.TrackRevisions  = false; // Флаг рецензирования, который записан в самом файле
+		// w:revisionView w:insDel: false = saved without the markup of tracked insertions and deletions
+		this.RevisionViewInsDel = undefined;
 
 		// Compatibility
 		this.SplitPageBreakAndParaMark        = false;
