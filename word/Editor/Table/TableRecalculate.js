@@ -239,17 +239,19 @@ CTable.prototype.private_RecalculateCheckPageColumnBreak = function(CurPage)
         return false;
     }
 
-	// A page break before a paragraph of the first row starts the whole table on a new page (Word; LibreOffice moves
-	// such a break to the table, SwNodes::TextToTable). Same exceptions as Paragraph's PageBreakBefore: no break for
-	// the first element of the document or after a non-continuous section break.
-	if (0 === CurPage && null !== PrevElement && this.private_IsFirstRowPageBreakBefore())
+	// A page break before the first paragraph of the first cell starts the whole table on the next page (Word;
+	// LibreOffice moves that break to the table, SwNodes::TextToTable), or in the next column, as a paragraph's page
+	// break before does. Same exceptions as the paragraph: no break for the first element of the document or after
+	// a section break that is not continuous or changes the page size.
+	if (0 === CurPage && null !== PrevElement && this.private_IsFirstCellPageBreakBefore())
 	{
 		let needBreak = true;
 		if (type_Paragraph === PrevElement.Get_Type() && undefined !== PrevElement.Get_SectionPr())
 		{
 			let prevSectPr = PrevElement.Get_SectionPr();
 			let curSectPr  = docSections.GetSectPrByElement(this);
-			if (c_oAscSectionBreakType.Continuous !== curSectPr.Get_Type() || true !== curSectPr.Compare_PageSize(prevSectPr))
+			if (c_oAscSectionBreakType.Continuous !== curSectPr.Get_Type()
+				|| true !== curSectPr.Compare_PageSize(prevSectPr))
 				needBreak = false;
 		}
 
@@ -262,19 +264,15 @@ CTable.prototype.private_RecalculateCheckPageColumnBreak = function(CurPage)
 
     return true;
 };
-CTable.prototype.private_IsFirstRowPageBreakBefore = function()
+CTable.prototype.private_IsFirstCellPageBreakBefore = function()
 {
-	if (this.GetRowsCount() <= 0)
+	if (this.GetRowsCount() <= 0 || this.GetRow(0).GetCellsCount() <= 0)
 		return false;
 
-	let row = this.GetRow(0);
-	for (let iCell = 0, cellsCount = row.GetCellsCount(); iCell < cellsCount; ++iCell)
-	{
-		let firstElement = row.GetCell(iCell).GetContent().GetElement(0);
-		if (firstElement && firstElement.IsParagraph() && true === firstElement.Get_CompiledPr2(false).ParaPr.PageBreakBefore)
-			return true;
-	}
-	return false;
+	let firstElement = this.GetRow(0).GetCell(0).GetContent().GetElement(0);
+	return !!(firstElement
+		&& firstElement.IsParagraph()
+		&& true === firstElement.Get_CompiledPr2(false).ParaPr.PageBreakBefore);
 };
 CTable.prototype.private_RecalculateGrid = function(pageFields)
 {
