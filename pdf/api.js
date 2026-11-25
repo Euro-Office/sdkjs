@@ -870,6 +870,173 @@
 		const oDoc = this.getPDFDoc();
 		return !oDoc.IsMergeLock();
 	};
+	// bit 5 of the /P entry of an encrypted PDF (ISO 32000-1, table 22): copy or otherwise extract text and graphics.
+	// The numbers given to CheckPerm are these bit positions (AscPDF.USER_PERMISSIONS: print 3, edit 4).
+	const PDF_PERM_COPY = 5;
+	/**
+	 * Why the pages can't be written into a new PDF file (asc_GetPagesAsPdfBlock).
+	 * @enum {number}
+	 */
+	const c_oAscPdfPagesAsPdfBlock = {
+		None        : 0,
+		Invalid     : 1, // not a PDF file, or not pages of the document
+		Changes     : 2, // changes the engine can't write yet: save the file and open it again
+		Permissions : 3, // the file does not allow copying or extracting its content
+		Password    : 4  // the file needs a password to open, the new file would not have one
+	};
+	window['Asc']['c_oAscPdfPagesAsPdfBlock'] = window['Asc'].c_oAscPdfPagesAsPdfBlock = c_oAscPdfPagesAsPdfBlock;
+	c_oAscPdfPagesAsPdfBlock['None']        = c_oAscPdfPagesAsPdfBlock.None;
+	c_oAscPdfPagesAsPdfBlock['Invalid']     = c_oAscPdfPagesAsPdfBlock.Invalid;
+	c_oAscPdfPagesAsPdfBlock['Changes']     = c_oAscPdfPagesAsPdfBlock.Changes;
+	c_oAscPdfPagesAsPdfBlock['Permissions'] = c_oAscPdfPagesAsPdfBlock.Permissions;
+	c_oAscPdfPagesAsPdfBlock['Password']    = c_oAscPdfPagesAsPdfBlock.Password;
+	/**
+	 * The page indexes sorted and without duplicates, or null if one of them is not a page of the document.
+	 * @param {CPDFDoc} oDoc
+	 * @param {number[]} aPages
+	 * @returns {?number[]}
+	 */
+	function GetValidPageIndexes(oDoc, aPages) {
+		if (!Array.isArray(aPages) || !aPages.length)
+			return null;
+
+		let nPagesCount = oDoc.GetPagesCount();
+		let aResult = [];
+		for (let i = 0; i < aPages.length; i++) {
+			let nPage = aPages[i];
+			if (typeof nPage !== "number" || nPage % 1 !== 0 || nPage < 0 || nPage >= nPagesCount)
+				return null;
+			if (aResult.indexOf(nPage) === -1)
+				aResult.push(nPage);
+		}
+		return aResult.sort(function(a, b) {
+			return a - b;
+		});
+	}
+	/**
+	 * Whether the pages can be written into a new PDF file with asc_GetPagesAsPdf.
+	 * The new file is made by the PDF engine from the pages of the opened file, with their annotations and form fields.
+	 * The engine can't write what was added in the editor as drawings (text boxes, shapes, pictures, edited page
+	 * text), applied redactions, drawn annotations changed since opening, new blank pages or a changed page order.
+	 * Such pages give false: they can be extracted after the file was saved and opened again.
+	 * @param {number[]} aPages page indexes
+	 * @returns {boolean}
+	 */
+	PDFEditorApi.prototype.asc_CanGetPagesAsPdf = function(aPages) {
+		return this.asc_GetPagesAsPdfBlock(aPages) === c_oAscPdfPagesAsPdfBlock.None;
+	};
+	/**
+	 * Why asc_GetPagesAsPdf can't write the given pages, see Asc.c_oAscPdfPagesAsPdfBlock.
+	 * The engine writes the new file without encryption, so it can't keep the restrictions or the open password
+	 * of a protected file. Such files are refused unless the owner password was entered in this session
+	 * (asc_CheckEditPassword or asc_CheckPrintPassword with the password).
+	 * @param {number[]} aPages page indexes
+	 * @returns {number}
+	 */
+	PDFEditorApi.prototype.asc_GetPagesAsPdfBlock = function(aPages) {
+		let oDoc = this.getPDFDoc();
+		let oFile = oDoc && oDoc.Viewer && oDoc.Viewer.file;
+		if (!oFile || oFile.type !== 0)
+			return c_oAscPdfPagesAsPdfBlock.Invalid;
+
+		let aIndexes = GetValidPageIndexes(oDoc, aPages);
+		if (!aIndexes)
+			return c_oAscPdfPagesAsPdfBlock.Invalid;
+
+		if (!this.isPdfOwnerPasswordChecked) {
+			if (this.currentPassword || oDoc.Viewer.savedPassword)
+				return c_oAscPdfPagesAsPdfBlock.Password;
+
+			let oNativeFile = oFile.nativeFile;
+			if (!oNativeFile || !oNativeFile["CheckPerm"] || !oNativeFile["CheckPerm"](PDF_PERM_COPY))
+				return c_oAscPdfPagesAsPdfBlock.Permissions;
+		}
+
+		if (!CanEngineWritePages(oDoc, aIndexes))
+			return c_oAscPdfPagesAsPdfBlock.Changes;
+
+		return c_oAscPdfPagesAsPdfBlock.None;
+	};
+	/**
+	 * Whether the engine can write the pages as they are now (see asc_CanGetPagesAsPdf).
+	 * @param {CPDFDoc} oDoc
+	 * @param {number[]} aIndexes valid page indexes, sorted
+	 * @returns {boolean}
+	 */
+	function CanEngineWritePages(oDoc, aIndexes) {
+		let oFile = oDoc.Viewer.file;
+
+		let nPrevOriginIndex = -1;
+		for (let i = 0; i < aIndexes.length; i++) {
+			let oFilePage = oFile.pages[aIndexes[i]];
+			let oPageInfo = oDoc.GetPageInfo(aIndexes[i]);
+			if (!oFilePage || !oPageInfo || undefined == oFilePage.originIndex || oFilePage.isRecognized)
+				return false;
+
+			// the engine writes the pages in the order of the opened file
+			if (oFilePage.originIndex < nPrevOriginIndex)
+				return false;
+			nPrevOriginIndex = oFilePage.originIndex;
+
+			if (oPageInfo.drawings && oPageInfo.drawings.length)
+				return false;
+
+			let aAnnots = oPageInfo.annots || [];
+			for (let j = 0; j < aAnnots.length; j++) {
+				let oAnnot = aAnnots[j];
+				if (oAnnot.IsRedact() && oAnnot.GetRedactId())
+					return false;
+				// the engine writes drawn annotations without their appearance
+				if (oAnnot.IsShapeBased() && oAnnot.IsChanged())
+					return false;
+			}
+		}
+
+		let aPageIds = aIndexes.map(function(nPage) {
+			return oDoc.GetPageInfo(nPage).GetId();
+		});
+		let aRedacts = oDoc.appliedRedactsData || [];
+		for (let i = 0; i < aRedacts.length; i++) {
+			if (aPageIds.indexOf(aRedacts[i].pageId) !== -1)
+				return false;
+		}
+
+		return true;
+	}
+	/**
+	 * The given pages as a new PDF file (the same as "copy page" writes for paste), for saving it under a new name.
+	 * The opened document is not changed.
+	 * @param {number[]} aPages page indexes
+	 * @returns {?Uint8Array} the bytes of the PDF file, null if asc_CanGetPagesAsPdf is false or the engine fails
+	 */
+	PDFEditorApi.prototype.asc_GetPagesAsPdf = function(aPages) {
+		if (!this.asc_CanGetPagesAsPdf(aPages))
+			return null;
+
+		let oDoc = this.getPDFDoc();
+		let aBytes = null;
+		try {
+			aBytes = oDoc.GetPagesBinary(GetValidPageIndexes(oDoc, aPages), false);
+		}
+		catch (e) {
+			aBytes = null;
+		}
+		return aBytes && aBytes.length ? aBytes : null;
+	};
+	/**
+	 * Saves the given pages as a new PDF file: the browser downloads it, the desktop app asks where to save it.
+	 * @param {number[]} aPages page indexes
+	 * @param {string} sFileName
+	 * @returns {boolean} false if nothing was saved (see asc_CanGetPagesAsPdf)
+	 */
+	PDFEditorApi.prototype.asc_SavePagesAsPdf = function(aPages, sFileName) {
+		let aBytes = this.asc_GetPagesAsPdf(aPages);
+		if (!aBytes)
+			return false;
+
+		AscCommon.DownloadFileFromBytes(aBytes, sFileName || "pages.pdf", "application/pdf");
+		return true;
+	};
 	PDFEditorApi.prototype.asc_GetSelectedText = function(bClearText, select_Pr) {
 		if (!this.DocumentRenderer)
 			return "";
@@ -5187,7 +5354,10 @@
 			return oDoc.Viewer.file.nativeFile['CheckPerm'](AscPDF.USER_PERMISSIONS.edit);
 		}
 
-		return oDoc.Viewer.file.nativeFile['CheckOwnerPassword'](password);
+		let isOwner = oDoc.Viewer.file.nativeFile['CheckOwnerPassword'](password);
+		if (isOwner)
+			this.isPdfOwnerPasswordChecked = true;
+		return isOwner;
 	};
 	PDFEditorApi.prototype.asc_CheckPrintPassword = function(password) {
 		let oDoc = this.getPDFDoc();
@@ -5196,7 +5366,10 @@
 			return oDoc.Viewer.file.nativeFile['CheckPerm'](AscPDF.USER_PERMISSIONS.print);
 		}
 
-		return oDoc.Viewer.file.nativeFile['CheckOwnerPassword'](password);
+		let isOwner = oDoc.Viewer.file.nativeFile['CheckOwnerPassword'](password);
+		if (isOwner)
+			this.isPdfOwnerPasswordChecked = true;
+		return isOwner;
 	};
 	
 	function CPdfContextMenuData(obj) {
@@ -5308,6 +5481,10 @@
 	PDFEditorApi.prototype['asc_CanRemovePages']           = PDFEditorApi.prototype.asc_CanRemovePages;
 	PDFEditorApi.prototype['asc_CanRotatePages']           = PDFEditorApi.prototype.asc_CanRotatePages;
 	PDFEditorApi.prototype['asc_CanPastePage']             = PDFEditorApi.prototype.asc_CanPastePage;
+	PDFEditorApi.prototype['asc_CanGetPagesAsPdf']         = PDFEditorApi.prototype.asc_CanGetPagesAsPdf;
+	PDFEditorApi.prototype['asc_GetPagesAsPdfBlock']       = PDFEditorApi.prototype.asc_GetPagesAsPdfBlock;
+	PDFEditorApi.prototype['asc_GetPagesAsPdf']            = PDFEditorApi.prototype.asc_GetPagesAsPdf;
+	PDFEditorApi.prototype['asc_SavePagesAsPdf']           = PDFEditorApi.prototype.asc_SavePagesAsPdf;
 	PDFEditorApi.prototype['asc_createSmartArt']		   = PDFEditorApi.prototype.asc_createSmartArt;
 	PDFEditorApi.prototype['asc_undoAllChanges']		   = PDFEditorApi.prototype.asc_undoAllChanges;
 	PDFEditorApi.prototype['asc_addChartDrawingObject']	   = PDFEditorApi.prototype.asc_addChartDrawingObject;
