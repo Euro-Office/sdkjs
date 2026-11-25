@@ -38,13 +38,18 @@ $(function ()
 		if (!editorApi.macros)
 			editorApi.macros = new AscCommon.CDocumentMacros();
 
-		logicDocument.Settings.RevisionViewInsDel = revisionViewInsDel;
-		let data = new AscCommonWord.BinaryFileWriter(logicDocument).Write();
-		logicDocument.Settings.RevisionViewInsDel = "not read";
-		new AscCommonWord.BinaryFileReader(logicDocument, {}).Read(data);
-		let result = logicDocument.Settings.RevisionViewInsDel;
-		logicDocument.Settings.RevisionViewInsDel = undefined;
-		return result;
+		try
+		{
+			logicDocument.Settings.RevisionViewInsDel = revisionViewInsDel;
+			let data = new AscCommonWord.BinaryFileWriter(logicDocument).Write();
+			logicDocument.Settings.RevisionViewInsDel = "not read";
+			new AscCommonWord.BinaryFileReader(logicDocument, {}).Read(data);
+			return logicDocument.Settings.RevisionViewInsDel;
+		}
+		finally
+		{
+			logicDocument.Settings.RevisionViewInsDel = undefined;
+		}
 	}
 
 	// The conversion path (x2t -> doctrenderer) calls asc_nativeCalculateFile before it draws the pages.
@@ -82,8 +87,14 @@ $(function ()
 		assert.deepEqual(AscTest.GetParagraphReviewText(p), changesKept, "tracked changes before the conversion");
 
 		logicDocument.Settings.RevisionViewInsDel = false;
-		calculateForConversion();
-		logicDocument.Settings.RevisionViewInsDel = undefined;
+		try
+		{
+			calculateForConversion();
+		}
+		finally
+		{
+			logicDocument.Settings.RevisionViewInsDel = undefined;
+		}
 
 		assert.deepEqual(AscTest.GetParagraphReviewText(p), [[reviewtype_Common, "Hi world"]], "rendered as Final");
 	});
@@ -96,8 +107,14 @@ $(function ()
 
 		p = fillDocumentWithChanges();
 		logicDocument.Settings.RevisionViewInsDel = true;
-		calculateForConversion();
-		logicDocument.Settings.RevisionViewInsDel = undefined;
+		try
+		{
+			calculateForConversion();
+		}
+		finally
+		{
+			logicDocument.Settings.RevisionViewInsDel = undefined;
+		}
 		assert.deepEqual(AscTest.GetParagraphReviewText(p), changesKept, "true: changes kept");
 	});
 
@@ -116,5 +133,23 @@ $(function ()
 			logicDocument.Settings.RevisionViewInsDel = undefined;
 		}
 		assert.deepEqual(AscTest.GetParagraphReviewText(p), changesKept, "IS_NATIVE_EDITOR: changes kept");
+	});
+
+	QUnit.test("Docbuilder keeps the changes", function (assert)
+	{
+		// docbuilder saves a PDF from the document it keeps open; a later save must still have the changes.
+		let p = fillDocumentWithChanges();
+		logicDocument.Settings.RevisionViewInsDel = false;
+		window["builderJS"] = {};
+		try
+		{
+			calculateForConversion();
+		}
+		finally
+		{
+			delete window["builderJS"];
+			logicDocument.Settings.RevisionViewInsDel = undefined;
+		}
+		assert.deepEqual(AscTest.GetParagraphReviewText(p), changesKept, "builderJS: changes kept");
 	});
 });
