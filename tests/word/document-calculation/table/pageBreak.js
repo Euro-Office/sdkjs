@@ -136,4 +136,44 @@ $(function ()
 		assert.strictEqual(table.GetPage(2).GetLastRow(), 1, "Check last row for page 2");
 	});
 	
+	function addTableWithPageBreakBefore(pos, rowIndex)
+	{
+		let table = AscTest.CreateTable(2, 2);
+		AscTest.RemoveTableBorders(table);
+		logicDocument.AddToContent(pos, table);
+		table.GetRow(rowIndex).GetCell(1).GetContent().GetElement(0).Set_PageBreakBefore(true);
+		return table;
+	}
+	
+	QUnit.test("Page break before a paragraph of the first row starts the table on a new page", function (assert)
+	{
+		logicDocument.AddToContent(0, AscTest.CreateParagraph());
+		let table = addTableWithPageBreakBefore(1, 0);
+		
+		AscTest.Recalculate();
+		assert.strictEqual(table.IsEmptyPage(0), true, "First page of the table should be empty");
+		assert.strictEqual(table.GetPagesCount(), 2, "Check page count");
+		assert.strictEqual(table.GetPage(1).GetFirstRow(), 0, "The whole table should be on the second page");
+		assert.strictEqual(table.GetPage(1).GetLastRow(), 1, "The whole table should be on the second page");
+	});
+	
+	QUnit.test("No page break before a table that is the first element of the document", function (assert)
+	{
+		let table = addTableWithPageBreakBefore(0, 0);
+		
+		AscTest.Recalculate();
+		assert.strictEqual(table.IsEmptyPage(0), false, "First page of the table should not be empty");
+		assert.strictEqual(table.GetPagesCount(), 1, "Check page count");
+	});
+	
+	QUnit.test("Page break before a paragraph of the second row does not move the table", function (assert)
+	{
+		logicDocument.AddToContent(0, AscTest.CreateParagraph());
+		let table = addTableWithPageBreakBefore(1, 1);
+		
+		AscTest.Recalculate();
+		assert.strictEqual(table.IsEmptyPage(0), false, "First page of the table should not be empty");
+		assert.strictEqual(table.GetPagesCount(), 1, "Check page count");
+	});
+	
 });
