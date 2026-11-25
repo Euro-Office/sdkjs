@@ -5473,7 +5473,10 @@ function isAllowPasteLink(pastedWb) {
 	 * Page numbering of a workbook printed from ODF. ODF numbers the printed pages across the whole
 	 * spreadsheet (LibreOffice ScPrintFuncCache): a sheet whose page style sets a first page number
 	 * starts the count again, the sheets after it continue from there. The first page and odd/even
-	 * headers follow the same count. Only the printed sheets of the job count (jobSheets, set by
+	 * headers follow the position in that count, not the printed number, as in LibreOffice (checked
+	 * with 24.2): a count that starts at 4 gets the first page header on page 4 and the even header on
+	 * page 5, and a sheet that goes on with the count gets no first page header of its own.
+	 * Only the printed sheets of the job count (jobSheets, set by
 	 * calcPagesPrint; a sheet of the job without printed pages still passes on its number, a hidden
 	 * sheet is not printed and passes on nothing): printing one sheet does not take over a number from
 	 * a sheet before it.

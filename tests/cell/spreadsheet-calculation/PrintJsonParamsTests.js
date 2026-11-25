@@ -530,6 +530,7 @@ $(function () {
 					}
 					return res;
 				};
+				// LibreOffice 24.2 prints the same: the even header on page "6" of a count that starts at 5
 				assert.deepEqual(pageTexts(), ["F1 f1", "E2 e2", "F5 f5", "E6 e6", "O7 o7"],
 					"ODS, drawHeaderFooter: page numbers of the run, first page header at the start of each run, then even/odd");
 				drawn = [];
