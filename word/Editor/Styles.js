@@ -10642,7 +10642,8 @@ CDocumentBorder.prototype =
 };
 CDocumentBorder.prototype.IsNone = function()
 {
-	return (this.Value === border_None);
+	// The interface still sends 0 (nil, the old value of border_None) for "no border", see setValue
+	return (this.Value === border_None || this.Value === AscWord.BorderType.nil);
 };
 CDocumentBorder.prototype.SetNone = function()
 {
@@ -10690,7 +10691,7 @@ CDocumentBorder.prototype.getValue = function()
  */
 CDocumentBorder.prototype.GetWidth = function()
 {
-	if (border_None === this.Value)
+	if (this.IsNone())
 		return 0;
 
 	return this.Size;
