@@ -83,25 +83,13 @@
 		}
 
 		var url = "../../../../sdkjs/common/libfont/engine/";
-		var useWasm = false;
-		var webAsmObj = window["WebAssembly"];
-		if (typeof webAsmObj === "object")
-		{
-			if (typeof webAsmObj["Memory"] === "function")
-			{
-				if ((typeof webAsmObj["instantiateStreaming"] === "function") || (typeof webAsmObj["instantiate"] === "function"))
-					useWasm = true;
-			}
-		}
-
-		var engine_name_ext = useWasm ? ".js" : "_ie.js";
 		var _onSuccess = function(){
 		};
 		var _onError = function(){
 			window['AscFonts'].onError();
 		};
 
-		AscCommon.loadScript(url + "fonts" + engine_name_ext, _onSuccess, _onError);
+		AscCommon.loadScript(url + "fonts.js", _onSuccess, _onError);
 	};
 
 	function FontStream(data, size)

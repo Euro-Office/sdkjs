@@ -32,17 +32,6 @@
 		this.message = message;
 		this.callback = callback;
 
-		this.useWasm = false;
-		var webAsmObj = window["WebAssembly"];
-		if (typeof webAsmObj === "object")
-		{
-			if (typeof webAsmObj["Memory"] === "function")
-			{
-				if ((typeof webAsmObj["instantiateStreaming"] === "function") || (typeof webAsmObj["instantiate"] === "function"))
-					this.useWasm = true;
-			}
-		}
-
 		this.enginePath = "./../../../../sdkjs/common/hash/hash/";
 		this.worker = null;
 
@@ -69,25 +58,17 @@
 		{
 			this.stop();
 
-			var worker_src = this.useWasm ? "engine.js" : "engine_ie.js";
-			worker_src = this.enginePath + worker_src;
+			var worker_src = this.enginePath + "engine.js";
 
 			this.worker = new Worker(worker_src);
 
-			var _t = this;
-
-			// обрабатываем ошибку, чтобы он не влиял на работу редактора
-			// и если ошибка из wasm модуля - то просто попробуем js версию - и рестартанем
+			// keep worker errors away from the editor
 			this.worker.onerror = function(e) {
 
 				e && e.preventDefault && e.preventDefault();
 				e && e.stopPropagation && e.stopPropagation();
 
-				if (_t.useWasm)
-				{
-					_t.useWasm = false;
-					_t.restart();
-				}
+				console.error("hash worker error", e && e.message);
 			};
 
 			this._start(this.worker);
