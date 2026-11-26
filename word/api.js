@@ -2387,6 +2387,11 @@ background-repeat: no-repeat;\
 
 	asc_docs_api.prototype.asc_PasteData = function(_format, data1, data2, text_data, useCurrentPoint, callback, checkLocks, rejectCallback)
 	{
+		var oThis = this, args = arguments;
+		if (!this.isClipboardPasteElement(data1, data2)
+			&& this.deferPasteWhileLoading(function() { oThis.asc_PasteData.apply(oThis, args); }))
+			return;
+
 		if (AscCommon.CollaborativeEditing.Get_GlobalLock())
 			return;
 
@@ -2447,6 +2452,11 @@ background-repeat: no-repeat;\
 	
 	asc_docs_api.prototype.asc_SpecialPasteData = function(props, isPasteOptions)
 	{
+		// A special paste undoes the last paste and pastes its data again: it must not wait for a load, as a
+		// paste that waits for the same load would then be the last paste
+		if (this.isFontsImagesLoading())
+			return;
+
 		if (AscCommon.CollaborativeEditing.Get_GlobalLock())
 	        return;
 
@@ -8206,11 +8216,7 @@ background-repeat: no-repeat;\
 		{
 			if (this.isPasteFonts_Images)
 			{
-				this.isPasteFonts_Images = false;
-				this.pasteImageMap       = null;
-				this.pasteCallback();
-				this.pasteCallback            = null;
-				this.decrementCounterLongAction();
+				this.pre_PasteCallback();
 			}
 			else if (this.isSaveFonts_Images)
 			{
@@ -8223,6 +8229,7 @@ background-repeat: no-repeat;\
 					this.bInit_word_control = true;
 					this.onDocumentContentReady();
 				}
+				this.runDeferredPastes();
 			}
 			else if (this.isLoadImagesCustom)
 			{
@@ -8231,6 +8238,7 @@ background-repeat: no-repeat;\
 
 				if (!this.ImageLoader.bIsAsyncLoadDocumentImages)
 					this.SyncLoadImages_callback();
+				this.runDeferredPastes();
 			}
 		}
 	};
@@ -8535,11 +8543,12 @@ background-repeat: no-repeat;\
 			callback();
 			return;
 		}
-		this.pasteCallback = callback;
-		this.pasteImageMap = _images;
+		var oThis = this;
+		if (this.deferPasteWhileLoading(function() { oThis.pre_Paste(_fonts, _images, callback); }))
+			return;
 
 		var _count = 0;
-		for (var i in this.pasteImageMap)
+		for (var i in _images)
 			++_count;
 
         AscFonts.FontPickerByCharacter.extendFonts(_fonts);
@@ -8547,12 +8556,13 @@ background-repeat: no-repeat;\
 		{
 			// никаких евентов. ничего грузить не нужно. сделано для сафари под макОс.
 			// там при LongActions теряется фокус и вставляются пробелы
-			this.pasteCallback();
-			this.pasteCallback            = null;
+			callback();
 
 			return;
 		}
 
+		this.pasteCallback = callback;
+		this.pasteImageMap = _images;
 		this.incrementCounterLongAction();
 		this.isPasteFonts_Images = true;
 		this.FontLoader.LoadDocumentFonts2(_fonts);
@@ -8560,6 +8570,9 @@ background-repeat: no-repeat;\
 
 	asc_docs_api.prototype.pre_Save = function(_images)
 	{
+		if (this.deferSaveWhilePasteLoads(_images))
+			return;
+
 		this.isSaveFonts_Images = true;
 		this.saveImageMap       = _images;
 		this.WordControl.m_oDrawingDocument.CheckFontNeeds();

@@ -93,6 +93,11 @@
 		this.ServerIdWaitComplete = false;
 		this.ServerIdWaitAction = null;
 
+		// The pastes and the other calls that wait for a load of fonts and images (see deferPasteWhileLoading)
+		this.pasteQueue            = [];
+		// pre_Save came while a paste loads: it starts when the paste is done (see pre_PasteCallback)
+		this.isSaveWaitingForPaste = false;
+
 		// Long action
 		this.IsLongActionCurrent       = 0;
 		this.LongActionCallbacks       = [];
@@ -1257,6 +1262,102 @@
 		}
 	};
 
+	// The loads of fonts and images share one font loader and one image loader, and the end of a load
+	// (asyncFontsDocumentEndLoaded, asyncImagesDocumentEndLoaded) serves one of them: a paste (pre_Paste,
+	// isPasteFonts_Images), the images of the changes of others (pre_Save, isSaveFonts_Images) or SyncLoadImages
+	// (isLoadImagesCustom). A load that starts while another one runs takes over its state or is lost.
+	baseEditorsApi.prototype.isFontsImagesLoading = function()
+	{
+		return !!(this.isPasteFonts_Images || this.isSaveFonts_Images || this.isLoadImagesCustom);
+	};
+	// While a load runs, a paste waits: paste is called when no load runs any more. Returns true if it waits.
+	// Each paste that waits runs, as its caller can wait for its callback (for example the plugin methods).
+	baseEditorsApi.prototype.deferPasteWhileLoading = function(paste)
+	{
+		if (!this.isFontsImagesLoading())
+			return false;
+
+		// A plugin pastes in its group actions, which hold the global lock and release it only for the call
+		// (executeGroupActions, or executeGroupActionsStart in PasteHtml). A call that was made with the lock
+		// released runs with it released again, also when group actions started after it; any other call
+		// runs as it is. A call that waits runs after the commands that a plugin sent after it.
+		let oThis = this;
+		let unlocked = !(AscCommon.CollaborativeEditing && AscCommon.CollaborativeEditing.Get_GlobalLock());
+		this.pasteQueue.push(function()
+		{
+			if (unlocked && oThis.isGroupActions())
+				oThis.executeGroupActions(paste);
+			else
+				paste();
+		});
+		return true;
+	};
+	// asc_PasteData of the clipboard paste gets the shared element of the clipboard, which the next paste fills
+	// again and Paste_End hides: such a call does not wait as a whole, pre_Paste waits after the element is read.
+	// The clipboard paste is ignored during a long action, so this happens only when a load starts between the
+	// paste event and this call (for example a plugin paste in that time).
+	baseEditorsApi.prototype.isClipboardPasteElement = function(data1, data2)
+	{
+		let clipboard = AscCommon.g_clipboardBase;
+		return !!(clipboard && ((data1 && data1 === clipboard.CommonDiv) || (data2 && data2 === clipboard.CommonIframe)));
+	};
+	// Starts the pastes that wait, in their order, until one of them loads
+	baseEditorsApi.prototype.runDeferredPastes = function()
+	{
+		while (!this.isFontsImagesLoading() && this.pasteQueue.length)
+		{
+			let paste = this.pasteQueue.shift();
+			try
+			{
+				paste();
+			}
+			catch (e)
+			{
+				// The editor stops editing on an error: the pastes that wait must not run later
+				this.pasteQueue = [];
+				throw e;
+			}
+		}
+	};
+	// The load of a paste ended: call its callback, start a pre_Save that waits, then the pastes that wait
+	baseEditorsApi.prototype.pre_PasteCallback = function()
+	{
+		let callback = this.pasteCallback;
+		this.isPasteFonts_Images = false;
+		this.pasteImageMap       = null;
+		this.pasteCallback       = null;
+		try
+		{
+			callback();
+		}
+		catch (e)
+		{
+			// The editor stops editing on an error: the pastes that wait must not run later
+			this.pasteQueue = [];
+			throw e;
+		}
+		finally
+		{
+			this.decrementCounterLongAction();
+			if (this.isSaveWaitingForPaste)
+			{
+				this.isSaveWaitingForPaste = false;
+				this.pre_Save(this.saveImageMap);
+			}
+		}
+		this.runDeferredPastes();
+	};
+	// pre_Save of an editor: true if a paste loads, and so the save starts when the paste is done
+	baseEditorsApi.prototype.deferSaveWhilePasteLoads = function(images)
+	{
+		if (!this.isPasteFonts_Images)
+			return false;
+
+		this.isSaveFonts_Images    = true;
+		this.saveImageMap          = images;
+		this.isSaveWaitingForPaste = true;
+		return true;
+	};
 	baseEditorsApi.prototype.isActionWithRestriction                   = function()
 	{
 		return 0 !== this.IsActionRestrictionCurrent;

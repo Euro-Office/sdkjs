@@ -373,13 +373,15 @@
 		return bCanUndo;
 	};
 	PDFEditorApi.prototype.asc_PasteData = function(_format, data1, data2, text_data, useCurrentPoint, callback, checkLocks) {
+		let _t = this, args = arguments;
+		if (!this.isClipboardPasteElement(data1, data2)
+			&& this.deferPasteWhileLoading(function() { _t.asc_PasteData.apply(_t, args); }))
+			return;
+
 		if (!this.DocumentRenderer)
 			return;
 		
 		if (!this.DocumentRenderer.canInteract()) {
-			let _t = this;
-			let args = arguments;
-			
 			this.DocumentRenderer.paint(null, function() {
 				_t.asc_PasteData.apply(_t, args);
 			});
@@ -4325,6 +4327,9 @@
 		return oDoc.History.Have_Changes();
 	};
 	PDFEditorApi.prototype.pre_Save = function(_images) {
+		if (this.deferSaveWhilePasteLoads(_images))
+			return;
+
 		this.isSaveFonts_Images = true;
 		this.saveImageMap       = _images;
 
@@ -4998,11 +5003,7 @@
 		}
 		else {
 			if (this.isPasteFonts_Images) {
-				this.isPasteFonts_Images = false;
-				this.pasteImageMap       = null;
-				this.pasteCallback();
-				this.pasteCallback            = null;
-				this.decrementCounterLongAction();
+				this.pre_PasteCallback();
 			}
 			else if (this.isSaveFonts_Images) {
 				this.isSaveFonts_Images = false;
@@ -5014,6 +5015,7 @@
 					this.bInit_word_control = true;
 					this.onDocumentContentReady();
 				}
+				this.runDeferredPastes();
 			}
 			else if (this.isLoadImagesCustom) {
 				this.isLoadImagesCustom = false;
@@ -5021,6 +5023,7 @@
 
 				if (!this.ImageLoader.bIsAsyncLoadDocumentImages)
 					this.SyncLoadImages_callback();
+				this.runDeferredPastes();
 			}
 		}
 	};
