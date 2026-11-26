@@ -517,6 +517,10 @@
 		this.outlinePageColor = "#000000";
 
 		this.betweenPages = 20;
+		// page by page: a wheel step or PgUp/PgDn goes to the next page instead of scrolling on;
+		// a page higher than the window is scrolled through first
+		this.isPageByPage = false;
+		this.pageByPageTime = 0;
 
 		this.moduleState = ModuleState.None;
 
@@ -1513,6 +1517,103 @@
 			this.m_oScrollVerApi.scrollToY(posY);
 			this.m_oScrollHorApi.scrollToX(posX);
 		};
+		this.setPageByPage = function(isOn)
+		{
+			this.isPageByPage = !!isOn;
+			if (this.isPageByPage && this.file && this.file.isValid())
+			{
+				let index = this.getPageByPageIndex();
+				if (index !== -1)
+					this.navigateToPage(index);
+			}
+		};
+		// the page at the top of the window: the first page whose bottom is below the top of the window (the last
+		// page if there is none). The pages are laid out one below the other, so their bottoms only grow and a
+		// binary search finds it without looking at every page (a PDF can have thousands of pages).
+		this.getPageByPageIndex = function()
+		{
+			let lo = 0;
+			let hi = this.drawingPages.length - 1;
+			if (hi < 0)
+				return -1;
+
+			while (lo < hi)
+			{
+				let mid = (lo + hi) >> 1;
+				if (this.drawingPages[mid].Y + this.getPageByPageHeight(mid) > this.scrollY)
+					hi = mid;
+				else
+					lo = mid + 1;
+			}
+			return lo;
+		};
+		this.getPageByPageHeight = function(index)
+		{
+			// the same as the page layout: a page turned by 90 or 270 degrees is as high as it is wide
+			let page = this.drawingPages[index];
+			return this.isLandscapePage(index) ? page.W : page.H;
+		};
+		// delta > 0 goes down. A wheel gives many events for one turn on a touchpad (with its inertia often for a
+		// second or more), so after a jump to another page, and after scrolling reaches the end of a page higher than
+		// the window, wheel events are ignored until they pause for a moment; each ignored event starts the pause
+		// again. So one swipe either scrolls to the end of the page or goes to the next page, never both. Keys are
+		// never held back.
+		this.scrollPageByPage = function(delta, isKey)
+		{
+			let index = this.getPageByPageIndex();
+			if (index === -1 || !delta)
+				return false;
+
+			let now = Date.now();
+			let page = this.drawingPages[index];
+			let pageTop = page.Y - this.betweenPages;
+			let pageBottom = page.Y + this.getPageByPageHeight(index) + this.betweenPages;
+			let viewBottom = this.scrollY + this.height;
+
+			if (!isKey && now - this.pageByPageTime < 250)
+			{
+				this.pageByPageTime = now;
+				return true;
+			}
+
+			let isPageInWindow = pageBottom - pageTop <= this.height;
+			if (delta > 0 && pageBottom > viewBottom + 1 && !isPageInWindow)
+			{
+				let rest = pageBottom - viewBottom;
+				this.m_oScrollVerApi.scrollByY(Math.min(delta, rest), false);
+				if (delta >= rest)
+					this.pageByPageTime = now;
+			}
+			else if (delta < 0 && this.scrollY > pageTop + 1 && !isPageInWindow)
+			{
+				let rest = this.scrollY - pageTop;
+				this.m_oScrollVerApi.scrollByY(-Math.min(-delta, rest), false);
+				if (-delta >= rest)
+					this.pageByPageTime = now;
+			}
+			else if (delta < 0 && this.scrollY > pageTop + 1)
+			{
+				// at the end of the document the last page cannot go to the top of the window, so the page above
+				// counts as the current one: first show it from its top
+				this.pageByPageTime = now;
+				this.m_oScrollVerApi.scrollToY(pageTop);
+			}
+			else
+			{
+				let target = delta > 0 ? index + 1 : index - 1;
+				if (target < 0 || target >= this.drawingPages.length)
+					return false;
+				this.pageByPageTime = now;
+
+				let targetHeight = this.getPageByPageHeight(target) + 2 * this.betweenPages;
+				if (delta < 0 && targetHeight > this.height)
+					this.m_oScrollVerApi.scrollToY(this.drawingPages[target].Y - this.betweenPages + targetHeight - this.height);
+				else
+					this.navigateToPage(target);
+			}
+			this.timerSync();
+			return true;
+		};
 		this.scrollToXY = function(posY, posX) {
 			let oDoc		= this.getPDFDoc();
 			let oActiveObj	= oDoc.GetActiveObject();
@@ -2295,7 +2396,8 @@
 
 			if (!scrollField) {
 				if (values.x) oThis.m_oScrollHorApi.scrollBy(values.x, 0, false);
-				if (values.y) oThis.m_oScrollVerApi.scrollBy(0, values.y, false);
+				if (values.y && oThis.isPageByPage) oThis.scrollPageByPage(values.y, false);
+				else if (values.y) oThis.m_oScrollVerApi.scrollBy(0, values.y, false);
 			}
 
 			// здесь - имитируем моус мув ---------------------------
@@ -3459,6 +3561,9 @@
 					if (nextPage >= 0)
 						this.navigateToPage(nextPage);
 				}
+				else if (this.isPageByPage) {
+					this.scrollPageByPage(-this.height, true);
+				}
 				else {
 					this.m_oScrollVerApi.scrollByY(-this.height, false);
 					this.timerSync();
@@ -3483,6 +3588,9 @@
 
 					if (nextPage < pagesCount)
 						this.navigateToPage(nextPage);
+				}
+				else if (this.isPageByPage) {
+					this.scrollPageByPage(this.height, true);
 				}
 				else {
 					this.m_oScrollVerApi.scrollByY(this.height, false);
