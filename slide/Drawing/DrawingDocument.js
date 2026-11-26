@@ -55,6 +55,11 @@ var COMMENT_HEIGHT = 16;
 
 const LAYOUT_SCALE = 0.87;
 
+// While others edit, each remote change asks for a new thumbnail of its slide. Draw the thumbnail of a slide that
+// remote changes change at most once in this time (ms). Other slides, own changes and new or resized thumbnails do
+// not wait.
+const THUMBNAIL_REMOTE_REDRAW_INTERVAL = 2000;
+
 // text measurer wrapper
 AscCommon.CTextMeasurer.prototype.GetAscender  = function()
 {
@@ -1578,14 +1583,17 @@ function CDrawingDocument()
 	};
 
 
+	// The recalculations until the next call come from remote changes (see CThumbnailsManager)
+	this.SetRemoteRecalc = function(isRemote)
+	{
+		if (this.m_oWordControl && this.m_oWordControl.Thumbnails)
+			this.m_oWordControl.Thumbnails.SetRemoteRecalc(isRemote);
+	};
+
 	this.OnRecalculateSlide = function(index)
 	{
 
-		let thpages = this.m_oWordControl.Thumbnails.m_arrPages;
-		if (thpages.length > index)
-		{
-			thpages[index].IsRecalc = true;
-		}
+		this.m_oWordControl.Thumbnails.MarkSlideRecalc(index);
 
 
 		if (this.m_oWordControl && this.m_oWordControl.MobileTouchManager)
@@ -3453,6 +3461,12 @@ function CThPage()
 	this.IsRecalc    = false;
 	this.cachedImage = null;
 
+	// Remote changes (see CThumbnailsManager.isRemoteRedrawWaiting): whether the slide is to be drawn because of
+	// them, the time of the last such redraw, and the slide that the thumbnail shows
+	this.IsRemoteRecalc   = false;
+	this.RemoteRedrawTime = -Infinity;
+	this.DrawnSlideId     = null;
+
 	this.IsSelected = false;
 	this.IsFocused  = false;
 }
@@ -4187,7 +4201,7 @@ function CThumbnailsManager(editorPage)
 	this.m_dScrollY_max = 0;
 
 	this.m_bIsUpdate = false;
-	this.m_nLastUpdateTime = 0;
+	this.m_bRemoteRecalc = false; // the changes of others are recalculated now
 
 	//regular mode
 	this.thumbnails = new CSlidesThumbnails();
@@ -5115,6 +5129,7 @@ function CThumbnailsManager(editorPage)
 		for (var i = 0; i < pages_count; i++)
 		{
 			this.m_arrPages[i].IsRecalc = true;
+			this.m_arrPages[i].IsRemoteRecalc = false;
 		}
 
 		this.m_bIsUpdate = true;
@@ -5404,6 +5419,49 @@ function CThumbnailsManager(editorPage)
 		this.OnUpdateOverlay();
 	};
 
+	this.SetRemoteRecalc = function(isRemote)
+	{
+		this.m_bRemoteRecalc = isRemote;
+	};
+
+	// The thumbnail of the slide is to be drawn again. It waits (see isRemoteRedrawWaiting) only when all its
+	// changes since its last redraw are remote changes. (SetSlideRecalc above has no callers.)
+	this.MarkSlideRecalc = function(index)
+	{
+		var page = this.m_arrPages[index];
+		if (!page)
+			return;
+		page.IsRemoteRecalc = this.m_bRemoteRecalc && (!page.IsRecalc || page.IsRemoteRecalc);
+		page.IsRecalc = true;
+	};
+
+	// The clock of isRemoteRedrawWaiting (the tests replace it)
+	this.GetTime = function()
+	{
+		return performance.now();
+	};
+
+	this.getSlideId = function(index)
+	{
+		var slide = this.m_oWordControl.m_oLogicDocument.GetSlide(index);
+		return (slide && slide.Get_Id) ? slide.Get_Id() : null;
+	};
+
+	// A page with remote changes waits until the interval since its last such redraw ends, if it has a thumbnail
+	// of the right size of the same slide. Its old thumbnail stays shown until then.
+	this.isRemoteRedrawWaiting = function(page, index, now)
+	{
+		if (!page.IsRemoteRecalc || null == page.cachedImage)
+			return false;
+		if (page.cachedImage.image.width != (page.right - page.left) ||
+			page.cachedImage.image.height != (page.bottom - page.top))
+			return false;
+		if (now - page.RemoteRedrawTime >= THUMBNAIL_REMOTE_REDRAW_INTERVAL)
+			return false;
+		// Slides before it were inserted or deleted: the page is for another slide now
+		return this.getSlideId(index) === page.DrawnSlideId;
+	};
+
 	this.onCheckUpdate = function()
 	{
 		if (!this.isThumbnailsShown() || 0 == this.DigitWidths.length)
@@ -5430,12 +5488,15 @@ function CThumbnailsManager(editorPage)
 
 		this.bIsEmptyDrawed = false;
 
+		var nNow = this.GetTime();
 		if (!this.m_bIsUpdate)
 		{
 			// определяем, нужно ли пересчитать и закэшировать табнейл (хотя бы один)
 			for (var i = this.m_lDrawingFirst; i <= this.m_lDrawingEnd; i++)
 			{
 				var page = this.m_arrPages[i];
+				if (this.isRemoteRedrawWaiting(page, i, nNow))
+					continue;
 				if (null == page.cachedImage || page.IsRecalc)
 				{
 					this.m_bIsUpdate = true;
@@ -5452,16 +5513,11 @@ function CThumbnailsManager(editorPage)
 		if (!this.m_bIsUpdate)
 			return;
 
-		// While others edit, every change asks for a thumbnail redraw. Redraw at most every 2 s then;
-		// a skipped redraw stays pending in m_bIsUpdate and runs on a later call.
-		var nNow = new Date().getTime();
-		if (!AscCommon.CollaborativeEditing.Is_SingleUser() && nNow - this.m_nLastUpdateTime < 2000)
-			return;
-		this.m_nLastUpdateTime = nNow;
-
 		for (var i = this.m_lDrawingFirst; i <= this.m_lDrawingEnd; i++)
 		{
 			var page = this.m_arrPages[i];
+			if (this.isRemoteRedrawWaiting(page, i, nNow))
+				continue;
 			var w = page.right - page.left;
 			var h = page.bottom - page.top;
 
@@ -5502,6 +5558,12 @@ function CThumbnailsManager(editorPage)
 				this.m_oWordControl.m_oApi.ShowParaMarks = bIsShowPars;
 
 				page.IsRecalc = false;
+				page.DrawnSlideId = this.getSlideId(i);
+				if (page.IsRemoteRecalc)
+				{
+					page.IsRemoteRecalc = false;
+					page.RemoteRedrawTime = nNow;
+				}
 
 				this.m_bIsUpdate = true;
 				break;
