@@ -308,9 +308,10 @@
         // Euro-Office extension: kept far above the ids above so that a record added later in the
         // same sequence cannot take it
         SourceFileType: 100,
-        // Euro-Office: sheets the editor cannot show (Excel 4.0 macro sheets). Opaque here;
-        // core writes and parses the payload. A high value keeps it clear of upstream ids.
-        PreservedSheets: 100
+        // Euro-Office extension, next to SourceFileType: sheets the editor cannot show (Excel 4.0
+        // macro sheets). Opaque here; core writes and parses the payload. The next Euro-Office
+        // record takes 102, here and in core (OOXML/Binary/Sheets/Common/BinReaderWriterDefines.h).
+        PreservedSheets: 101
     };
     /** @enum */
     var c_oSerWorkbookPrTypes =
