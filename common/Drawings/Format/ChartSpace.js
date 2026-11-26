@@ -10373,7 +10373,8 @@ function(window, undefined) {
 			return false;
 		}
 		if (this.cachedCanvas) {
-			if (this.cachedCanvas.width !== nWidth || this.cachedCanvas.height !== nHeight) {
+			if (this.cachedCanvas.width !== nWidth || this.cachedCanvas.height !== nHeight ||
+				this.cachedPictureFilter !== graphics.pictureFilter) {
 				this.removeCachedCanvas();
 			}
 		}
@@ -10399,6 +10400,8 @@ function(window, undefined) {
 			var g = new AscCommon.CGraphics();
 			g.init(ctx, nWidth, nHeight, nWidth / graphics.m_oCoordTransform.sx, nHeight / graphics.m_oCoordTransform.sy);
 			g.m_oFontManager = AscCommon.g_fontManager;
+			g.pictureFilter = graphics.pictureFilter;
+			this.cachedPictureFilter = graphics.pictureFilter;
 			g.m_oCoordTransform.tx = -((this.transform.tx - dBorderW) * graphics.m_oCoordTransform.sx + 0.5) >> 0;
 			g.m_oCoordTransform.ty = -((this.transform.ty - dBorderW) * graphics.m_oCoordTransform.sy + 0.5) >> 0;
 			g.transform(1, 0, 0, 1, 0, 0);

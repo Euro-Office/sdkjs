@@ -170,6 +170,9 @@
 		this.m_oLastFont2       = null;
 
 		this.dash_no_smart = null;
+
+		// CSS filter for the pictures drawn through this instance, set only by the spreadsheet objects canvas
+		this.pictureFilter = "";
 	}
 
 	CGraphics.prototype = Object.create(AscCommon.CGraphicsBase.prototype);
@@ -526,6 +529,11 @@
 
 		this.m_bPenColorInit = false;
 		this.m_bBrushColorInit = false;
+	};
+	CGraphics.prototype.applyPictureFilter = function()
+	{
+		if (this.pictureFilter)
+			this.m_oContext.filter = this.pictureFilter;
 	};
 	CGraphics.prototype.clip = function()
 	{
