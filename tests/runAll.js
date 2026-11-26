@@ -65,6 +65,7 @@ const allTests = [
 	'word/unit-tests/deleted-text-recovery.html',
 	'word/unit-tests/fieldInstructionParser.html',
 	'word/paragraph-borders/paragraph-borders.html',
+	'word/table-border-move/table-border-move.html',
 	'word/content-control/block-level/cursorAndSelection.html',
 	'word/content-control/inline-level/checkbox.html',
 	'word/content-control/inline-level/cursorAndSelection.html',
