@@ -15675,6 +15675,10 @@ CDocument.prototype.Continue_FastCollaborativeEditing = function()
 	if (true === this.IsMovingTableBorder() || true === this.Api.isStartAddShape || this.DrawingObjects.isTrackingDrawings() || this.Api.isOpenedFrameEditor)
 		return;
 
+	if (this.CollaborativeEditing.IsFastSyncPaused())
+		return;
+
+	var nSyncStart = new Date().getTime();
 	var HaveChanges = this.History.Have_Changes(true);
 	if (true !== HaveChanges && (true === this.CollaborativeEditing.Have_OtherChanges() || 0 !== this.CollaborativeEditing.getOwnLocksLength()))
 	{
@@ -15686,6 +15690,7 @@ CDocument.prototype.Continue_FastCollaborativeEditing = function()
 	{
 		this.Api.asc_Save(true);
 	}
+	this.CollaborativeEditing.OnFastSync(nSyncStart);
 
 	var CurTime = new Date().getTime();
 	if (true === this.NeedUpdateTargetForCollaboration && (CurTime - this.LastUpdateTargetTime > 1000))
