@@ -8168,39 +8168,16 @@ CTable.prototype.IncreaseDecreaseIndent = function(bIncrease)
 {
 	if (this.IsCellSelection())
 	{
-		var TablePr = this.Get_CompiledPr(false).TablePr;
-
-		var LeftIndOld = TablePr.TableInd;
-		if (undefined === LeftIndOld || null === LeftIndOld)
+		// With whole cells (or rows) selected the text in these cells is indented, as with the ruler and the indent
+		// fields. The table itself (its indent and so its column borders) stays where it is.
+		var arrCells = this.GetSelectionArray();
+		for (var nIndex = 0, nCount = arrCells.length; nIndex < nCount; ++nIndex)
 		{
-			LeftIndOld = 0;
+			var oCellContent = this.GetRow(arrCells[nIndex].Row).GetCell(arrCells[nIndex].Cell).GetContent();
+			oCellContent.SetApplyToAll(true);
+			oCellContent.IncreaseDecreaseIndent(bIncrease);
+			oCellContent.SetApplyToAll(false);
 		}
-		else if (LeftIndOld < 0)
-		{
-			this.Set_TableInd(0);
-			return;
-		}
-
-		var LeftIndNew = 0;
-		if (true === bIncrease)
-		{
-			if (LeftIndOld >= 0)
-			{
-				LeftIndOld = 12.5 * parseInt(10 * LeftIndOld / 125);
-				LeftIndNew = ( (LeftIndOld - (10 * LeftIndOld) % 125 / 10) / 12.5 + 1) * 12.5;
-			}
-
-			if (LeftIndNew < 0)
-				LeftIndNew = 12.5;
-		}
-		else
-		{
-			var TempValue = (125 - (10 * LeftIndOld) % 125);
-			TempValue     = ( 125 === TempValue ? 0 : TempValue );
-			LeftIndNew    = Math.max(( (LeftIndOld + TempValue / 10) / 12.5 - 1 ) * 12.5, 0);
-		}
-
-		this.Set_TableInd(LeftIndNew);
 	}
 	else
 	{
