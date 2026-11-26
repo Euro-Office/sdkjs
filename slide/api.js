@@ -436,6 +436,9 @@
 		var t                                        = this;
 		this.CoAuthoringApi.onCursor                 = function(e)
 		{
+			if (t.deferCursorUntilReady(e))
+				return;
+
 			if (true === AscCommon.CollaborativeEditing.Is_Fast())
 			{
 				t.WordControl.m_oLogicDocument.Update_ForeignCursor(e[e.length - 1]['cursor'], e[e.length - 1]['user'], true, e[e.length - 1]['useridoriginal']);
@@ -446,6 +449,11 @@
 			if (true === AscCommon.CollaborativeEditing.Is_Fast() && false === e['state'])
 			{
 				editor.WordControl.m_oLogicDocument.Remove_ForeignCursor(e['id']);
+			}
+			else if (true === AscCommon.CollaborativeEditing.Is_Fast() && true === e['state'] && t.WordControl.m_oLogicDocument)
+			{
+				// A co-author who joins knows no cursor yet: send the own one again
+				t.WordControl.m_oLogicDocument.NeedUpdateTargetForCollaboration = true;
 			}
 			t.sendEvent("asc_onConnectionStateChanged", e);
 		};
@@ -858,6 +866,7 @@
 		AscCommon.CollaborativeEditing.Clear();
 		this.isApplyChangesOnOpenEnabled = true;
 		this.isDocumentLoadComplete = false;
+		this.preReadyCursors = {}; // the cursors of the closed document
 		this.ServerImagesWaitComplete = false;
 		this.turnOffSpecialModes();
 

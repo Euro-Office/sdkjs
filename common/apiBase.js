@@ -152,6 +152,8 @@
 		this.isDocumentLoadComplete = false;
 		// Переменная, которая отвечает, послали ли мы окончание открытия документа
 		this.isPreOpenLocks = true;
+		// The newest cursor of each co-author that came before the document was ready (see deferCursorUntilReady)
+		this.preReadyCursors = {};
 		this.isApplyChangesOnOpenEnabled = true;
 		this.isProtectionSupport = true;
 		this.isAnonymousSupport = true;
@@ -1513,6 +1515,44 @@
 		// теперь на старте нельзя удалить бинарник для подбора - он может пригодиться в nativeViewer
 		if (!this.disableRemoveFonts)
 			delete window["g_fonts_selection_bin"];
+
+		this.applyDeferredCursors();
+	};
+	// A cursor of a co-author that comes while the document opens can name an object that is not there yet (the
+	// document is not read, or the changes of others are not applied): the newest cursor of each co-author waits
+	// until the document is ready. Returns true if it waits.
+	baseEditorsApi.prototype.deferCursorUntilReady = function(e)
+	{
+		let last = e && e[e.length - 1];
+		if (this.isDocumentLoadComplete || !last)
+			return false;
+
+		this.preReadyCursors[last['user']] = e;
+		return true;
+	};
+	// Applies the cursors that wait, of the co-authors who are still there. A cursor that fails is left out, so
+	// that the end of the open goes on.
+	baseEditorsApi.prototype.applyDeferredCursors = function()
+	{
+		let cursors = this.preReadyCursors;
+		this.preReadyCursors = {};
+		if (!this.CoAuthoringApi || !this.CoAuthoringApi.onCursor)
+			return;
+
+		for (let userId in cursors)
+		{
+			if (!this.CoAuthoringApi.isParticipant(userId))
+				continue;
+
+			try
+			{
+				this.CoAuthoringApi.onCursor(cursors[userId]);
+			}
+			catch (e)
+			{
+				AscCommon.sendClientLog("error", "applyDeferredCursors: " + e, this);
+			}
+		}
 	};
 	// Save
 	baseEditorsApi.prototype.processSavedFile                    = function(url, downloadType, filetype)

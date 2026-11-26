@@ -3483,6 +3483,7 @@
 		AscCommon.CollaborativeEditing.Clear();
 		this.isApplyChangesOnOpenEnabled = true;
 		this.isDocumentLoadComplete = false;
+		this.preReadyCursors = {}; // the cursors of the closed document
 		this.ServerImagesWaitComplete = false;
 		this.turnOffSpecialModes();
 		AscCommon.pptx_content_loader.ImageMapChecker = {};
@@ -4210,6 +4211,10 @@
 			if (true === AscCommon.CollaborativeEditing.Is_Fast() && false === e['state']) {
 				t.WordControl.m_oLogicDocument.Remove_ForeignCursor(e['id']);
 				t.DocumentRenderer.onUpdateOverlay();
+			}
+			else if (true === AscCommon.CollaborativeEditing.Is_Fast() && true === e['state'] && t.getPDFDoc()) {
+				// A co-author who joins knows no cursor yet: send the own one again
+				t.getPDFDoc().NeedUpdateTargetForCollaboration = true;
 			}
 			t.sendEvent("asc_onConnectionStateChanged", e);
 		};

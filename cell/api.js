@@ -1858,6 +1858,7 @@ var editor;
 		AscCommon.g_oDocumentUrls.Clear();
 		this.isApplyChangesOnOpenEnabled = true;
 		this.isDocumentLoadComplete = false;
+		this.preReadyCursors = {}; // the cursors of the closed document
 		this.FontLoadWaitComplete = false;
         this.turnOffSpecialModes();
 
@@ -2791,6 +2792,9 @@ var editor;
     this.CoAuthoringApi.onConnectionStateChanged = function(e) {
 		if (true === AscCommon.CollaborativeEditing.Is_Fast() && false === e['state']) {
 			t.wb.Remove_ForeignCursor(e['id']);
+		} else if (true === AscCommon.CollaborativeEditing.Is_Fast() && true === e['state'] && t.wb) {
+			// A co-author who joins knows no cursor yet: send the own one again
+			t.wb.updateTargetForCollaboration();
 		}
     	t.handlers.trigger("asc_onConnectionStateChanged", e);
     };
@@ -3011,6 +3015,9 @@ var editor;
         }
     };
     this.CoAuthoringApi.onCursor = function(e) {
+      if (t.deferCursorUntilReady(e)) {
+        return;
+      }
       if (AscCommon.CollaborativeEditing && true === AscCommon.CollaborativeEditing.Is_Fast() && e && e[e.length - 1]) {
         t.wb.Update_ForeignCursor(e[e.length - 1]['cursor'], e[e.length - 1]['user'], true, e[e.length - 1]['useridoriginal']);
       }
