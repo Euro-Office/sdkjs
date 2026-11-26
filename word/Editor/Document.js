@@ -195,6 +195,17 @@ function CStatistics(LogicDocument)
     this.Id       = null; // Id таймера для подсчета всего кроме страниц
     this.PagesId  = null; // Id таймера для подсчета страниц
 
+    // options of the count, see SetOptions
+    this.IncludeHdrFtr      = false;
+    this.IncludeComments    = false;
+    this.DashSeparatesWords = false;
+
+    // counting a selection: notes are counted only when they are selected themselves
+    this.IsSelection = false;
+
+    // drawings of the main text and of the notes are counted per page; those of headers and footers in the runs
+    this.CountDrawingsInRuns = false;
+
     this.Reset();
 }
 
@@ -212,10 +223,40 @@ CStatistics.prototype.Reset = function()
 	this.Paragraphs      = 0;
 	this.SymbolsWOSpaces = 0;
 	this.SymbolsWhSpaces = 0;
+	this.AddedWords      = 0;
+	this.DeletedWords    = 0;
+
+	this.CountDrawingsInRuns = false;
 };
-CStatistics.prototype.Start = function()
+/**
+ * @param {{includeHdrFtr: ?boolean, includeComments: ?boolean, dashSeparatesWords: ?boolean}} [options]
+ *     includeHdrFtr - also count the text of headers and footers
+ *     includeComments - also count the text of comments and their replies
+ *     dashSeparatesWords - en and em dashes separate words, as in LibreOffice ("Haus–Boot" is two words);
+ *     off by default, as in Word
+ */
+CStatistics.prototype.SetOptions = function(options)
+{
+	options = options || {};
+	this.IncludeHdrFtr      = !!options.includeHdrFtr;
+	this.IncludeComments    = !!options.includeComments;
+	this.DashSeparatesWords = !!options.dashSeparatesWords;
+};
+/**
+ * @param {number} codePoint
+ * @returns {boolean}
+ */
+CStatistics.prototype.IsWordSeparatorDash = function(codePoint)
+{
+	return this.DashSeparatesWords && AscCommon.isWordSeparatorDash(codePoint);
+};
+/**
+ * @param {Object} [options] see SetOptions
+ */
+CStatistics.prototype.Start = function(options)
 {
 	this.Reset();
+	this.SetOptions(options);
 
 	var LogicDocument = this.LogicDocument;
 	this.PagesId = setTimeout(function(){LogicDocument.Statistics_GetPagesInfo();}, 1);
@@ -278,7 +319,10 @@ CStatistics.prototype.GetInfo = function()
 		WordsCount     : this.Words,
 		ParagraphCount : this.Paragraphs,
 		SymbolsCount   : this.SymbolsWOSpaces,
-		SymbolsWSCount : this.SymbolsWhSpaces
+		SymbolsWSCount : this.SymbolsWhSpaces,
+
+		AddedWordsCount   : this.AddedWords,
+		DeletedWordsCount : this.DeletedWords
 	};
 };
 CStatistics.prototype.Send = function()
@@ -310,6 +354,49 @@ CStatistics.prototype.Add_Symbol = function(bSpace)
 	this.SymbolsWhSpaces++;
 	if ( true != bSpace )
 		this.SymbolsWOSpaces++;
+};
+/**
+ * Counts a plain text, e.g. of a comment, with the same rules as the document text
+ * @param {string} text
+ */
+CStatistics.prototype.AddText = function(text)
+{
+	let isWord      = false;
+	let isEmptyLine = true;
+	for (let iter = text.getUnicodeIterator(); iter.check(); iter.next())
+	{
+		let codePoint = iter.value();
+		if (0x0A === codePoint || 0x0D === codePoint)
+		{
+			if (!isEmptyLine)
+				this.Add_Paragraph();
+			isEmptyLine = true;
+			isWord      = false;
+			continue;
+		}
+
+		let isSpace = AscCommon.IsSpace(codePoint) || 0x09 === codePoint || 0xA0 === codePoint;
+		this.Add_Symbol(isSpace);
+		if (isSpace || this.IsWordSeparatorDash(codePoint))
+		{
+			isWord = false;
+		}
+		else if (AscCommon.isCJWordChar(codePoint))
+		{
+			this.Add_Word();
+			isWord = false;
+		}
+		else
+		{
+			if (!isWord)
+				this.Add_Word();
+			isWord = true;
+		}
+		isEmptyLine = false;
+	}
+
+	if (!isEmptyLine)
+		this.Add_Paragraph();
 };
 
 function CDocumentRecalcInfo()
@@ -17550,9 +17637,12 @@ CDocument.prototype.Set_MathProps = function(MathProps)
 //----------------------------------------------------------------------------------------------------------------------
 // Statistics (Функции для работы со статистикой)
 //----------------------------------------------------------------------------------------------------------------------
-CDocument.prototype.Statistics_Start = function()
+/**
+ * @param {Object} [options] see CStatistics.SetOptions
+ */
+CDocument.prototype.Statistics_Start = function(options)
 {
-	this.Statistics.Start();
+	this.Statistics.Start(options);
 };
 CDocument.prototype.Statistics_GetParagraphsInfo = function()
 {
@@ -17591,6 +17681,13 @@ CDocument.prototype.Statistics_GetPagesInfo = function()
 			this.DrawingObjects.documentStatistics(CurPage, this.Statistics);
 		}
 
+		// Headers and footers are known only once all pages are recalculated
+		if (this.Statistics.IncludeHdrFtr)
+			this.CollectHdrFtrStatistics(this.Statistics);
+
+		if (this.Statistics.IncludeComments)
+			this.CollectCommentStatistics(this.Statistics);
+
 		this.Statistics.Stop_PagesInfo();
 	}
 };
@@ -17601,9 +17698,10 @@ CDocument.prototype.Statistics_Stop = function()
 /**
  * Counts pages, words, paragraphs and symbols in the current selection with the same rules as the document total.
  * Returns null when nothing is selected.
+ * @param {Object} [options] see CStatistics.SetOptions; only dashSeparatesWords applies to a selection
  * @returns {?{PageCount: number, WordsCount: number, ParagraphCount: number, SymbolsCount: number, SymbolsWSCount: number}}
  */
-CDocument.prototype.GetSelectionStatistics = function()
+CDocument.prototype.GetSelectionStatistics = function(options)
 {
 	if (!this.IsSelectionUse() || this.IsSelectionEmpty())
 		return null;
@@ -17615,6 +17713,8 @@ CDocument.prototype.GetSelectionStatistics = function()
 	// Count the selected runs in place. A GetSelectedContent copy is slow on large selections and queues each
 	// copied paragraph for the track changes check.
 	let stats     = new CStatistics(this);
+	stats.SetOptions(options);
+	stats.IsSelection = true;
 	let paragraph = null;
 	let paraStats = null;
 	function endParagraph()
@@ -17650,6 +17750,53 @@ CDocument.prototype.GetSelectionStatistics = function()
 	let bounds = docpostype_HdrFtr !== this.GetDocPosType() ? this.GetSelectionBounds() : null;
 	stats.Update_Pages(bounds && bounds.Start && bounds.End ? bounds.End.Page - bounds.Start.Page + 1 : -1);
 	return stats.GetInfo();
+};
+/**
+ * Adds the text of the headers and footers shown on the document pages to the statistics.
+ * A header or footer that repeats on several pages is counted once.
+ * @param stats {CStatistics}
+ */
+CDocument.prototype.CollectHdrFtrStatistics = function(stats)
+{
+	let hdrFtrs = new Set();
+	for (let pageIndex = 0, pageCount = this.Pages.length; pageIndex < pageCount; ++pageIndex)
+	{
+		let header = this.HdrFtr.GetHdrFtr(pageIndex, true);
+		let footer = this.HdrFtr.GetHdrFtr(pageIndex, false);
+		if (header)
+			hdrFtrs.add(header);
+		if (footer)
+			hdrFtrs.add(footer);
+	}
+
+	stats.CountDrawingsInRuns = true;
+	hdrFtrs.forEach(function(hdrFtr)
+	{
+		hdrFtr.GetContent().CollectDocumentStatistics(stats);
+	});
+	stats.CountDrawingsInRuns = false;
+};
+/**
+ * Adds the text of all comments and their replies to the statistics
+ * @param stats {CStatistics}
+ */
+CDocument.prototype.CollectCommentStatistics = function(stats)
+{
+	function collectData(data)
+	{
+		stats.AddText(data.m_sText || "");
+		for (let index = 0, count = data.m_aReplies.length; index < count; ++index)
+		{
+			collectData(data.m_aReplies[index]);
+		}
+	}
+
+	let comments = this.Comments.GetAllComments();
+	for (let id in comments)
+	{
+		if (comments[id] && comments[id].GetData())
+			collectData(comments[id].GetData());
+	}
 };
 //----------------------------------------------------------------------------------------------------------------------
 // Функции для работы с MailMerge
@@ -28977,6 +29124,7 @@ window['AscWord'] = window['AscWord'] || {};
 
 window['AscWord'].CDocument = CDocument;
 window['AscWord'].Document = CDocument;
+window['AscWord'].CStatistics = CStatistics;
 window['AscCommonWord'].CDocument = CDocument;
 window['AscCommonWord'].docpostype_Content        = docpostype_Content;
 window['AscCommonWord'].docpostype_HdrFtr         = docpostype_HdrFtr;
