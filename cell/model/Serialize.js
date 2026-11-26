@@ -10020,9 +10020,16 @@
             return res;
         }
 
-        this.ReadRichValueFallback = function (type, length, poResult)
+        this.ReadRichValueFallback = function (type, length, pFallback)
         {
             let res = c_oSerConstants.ReadOk;
+            if (c_oSer_RichValue.FallbackValue === type) {
+                pFallback.content = this.stream.GetString2LE(length);
+            } else if (c_oSer_RichValue.FallbackType === type) {
+                pFallback.t = this.stream.GetUChar();
+            } else {
+                res = c_oSerConstants.ReadUnknown;
+            }
             return res;
         };
 
@@ -10038,7 +10045,7 @@
                 pValue.arrV.push(s);
             }
             else if (c_oSer_RichValue.Fallback === type) {
-                pValue.fb = {};
+                pValue.fb = new AscCommonExcel.CRichValueFallback();
                 let oThis = this;
                 res = this.bcr.Read1(length, function (t, l) {
                     return oThis.ReadRichValueFallback(t, l, pValue.fb);

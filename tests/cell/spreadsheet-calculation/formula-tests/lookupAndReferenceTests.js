@@ -2995,6 +2995,11 @@ $(function () {
 		ws.getRange2("B10").setValue("");
 		ws.getRange2("B11").setValue();
 
+		// Cells never written in include are FALSE, not a thrown TypeError: nothing left, no if_empty.
+		oParser = new parserFormula("FILTER(ZZ100:ZZ101,ZZ100:ZZ101)", "A1", ws);
+		assert.ok(oParser.parse());
+		assert.strictEqual(oParser.calculate().type, AscCommonExcel.cElementType.error);
+
 		ws.getRange2("F10").setValue("1");
 		ws.getRange2("F11").setValue("3");
 		ws.getRange2("F12").setValue("5");
@@ -14159,6 +14164,11 @@ $(function () {
 		ws.getRange2("B2").setValue("#N/A");
 		ws.getRange2("B3").setValue("");
 
+		// A flag that is neither a boolean nor a number is #VALUE!, as in Excel, not a thrown TypeError.
+		oParser = new parserFormula("TOROW(A1:B3,0,\"test\")", "A1", ws);
+		assert.ok(oParser.parse());
+		assert.strictEqual(oParser.calculate().getValue(), "#VALUE!");
+
 		oParser = new parserFormula("TOROW(A1:B3,0, FALSE)", "A1", ws);
 		assert.ok(oParser.parse());
 		let array = oParser.calculate();
@@ -14519,6 +14529,11 @@ $(function () {
 		ws.getRange2("B1").setValue("test2");
 		ws.getRange2("B2").setValue("#N/A");
 		ws.getRange2("B3").setValue("");
+
+		// A flag that is neither a boolean nor a number is #VALUE!, as in Excel, not a thrown TypeError.
+		oParser = new parserFormula("TOCOL(A1:B3,0,\"test\")", "A1", ws);
+		assert.ok(oParser.parse());
+		assert.strictEqual(oParser.calculate().getValue(), "#VALUE!");
 
 		oParser = new parserFormula("TOCOL(A1:B3,0, FALSE)", "A1", ws);
 		assert.ok(oParser.parse());

@@ -39168,6 +39168,15 @@ $(function () {
 
 	QUnit.test("Test: \"TREND\"", function (assert) {
 		ws.getRange2("A1:C214").cleanAll();
+
+		// const as text or a range is #VALUE!, as in Excel, not a thrown TypeError.
+		oParser = new parserFormula("TREND({1,2,3},{1,2,3},{4},\"test\")", "A1", ws);
+		assert.ok(oParser.parse());
+		assert.strictEqual(oParser.calculate().getValue(), "#VALUE!");
+
+		oParser = new parserFormula("TREND({1,2,3},{1,2,3},{4},B1:C2)", "A1", ws);
+		assert.ok(oParser.parse());
+		assert.strictEqual(oParser.calculate().getValue(), "#VALUE!");
 		// Data for reference link. Use A100-A111
 		ws.getRange2("A100").setValue("0.5");
 		ws.getRange2("A101").setValue("1.5");

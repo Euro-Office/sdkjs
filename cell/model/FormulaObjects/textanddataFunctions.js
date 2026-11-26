@@ -128,6 +128,9 @@ function (window, undefined) {
 		if (match_end.type === cElementType.error) {
 			return match_end;
 		}
+		if (match_mode.type !== cElementType.bool || match_end.type !== cElementType.bool) {
+			return new cError(cErrorType.wrong_value_type);
+		}
 
 		instance_num = instance_num.toNumber ? instance_num.toNumber() : 0;
 		if (instance_num === 0 || (instance_num > text.length && newArgs[2] && newArgs[2].type !== cElementType.empty)) {
@@ -3639,6 +3642,9 @@ function (window, undefined) {
 		if (ignore_empty.type === cElementType.error) {
 			return ignore_empty;
 		}
+		if (ignore_empty.type !== cElementType.bool) {
+			return new cError(cErrorType.wrong_value_type);
+		}
 		ignore_empty = ignore_empty.toBool();
 
 		let match_mode = arg[4] ? arg[4].tocBool() : new cBool(false);
@@ -3648,6 +3654,9 @@ function (window, undefined) {
 		}
 		if (match_mode.type === cElementType.error) {
 			return match_mode;
+		}
+		if (match_mode.type !== cElementType.bool) {
+			return new cError(cErrorType.wrong_value_type);
 		}
 		match_mode = match_mode.toBool();
 

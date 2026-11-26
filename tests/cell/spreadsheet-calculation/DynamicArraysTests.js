@@ -10228,5 +10228,36 @@ $(function () {
 		clearData(0, 0, 100, 200);
 	});
 
+	QUnit.test("Test: \"Rich value fallback is read without breaking the workbook\"", function (assert) {
+		// Excel writes <fb> (the cached error) in xl/richData/rdrichvalue.xml. Skipping it left the reader
+		// out of step with the stream, so the next rich values and the sheets were read wrong.
+		let richValueData = new AscCommonExcel.CRichValueData();
+		let withFallback = new AscCommonExcel.CRichValue();
+		withFallback.s = 0;
+		withFallback.arrV = ["1"];
+		withFallback.fb = new AscCommonExcel.CRichValueFallback();
+		withFallback.fb.content = "#NAME?";
+		withFallback.fb.t = 1;
+		let next = new AscCommonExcel.CRichValue();
+		next.s = 0;
+		next.arrV = ["2", "3"];
+		richValueData.pData = [withFallback, next];
+		wb.richValueData = richValueData;
+		let data = new AscCommonExcel.BinaryFileWriter(wb).Write();
+		wb.richValueData = null;
+
+		let read = new AscCommonExcel.Workbook(undefined, undefined, false);
+		read.DrawingDocument = wb.DrawingDocument;
+		AscFormat.ExecuteNoHistory(function () {
+			new AscCommonExcel.BinaryFileReader().Read(data, read);
+		});
+		let values = read.richValueData.pData;
+		assert.strictEqual(values.length, 2, "both rich values");
+		assert.strictEqual(values[0].fb.content, "#NAME?", "fallback value");
+		assert.strictEqual(values[0].fb.t, 1, "fallback type");
+		assert.strictEqual(values[1].arrV.join(","), "2,3", "the next rich value");
+		assert.strictEqual(read.aWorksheets.length, wb.aWorksheets.length, "every sheet");
+	});
+
 	QUnit.module("Dynamic Arrays Tests");
 });

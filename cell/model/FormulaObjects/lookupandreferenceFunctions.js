@@ -1096,7 +1096,7 @@ function (window, undefined) {
 
 			for (let i = 0; i < rows; i++) {
 				for (let j = 0; j < columns; j++) {
-					let val = arg1.getValueByRowCol ? arg1.getValueByRowCol(i, j) : arg1.getElementRowCol(i, j, true);
+					let val = arg1.getValueByRowCol ? arg1.getValueByRowCol(i, j, true) : arg1.getElementRowCol(i, j, true);
 
 					val = val.tocBool();
 					val = val.toBool ? val.toBool() : new cError(cErrorType.wrong_value_type);
@@ -5085,6 +5085,9 @@ function (window, undefined) {
 		arg3 = arg3.tocBool();
 		if (arg3.type === cElementType.error) {
 			return arg3;
+		}
+		if (arg3.type !== cElementType.bool) {
+			return new cError(cErrorType.wrong_value_type);
 		}
 		arg3 = arg3.toBool();
 
