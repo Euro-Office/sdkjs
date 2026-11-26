@@ -17324,14 +17324,7 @@
     }
 
     function fGetParsedArray(sVal) {
-        var aParsed;
-        if(sVal[0] === "=") {
-            aParsed = sVal.slice(1).split(",");
-        }
-        else {
-            aParsed = sVal.split(",");
-        }
-        return aParsed;
+        return AscCommon.parserHelp.splitRefs(sVal[0] === "=" ? sVal.slice(1) : sVal);
     }
     function fCheckParseRefsError(aParsed, oResult) {
         var bR1C1;
@@ -17504,7 +17497,7 @@
 		}
 
 		const f1 = sFormula;
-		const arrF = f1.split(",");
+		const arrF = AscCommon.parserHelp.splitRefs(f1);
 		const arrResult = [];
 		for (let i = 0; i < arrF.length; i += 1)
 		{

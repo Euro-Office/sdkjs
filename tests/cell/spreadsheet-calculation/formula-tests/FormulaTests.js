@@ -6176,6 +6176,44 @@ $(function () {
 			ws.getRange2("A1:Z10000").cleanAll();
 		});
 	});
+	QUnit.test("Test: \"getRangeByRef with a comma in a quoted sheet name\"", function (assert) {
+		// instrument exports name sheets like "Ramp 15,00 °Cmin to 300,00 °C"; a chart over such a sheet must still work
+		let wsName = "Ramp 15,00 °C";
+		let newWs = wb.createWorksheet(1, wsName);
+
+		let ranges = AscCommonExcel.getRangeByRef("'" + wsName + "'!$B$2:$C$31", ws);
+		assert.strictEqual(ranges.length, 1, "A comma inside a quoted sheet name keeps the reference whole");
+		assert.ok(ranges[0] && ranges[0].worksheet === newWs, "The reference points to the sheet with the comma");
+		assert.strictEqual(ranges[0] && ranges[0].bbox.getName(), "$B$2:$C$31", "The reference keeps its cells");
+
+		ranges = AscCommonExcel.getRangeByRef("'" + wsName + "'!$A$1,'" + ws.getName() + "'!$B$1", ws);
+		assert.strictEqual(ranges.length, 2, "Commas outside quotes still separate references");
+
+		wb.removeWorksheet(1);
+	});
+
+	QUnit.test("Test: \"chart series with a comma in a quoted sheet name\"", function (assert) {
+		assert.deepEqual(AscCommon.parserHelp.splitRefs("'a,b'!$A$1,'c''s, x'!$B$2,Sheet1!$C$3"),
+			["'a,b'!$A$1", "'c''s, x'!$B$2", "Sheet1!$C$3"], "splitRefs splits only at commas outside quotes");
+
+		let newWs = wb.createWorksheet(1, "a,b");
+		newWs.getRange2("A1").setValue("1");
+		newWs.getRange2("A2").setValue("2");
+		newWs.getRange2("A3").setValue("3");
+		newWs.getRange2("B1").setValue("Series");
+
+		let oVal = new AscFormat.CYVal();
+		let oResult = oVal.setValues("='a,b'!$A$1:$A$3");
+		assert.strictEqual(oResult.getError(), Asc.c_oAscError.ID.No, "Series values on a sheet with a comma parse");
+		assert.strictEqual(oVal.numRef && oVal.numRef.f, "'a,b'!$A$1:$A$3", "Series values keep the quoted sheet name");
+
+		let oTx = new AscFormat.CTx();
+		oResult = oTx.setValues("='a,b'!$B$1");
+		assert.strictEqual(oResult.getError(), Asc.c_oAscError.ID.No, "Series name on a sheet with a comma parses");
+		assert.strictEqual(oTx.strRef && oTx.strRef.f, "'a,b'!$B$1", "Series name keeps the quoted sheet name");
+
+		wb.removeWorksheet(1);
+	});
 	QUnit.test("Test: \"3d_ref_tests\"", function (assert) {
 		let cellWithFormula = new AscCommonExcel.CCellWithFormula(ws, 1, 0);
 		let wsName = "हरियाणवी";

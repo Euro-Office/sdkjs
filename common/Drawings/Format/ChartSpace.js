@@ -14196,7 +14196,7 @@ function(window, undefined) {
 			sFormula = sFormula.slice(0, -1);
 
 		const f1 = sFormula;
-		const arrF = f1.split(",");
+		const arrF = AscCommon.parserHelp.splitRefs(f1);
 		for (let i = 0; i < arrF.length; i++) {
 			let parsedRef = fGetParsedRef(arrF[i], result);
 			if (parsedRef) {

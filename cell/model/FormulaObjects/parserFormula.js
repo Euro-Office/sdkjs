@@ -5239,7 +5239,7 @@ parserHelp.setDigitSeparator(AscCommon.g_oDefaultCultureInfo.NumberDecimalSepara
 				ref = ref.slice(0, -1);
 			}
 
-			var arrRefs = ref.split(',');
+			var arrRefs = parserHelp.splitRefs(ref);
 			arrRefs.forEach(function (refItem) {
 				// ToDo in parser formula
 				var currentWorkbook = '[0]!';

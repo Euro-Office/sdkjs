@@ -4063,6 +4063,26 @@
 		}
 		return rx_test_ws_name.test(sheet) ? sheet : "'" + sheet.replace(/'/g, "''") + "'";
 	};
+
+	// a union of references splits at commas outside single quotes: a sheet name may hold a comma ('' inside a name toggles twice)
+	parserHelper.prototype.splitRefs = function (ref)
+	{
+		const res = [];
+		let inQuotes = false, start = 0;
+		for (let i = 0; i < ref.length; i++)
+		{
+			const c = ref[i];
+			if (c === "'")
+				inQuotes = !inQuotes;
+			else if (c === "," && !inQuotes)
+			{
+				res.push(ref.slice(start, i));
+				start = i + 1;
+			}
+		}
+		res.push(ref.slice(start));
+		return res;
+	};
 	/**
 	 * Проверяем ссылку на валидность для диаграммы или автофильтра
 	 * @param {AscCommonExcel.Workbook} model
