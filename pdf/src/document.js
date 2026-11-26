@@ -180,6 +180,7 @@ var CPresentation = CPresentation || function(){};
         
         this.mergedPagesData = [];
         this.appliedRedactsData = [];
+        this.needFullRewrite = false; // see SetNeedFullRewrite
 
 		this.fontLoader             = AscCommon.g_font_loader;
 		this.defaultFontsLoaded     = -1; // -1 не загружены и не грузим, 0 - грузим, 1 - загружены
@@ -4051,6 +4052,7 @@ var CPresentation = CPresentation || function(){};
 			case AscDFH.historydescription_Document_ChangeComment:
 			case AscDFH.historydescription_Pdf_AddComment:
 			case AscDFH.historydescription_Pdf_RemoveComment:
+			case AscDFH.historydescription_Document_RemovePersonalInformation:
 				nChangesType = AscCommon.changestype_2_Comment;
 				break;
 			default:
@@ -7655,6 +7657,24 @@ var CPresentation = CPresentation || function(){};
 		return !!this.annots.find(function(annot) {
 			return annot.IsRedact() && annot.GetRedactId();
 		});
+	};
+	/**
+	 * Normally changes are saved as an incremental update, so the old objects (for example the old author names of
+	 * annotations) stay readable in the file. After removing information the file has to be written as a new file,
+	 * as after an applied redaction. This is a change in the history, so co-authors and the server that saves the
+	 * file get it too, and undo resets it.
+	 * @param {boolean} bNeed
+	 */
+	CPDFDoc.prototype.SetNeedFullRewrite = function(bNeed) {
+		bNeed = !!bNeed;
+		if (this.needFullRewrite === bNeed)
+			return;
+
+		AscCommon.History.Add(new CChangesPDFDocumentFullRewrite(this, this.needFullRewrite, bNeed));
+		this.needFullRewrite = bNeed;
+	};
+	CPDFDoc.prototype.IsNeedFullRewrite = function() {
+		return this.needFullRewrite || this.HasAppliedRedact();
 	};
     CPDFDoc.prototype.ApplyRedact = function(sRedactId, nPage) {
         let oFile = this.Viewer.file;

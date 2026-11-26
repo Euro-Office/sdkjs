@@ -451,6 +451,58 @@
 		if (this.DocumentRenderer.isFullText)
 			this.sync_GetDocInfoEndCallback();
 	};
+	/**
+	 * Replaces the author of every annotation, comment and reply with one name and removes the user ids, as the
+	 * document inspector of Word does. Dates are kept. One undo step.
+	 * The document properties of the PDF (title, author ...) can't be changed by this editor.
+	 * @param {string} [sName="Author"]
+	 */
+	PDFEditorApi.prototype.asc_RemovePersonalInformation = function(sName) {
+		let oDoc = this.getPDFDoc();
+		if (!oDoc)
+			return;
+		sName = sName || "Author";
+
+		let aAll = [];
+		oDoc.annots.forEach(function collect(oAnnot) {
+			aAll.push(oAnnot);
+			(oAnnot.GetReplies && oAnnot.GetReplies() || []).forEach(collect);
+		});
+		oDoc.DoAction(function() {
+			// Replies added in the comment panel exist on every client (and on the save server) as separate objects
+			// with their own ids, so their own changes don't reach the other copies. They follow the comment data of
+			// the annotation they belong to, so that data gets the new name too. This comes first, so undo brings
+			// back the old names in it.
+			oDoc.annots.forEach(function(oAnnot) {
+				let oAscData = oAnnot.GetReplies && oAnnot.GetReplies().length && oAnnot.GetAscCommentData();
+				if (!oAscData)
+					return;
+				let oData = new AscCommon.CCommentData();
+				oData.Read_FromAscCommentData(oAscData);
+				[oData].concat(oData.m_aReplies).forEach(function(oItem) {
+					oItem.m_sUserName = sName;
+					oItem.m_sUserId = "";
+				});
+				oAnnot.EditCommentData(oData);
+			});
+			aAll.forEach(function(oAnnot) {
+				oAnnot.SetAuthor(sName);
+				oAnnot.SetUserId("");
+			});
+			// otherwise the old names stay in the file, in the part before the incremental update
+			oDoc.SetNeedFullRewrite(true);
+		}, AscDFH.historydescription_Document_RemovePersonalInformation, this, aAll.map(function(oAnnot) {return oAnnot.GetId();}));
+
+		let t = this;
+		oDoc.annots.forEach(function(oAnnot) {
+			let oAscData = oAnnot.GetAscCommentData && oAnnot.GetAscCommentData();
+			if (!oAscData)
+				return;
+			let oData = new AscCommon.CCommentData();
+			oData.Read_FromAscCommentData(oAscData);
+			t.sync_ChangeCommentData(oAnnot.GetId(), oData);
+		});
+	};
 	PDFEditorApi.prototype.stopGetDocInfo = function() {
 		this.sync_GetDocInfoStopCallback();
 		this.DocumentRenderer.endStatistics();
@@ -5257,6 +5309,7 @@
 	PDFEditorApi.prototype['asc_getCanUndo']				= PDFEditorApi.prototype.asc_getCanUndo;
 	PDFEditorApi.prototype['asc_setAdvancedOptions']		= PDFEditorApi.prototype.asc_setAdvancedOptions;
 	PDFEditorApi.prototype['startGetDocInfo']				= PDFEditorApi.prototype.startGetDocInfo;
+	PDFEditorApi.prototype['asc_RemovePersonalInformation']	= PDFEditorApi.prototype.asc_RemovePersonalInformation;
 	PDFEditorApi.prototype['stopGetDocInfo']				= PDFEditorApi.prototype.stopGetDocInfo;
 	PDFEditorApi.prototype['can_CopyCut']					= PDFEditorApi.prototype.can_CopyCut;
 	PDFEditorApi.prototype['asc_searchEnabled']				= PDFEditorApi.prototype.asc_searchEnabled;
