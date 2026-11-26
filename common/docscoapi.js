@@ -1702,6 +1702,8 @@
       },
       'editorType': this.editorType,
       'lastOtherSaveTime': this.lastOtherSaveTime,
+      //on restore in fast mode the server sends the changes after this index instead of an error
+      'syncChangesIndex': !this._isExcel && !this._isReSaveAfterAuth && AscCommon.CollaborativeEditing && AscCommon.CollaborativeEditing.Is_Fast() ? this.syncChangesIndex : undefined,
       'block': this.ownedLockBlocks,
       'sessionId': this._id,
       'sessionTimeConnect': this._sessionTimeConnect,
