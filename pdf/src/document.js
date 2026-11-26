@@ -177,6 +177,7 @@ var CPresentation = CPresentation || function(){};
         this.Api        = Asc.editor;
 
         this.annotsHidden = false;
+        this.showResolvedComments = true; // the "show resolved comments" setting, see SetShowResolvedComments
         
         this.mergedPagesData = [];
         this.appliedRedactsData = [];
@@ -4562,6 +4563,127 @@ var CPresentation = CPresentation || function(){};
 			});
         }
     };
+    /**
+	 * The annotations shown in the comments panel that the user can see, page by page and from top to bottom
+	 * (then from left to right on the same line). Replies are not included, they belong to their annotation.
+	 * Resolved comments are left out while the "show resolved comments" setting is off, as in the text editor.
+	 * @memberof CPDFDoc
+	 * @typeofeditors ["PDF"]
+	 * @returns {AscPDF.CAnnotationBase[]}
+	 */
+    CPDFDoc.prototype.GetCommentsInOrder = function() {
+        if (this.IsAnnotsHidden())
+            return [];
+
+        let isShowResolved = this.IsShowResolvedComments();
+        let aComments = [];
+        this.annots.forEach(function(oAnnot) {
+            if (oAnnot.IsHidden())
+                return;
+
+            let oData = oAnnot.GetAscCommentData();
+            if (!oData || false === AscCommon.UserInfoParser.canViewComment(oData.asc_getUserName()))
+                return;
+            if (!isShowResolved && oData.asc_getSolved())
+                return;
+
+            let oPos = getCommentPosition(oAnnot);
+            oPos.annot = oAnnot;
+            aComments.push(oPos);
+        });
+
+        // first top to bottom, then put the comments of one line together: a comment starts a new line if it is
+        // more than COMMENT_LINE_TOLERANCE below the first comment of the current line
+        aComments.sort(function(oItem1, oItem2) {
+            return (oItem1.page - oItem2.page) || (oItem1.y - oItem2.y) || (oItem1.x - oItem2.x);
+        });
+        let nLine = -1, nLineY = 0, nLinePage = -1;
+        aComments.forEach(function(oItem) {
+            if (oItem.page !== nLinePage || oItem.y - nLineY > COMMENT_LINE_TOLERANCE) {
+                ++nLine;
+                nLineY    = oItem.y;
+                nLinePage = oItem.page;
+            }
+            oItem.line = nLine;
+        });
+        aComments.sort(function(oItem1, oItem2) {
+            return (oItem1.line - oItem2.line) || (oItem1.x - oItem2.x) || (oItem1.y - oItem2.y);
+        });
+        return aComments.map(function(oItem) {
+            return oItem.annot;
+        });
+    };
+    // Notes placed by hand on one line of text are rarely at exactly the same height. Comments less than half a
+    // line of 12 pt text apart (in points, as the annotation rectangles) count as the same line, left to right.
+    const COMMENT_LINE_TOLERANCE = 6;
+    function getCommentPosition(oAnnot) {
+        let aRect = oAnnot.GetRect();
+        return {page: oAnnot.GetPage(), y: aRect[1], x: aRect[0]};
+    }
+    function compareCommentPositions(oItem1, oItem2) {
+        let nDiffY = oItem1.y - oItem2.y;
+        if (Math.abs(nDiffY) <= COMMENT_LINE_TOLERANCE)
+            nDiffY = 0;
+        return (oItem1.page - oItem2.page) || nDiffY || (oItem1.x - oItem2.x);
+    }
+    /**
+	 * Returns the comment after (or before) the selected annotation, or after (or before) the current page if no
+	 * annotation is selected, and wraps round at the end of the document.
+	 * @memberof CPDFDoc
+	 * @typeofeditors ["PDF"]
+     * @param {boolean} isNext
+	 * @returns {?string} the id of the annotation, or null if comments are hidden or there is no comment to go to
+	 */
+    CPDFDoc.prototype.GetNextCommentId = function(isNext) {
+        let aComments = this.GetCommentsInOrder();
+        let nCount = aComments.length;
+        if (!nCount)
+            return null;
+
+        let nFound = -1;
+        let oSelected = this.mouseDownAnnot;
+        let nSelected = oSelected ? aComments.indexOf(oSelected) : -1;
+        if (-1 !== nSelected) {
+            // a selected comment works like the cursor in the text editor: go on from it
+            nFound = (nSelected + (isNext ? 1 : nCount - 1)) % nCount;
+        }
+        else {
+            // another annotation is selected: the comments after (or before) its place;
+            // nothing selected: the first comment from the top of the current page on, or the last one before it
+            let oFrom = oSelected && oSelected.IsUseInDocument()
+                ? getCommentPosition(oSelected)
+                : {page: this.GetCurPage(), y: -Infinity, x: -Infinity};
+            for (let nIndex = 0; nIndex < nCount; ++nIndex) {
+                let nCompare = compareCommentPositions(getCommentPosition(aComments[nIndex]), oFrom);
+                if (isNext && nCompare > 0) {
+                    nFound = nIndex;
+                    break;
+                }
+                if (!isNext && nCompare < 0)
+                    nFound = nIndex;
+            }
+        }
+
+        if (-1 === nFound)
+            nFound = isNext ? 0 : nCount - 1;
+
+        return aComments[nFound].GetId();
+    };
+    /**
+	 * Goes to the next (or previous) comment, selects it and scrolls to it if it is not visible
+	 * @memberof CPDFDoc
+	 * @typeofeditors ["PDF"]
+     * @param {boolean} isNext
+	 * @returns {?string} the id of the annotation, or null if comments are hidden or there is no comment to go to
+	 */
+    CPDFDoc.prototype.GotoComment = function(isNext) {
+        let sId = this.GetNextCommentId(isNext);
+        if (!sId)
+            return null;
+
+        this.GoToAnnot(sId);
+        return sId;
+    };
     CPDFDoc.prototype.HideComments = function() {
         editor.sync_HideComment();
         this.showedCommentId = undefined;
@@ -4805,6 +4927,19 @@ var CPresentation = CPresentation || function(){};
     };
     CPDFDoc.prototype.IsAnnotsHidden = function() {
         return this.annotsHidden;
+    };
+    /**
+	 * Remembers the "show resolved comments" setting (asc_showComments passes it), as CDocument.ShowComments does
+	 * in the text editor. Going to the next or previous comment skips resolved comments while it is off.
+	 * @memberof CPDFDoc
+	 * @typeofeditors ["PDF"]
+	 * @param {boolean} isShow
+	 */
+    CPDFDoc.prototype.SetShowResolvedComments = function(isShow) {
+        this.showResolvedComments = false !== isShow;
+    };
+    CPDFDoc.prototype.IsShowResolvedComments = function() {
+        return this.showResolvedComments;
     };
     
     /**
