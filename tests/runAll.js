@@ -59,6 +59,8 @@ const allTests = [
 	'common/api/api-cell.html',
 	'common/api/api-slide.html',
 	'common/api/api-visio.html',
+	'common/paste-queue/paste-queue-slide.html',
+	'common/paste-queue/paste-queue-word.html',
 	'common/libfont/like-fonts.html',
 
 	'word/unit-tests/paragraphContentPos.html',
