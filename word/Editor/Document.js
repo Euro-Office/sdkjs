@@ -7410,6 +7410,9 @@ CDocument.prototype.Selection_SetStart         = function(X, Y, MouseEvent)
     var bInText      = (null === this.IsInText(X, Y, this.CurPage) ? false : true);
     var bTableBorder = (null === this.IsTableBorder(X, Y, this.CurPage) ? false : true);
     var nInDrawing   = this.DrawingObjects.IsInDrawingObject(X, Y, this.CurPage, this);
+	// A table in front of an object behind the text gets the click, also where its cell has no text
+	if (DRAWING_ARRAY_TYPE_BEHIND === nInDrawing && !bInText && this.private_IsInMainTableByXY(X, Y, this.CurPage))
+		bInText = true;
 	var bFlowTable   = (null === this.DrawingObjects.getTableByXY(X, Y, this.CurPage, this) ? false : true);
 
 	// Сначала посмотрим, попалили мы в текстовый селект (но при этом не в границу таблицы и не более чем одинарным кликом)
@@ -8352,7 +8355,10 @@ CDocument.prototype.IsTableBorder = function(X, Y, PageIndex)
 	}
 	else
 	{
-		if (-1 != this.DrawingObjects.IsInDrawingObject(X, Y, PageIndex, this))
+		// An object in front of the text covers the border; an object behind the text does not (as in Word, the border
+		// of a table in front of a text box behind the text can still be moved)
+		var nInDrawing = this.DrawingObjects.IsInDrawingObject(X, Y, PageIndex, this);
+		if (-1 != nInDrawing && DRAWING_ARRAY_TYPE_BEHIND !== nInDrawing)
 		{
 			return null;
 		}
@@ -8371,6 +8377,31 @@ CDocument.prototype.IsTableBorder = function(X, Y, PageIndex)
 			return this.Content[ContentPos].IsTableBorder(X, Y, ElementPageIndex);
 		}
 	}
+};
+/**
+ * Is the point inside a table of the main text (not only on its text)? Used so that a table in front of an object
+ * behind the text gets the click everywhere in its cells, not only on the letters.
+ * @param {number} X
+ * @param {number} Y
+ * @param {number} PageAbs
+ * @returns {boolean}
+ */
+CDocument.prototype.private_IsInMainTableByXY = function(X, Y, PageAbs)
+{
+	if (PageAbs < 0 || PageAbs >= this.Pages.length)
+		return false;
+
+	if (this.Footnotes.CheckHitInFootnote(X, Y, PageAbs) || this.Endnotes.CheckHitInEndnote(X, Y, PageAbs))
+		return false;
+
+	var nContentPos = this.Internal_GetContentPosByXY(X, Y, PageAbs);
+	var oElement    = this.Content[nContentPos];
+	if (!oElement || !oElement.IsTable())
+		return false;
+
+	var nElementPage = this.private_GetElementPageIndexByXY(nContentPos, X, Y, PageAbs);
+	var oBounds      = oElement.GetPageBounds(nElementPage);
+	return (oBounds && X >= oBounds.Left && X <= oBounds.Right && Y >= oBounds.Top && Y <= oBounds.Bottom);
 };
 /**
  * Проверяем, происходит ли сейчас выделение ячеек какой-либо таблицы
@@ -21653,6 +21684,11 @@ CDocument.prototype.controller_UpdateCursorType = function(X, Y, PageAbs, MouseE
 {
 	var bInText      = (null === this.IsInText(X, Y, PageAbs) ? false : true);
 	var bTableBorder = (null === this.IsTableBorder(X, Y, PageAbs) ? false : true);
+	// see Selection_SetStart: a table in front of an object behind the text shows the text cursor
+	if (!bInText && !bTableBorder
+		&& DRAWING_ARRAY_TYPE_BEHIND === this.DrawingObjects.IsInDrawingObject(X, Y, PageAbs, this)
+		&& this.private_IsInMainTableByXY(X, Y, PageAbs))
+		bInText = true;
 
 	// Ничего не делаем
 	if (true === this.DrawingObjects.updateCursorType(PageAbs, X, Y, MouseEvent, ( true === bInText || true === bTableBorder ? true : false )))
