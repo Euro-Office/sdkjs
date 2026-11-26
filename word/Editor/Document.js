@@ -8614,6 +8614,17 @@ CDocument.prototype.OnKeyDown = function(e)
 				{
 					this.MoveCursorToCell(true === e.ShiftKey ? false : true);
 				}
+				else if (true === SelectedInfo.IsInTable() && true === e.CtrlKey && true !== e.ShiftKey && !SelectedInfo.IsDrawingObjSelected())
+				{
+					// As in Word, Ctrl+Tab in a table always inserts a tab character, also at the start of a paragraph
+					// (where Tab would change the indent or the list level)
+					if (false === this.Document_Is_SelectionLocked(changestype_Paragraph_Content))
+					{
+						this.StartAction(AscDFH.historydescription_Document_AddTab);
+						this.AddToParagraph(new AscWord.CRunTab());
+						this.FinalizeAction();
+					}
+				}
 				else if (true === SelectedInfo.IsDrawingObjSelected() && true != e.CtrlKey)
 				{
 					this.DrawingObjects.selectNextObject((e.ShiftKey === true ? -1 : 1));

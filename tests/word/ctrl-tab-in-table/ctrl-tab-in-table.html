@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!--
+  SPDX-FileCopyrightText: 2026 Euro-Office contributors
+  SPDX-License-Identifier: AGPL-3.0-only
+-->
+<html>
+<head>
+	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+
+	<title>Ctrl+Tab in table cells</title>
+
+	<script type="text/javascript" src="../../node_modules/jquery/dist/jquery.min.js"></script>
+	<link type="text/css" href="../../node_modules/qunit/qunit/qunit.css" rel="stylesheet" media="screen"/>
+	<script type="text/javascript" src="../../node_modules/qunit/qunit/qunit.js"></script>
+	<script type="text/javascript" src="../../../vendor/xregexp-all-min.js"></script>
+
+	<script type="text/javascript" src="../../../develop/sdkjs/word/scripts.js"></script>
+	<script type="text/javascript">
+		window.sdk_scripts.forEach(function(item)
+		{
+			document.write('<script type="text/javascript" src="' + item + '"><\/script>');
+		});
+	</script>
+
+	<script type="text/javascript" src="../common/common.js"></script>
+	<script type="text/javascript" src="../common/editor.js"></script>
+	<script type="text/javascript" src="../common/document.js"></script>
+	<script type="text/javascript" src="../common/measurer.js"></script>
+
+	<script type="text/javascript" src="ctrl-tab-in-table.js"></script>
+</head>
+<body>
+<h1 id="qunit-header">Ctrl+Tab in table cells</h1>
+<h2 id="qunit-banner"></h2>
+<div id="qunit-testrunner-toolbar"></div>
+<h2 id="qunit-userAgent"></h2>
+<ol id="qunit-tests"></ol>
+<div id="qunit-fixture">test markup, will be hidden</div>
+</body>
+</html>
