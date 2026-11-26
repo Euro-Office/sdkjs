@@ -5,8 +5,8 @@
 
 'use strict';
 
-// doctrenderer (x2t, docbuilder, desktop converter) loads common/Native/native.js
-// and XRegExp, then the editor bundle, with no jQuery. The bundle must load
+// doctrenderer (x2t, docbuilder, desktop converter) loads common/Native/native.js,
+// then the editor bundle, with no jQuery and no XRegExp. The bundle must load
 // there: its top level may not reference a global jQuery or $.
 // Sources are concatenated the way build/loaders/sdk-concat.cjs does.
 
@@ -27,7 +27,6 @@ function loadEditor(module, platform) {
     const ctx = vm.createContext({});
     vm.runInContext('var window = this, self = this, native;', ctx);
     vm.runInContext(read(path.join(SRC_ROOT, 'common/Native/native.js')), ctx);
-    vm.runInContext(read(path.join(SRC_ROOT, 'vendor/xregexp-all-min.js')), ctx);
     vm.runInContext(concat(getFilesMin(cfg, platform)), ctx);
     vm.runInContext('(function(window, undefined) {\n' + concat(getFilesAll(cfg, platform)) + '\n})(window);', ctx);
     return ctx;

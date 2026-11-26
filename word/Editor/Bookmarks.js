@@ -494,12 +494,13 @@ CBookmarksManager.prototype.IsInternalUseBookmark = function(sName)
 {
 	return (sName === "_GoBack");
 };
+var rx_bookmarkName = new RegExp("^[" + AscCommon.str_letters + "][" + AscCommon.str_letters + AscCommon.str_numbers + "_]*$");
 CBookmarksManager.prototype.CheckNewBookmarkName = function(sName)
 {
 	if (!sName)
 		return false;
 
-	return (sName === XRegExp.match(sName, new XRegExp('(\\pL)(\\pL|\_|\\pN){0,39}')));
+	return (sName.length <= 40 && rx_bookmarkName.test(sName));
 };
 CBookmarksManager.prototype.GetNameForHeadingBookmark = function(oParagraph)
 {

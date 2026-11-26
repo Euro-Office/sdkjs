@@ -9094,6 +9094,8 @@ CT_pivotTableDefinition.prototype.findFieldByItem = function(itemString) {
 	}
 	return null;
 };
+var rx_pivotFieldName = new RegExp("^[" + AscCommon.str_letters + "_][" + AscCommon.str_letters + AscCommon.str_numbers + "_]*$");
+var rx_pivotItem = new RegExp("^([" + AscCommon.str_letters + AscCommon.str_numbers + "_]+)\\[([" + AscCommon.str_letters + AscCommon.str_numbers + "_]+)\\]");
 /**
  * @param {string[]} items
  * @return {GetPivotDataParams}
@@ -9106,8 +9108,7 @@ CT_pivotTableDefinition.prototype.asc_getDataToGetPivotData = function(items) {
 	const optParamsMap = new Map();
 	const cacheFields = this.asc_getCacheFields();
 	for (let i = 0; i < items.length; i += 1) {
-		const reg = new XRegExp('^([\\p{L}\\p{N}_]+)\\[([\\p{L}\\p{N}_]+)\\]');
-		const match = reg.exec(items[i]);
+		const match = rx_pivotItem.exec(items[i]);
 		if (match !== null && match[1] && match[2]) {
 			const fieldIndex = this.getFieldIndexByValue(match[1]);
 			if (fieldIndex === null || optParamsMap.has(fieldIndex)) {
@@ -10250,9 +10251,8 @@ PivotFormatsManager.prototype.checkReferenceValues = function(referenceInfo, val
  */
 CT_pivotTableDefinition.prototype.asc_convertNameToFormula = function(name) {
 	let result = '';
-	const reg = new XRegExp('^[\\p{L}_][\\p{L}\\p{N}_]*$');
 	result = name.replace(/\'/g, "''");
-	if (!reg.test(result)) {
+	if (!rx_pivotFieldName.test(result)) {
 		result = "'" + result + "'";
 	}
 	return result;

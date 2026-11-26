@@ -29,7 +29,7 @@ bundles (`sdk-all.js` / `sdk-all-min.js`) that the sibling **web-apps** repo loa
 | `build/`    | Webpack build: `webpack.*.mjs`, `scripts/`, `lib/` (shared env/config helpers), `loaders/` (`sdk-concat.cjs`), `test/` (build-tooling unit/integration tests), `package.json`, `license.header`. Run npm from **here**. See `build/DEVELOPER-GUIDE.md` for the full workflow. |
 | `configs/`  | `<editor>.json` file-lists that drive the build (load order); `externs.json` for Closure. |
 | `tests/`    | QUnit suites per editor + `code-style/check.py` (the lint gate). |
-| `vendor/`   | Third-party libs (jQuery, XRegExp, etc.). Excluded from lint/build minification. |
+| `vendor/`   | Third-party libs (jQuery, etc.). Excluded from lint/build minification. |
 | `tools/`    | One-off Python maintenance scripts (color schemes, SVG cursors). |
 
 ## Build & develop
@@ -118,7 +118,7 @@ not silently dropped.
 
 Test dependencies are pinned in `tests/package.json` + `tests/npm-shrinkwrap.json`, kept out of
 `build/` so production `npm ci` there does not download Chromium. Test pages load QUnit and
-jQuery from `tests/node_modules` and XRegExp from `vendor/`, never from a CDN
+jQuery from `tests/node_modules`, never from a CDN
 (`build/test/test-pages-offline.test.cjs` enforces this). New pages: copy those relative
 `<script>`/`<link>` paths from a sibling page.
 

@@ -59,7 +59,7 @@
 			AscCommonExcel.StringRender.apply(this, arguments);
 
 			/** @type RegExp */
-			this.reWordBegining = new XRegExp("[^\\p{L}\\p{N}\\'][\\p{L}\\p{N}]", "i");
+			this.reWordBegining = new RegExp("[^" + AscCommon.str_letters + AscCommon.str_numbers + "'][" + AscCommon.str_letters + AscCommon.str_numbers + "]", "i");
 
 			return this;
 		}
