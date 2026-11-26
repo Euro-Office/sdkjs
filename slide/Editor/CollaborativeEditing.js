@@ -322,7 +322,21 @@ CCollaborativeEditing.prototype.OnEnd_Load_Objects = function()
 
 		const arrChanges = this.CoHistory.GetAllChanges();
 		const oRecalcData = LogicDocument.History.Get_RecalcData(null, arrChanges, this.m_nRecalcIndexStart, this.m_nRecalcIndexEnd);
-    LogicDocument.Recalculate(oRecalcData);
+		// The thumbnails of the slides that this recalculates are drawn less often (see CThumbnailsManager).
+		// The finally: a flag left on after an exception would throttle the own changes too.
+		const drawingDocument = LogicDocument.DrawingDocument;
+		const isMarked = !!(drawingDocument && drawingDocument.SetRemoteRecalc);
+		if (isMarked)
+			drawingDocument.SetRemoteRecalc(true);
+		try
+		{
+			LogicDocument.Recalculate(oRecalcData);
+		}
+		finally
+		{
+			if (isMarked)
+				drawingDocument.SetRemoteRecalc(false);
+		}
     LogicDocument.Document_UpdateSelectionState();
     LogicDocument.Document_UpdateInterfaceState();
 
