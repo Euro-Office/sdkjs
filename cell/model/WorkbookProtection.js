@@ -64,7 +64,7 @@
 				alg = AscCommon.c_oSerAlgorithmNameTypes.RIPEMD_160;
 				break;
 			case "SHA-1" :
-				alg = AscCommon.c_oSerAlgorithmNameTypes.SHA1;
+				alg = AscCommon.c_oSerAlgorithmNameTypes.SHA_1;
 				break;
 			case "SHA-256" :
 				alg = AscCommon.c_oSerAlgorithmNameTypes.SHA_256;
@@ -100,7 +100,7 @@
 			case  AscCommon.c_oSerAlgorithmNameTypes.RIPEMD_160:
 				str = "RIPEMD-160";
 				break;
-			case  AscCommon.c_oSerAlgorithmNameTypes.SHA1:
+			case  AscCommon.c_oSerAlgorithmNameTypes.SHA_1:
 				str = "SHA-1";
 				break;
 			case AscCommon.c_oSerAlgorithmNameTypes.SHA_256 :
