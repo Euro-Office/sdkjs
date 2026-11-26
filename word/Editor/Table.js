@@ -373,15 +373,20 @@ CTable.prototype.Get_Props = function()
 			if (0 === Index)
 			{
 				CellWidthStart = _CellWidth;
+				CellWidth      = _CellWidth;
 			}
-			else
+			else if (undefined !== CellWidth)
 			{
-
-				if ((tblwidth_Auto === Cell_w.Type && null !== CellWidth)
-					|| (undefined === CellWidth
-					|| null === CellWidth
-					|| Math.abs(CellWidth - _CellWidth) > 0.001))
+				// the cell width is mixed if the cells have different widths (an auto width is null)
+				if (null === CellWidth || null === _CellWidth)
+				{
+					if (CellWidth !== _CellWidth)
+						CellWidth = undefined;
+				}
+				else if (Math.abs(CellWidth - _CellWidth) > 0.001)
+				{
 					CellWidth = undefined;
+				}
 			}
 
 			// Крайняя левая ли данная ячейка в выделении?
@@ -781,6 +786,30 @@ CTable.prototype.Get_Props = function()
 	var nColumnWidth = null;
 
 	var arrRowsInfo = this.private_GetRowsInfo();
+	if (this.IsCellSelection())
+	{
+		// Like Word: with several selected cells the Width field shows the width of the selected cells (empty if
+		// they differ), the cells of the other rows don't matter
+		for (var nIndex = 0, nCount = arrSelectedCells.length; nIndex < nCount; ++nIndex)
+		{
+			var oSelectedInfo = this.private_GetCellInRowsInfo(arrRowsInfo, arrSelectedCells[nIndex].Row, arrSelectedCells[nIndex].Cell);
+			if (!oSelectedInfo)
+				continue;
+
+			if (null === nColumnWidth)
+			{
+				nColumnWidth = oSelectedInfo.W;
+			}
+			else if (Math.abs(nColumnWidth - oSelectedInfo.W) > 0.001)
+			{
+				nColumnWidth = undefined;
+				break;
+			}
+		}
+
+		arrRowsInfo = [];
+	}
+
 	for (var nCurRow = 0, nCount = arrRowsInfo.length; nCurRow < nCount; ++nCurRow)
 	{
 		var nAdd = -1 === arrRowsInfo[nCurRow][0].Type ? 1 : 0;
@@ -2168,6 +2197,16 @@ CTable.prototype.Set_Props = function(Props)
 		var CellsWidth = Props.CellsWidth;
 		if (null !== CellsWidth && Math.abs(CellsWidth) < 0.001)
 			CellsWidth = null;
+
+		// Like Word: the cells get this width at once (not only as preferred width, which a table with fixed column
+		// widths doesn't use), the cells of the other rows stay. The preferred width is set below (the new grid
+		// writes widths in mm).
+		if (null !== CellsWidth)
+		{
+			var nCellsWidthMm = CellsWidth > -0.001 ? CellsWidth : this.private_RecalculatePercentWidth() * Math.abs(CellsWidth) / 100;
+			if (nCellsWidthMm > 0.001)
+				this.private_SetCellsWidthInGrid(nCellsWidthMm, true, undefined === Props.TableWidth);
+		}
 
 		if (this.Selection.Use === true && table_Selection_Cell === this.Selection.Type)
 		{
@@ -5208,9 +5247,10 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 				return;
 			}
 
+			// A nested table can change the tables around it too (see private_SetTopTableLayoutFixed)
 			if (false === LogicDocument.Document_Is_SelectionLocked(AscCommon.changestype_None, {
-					Type      : AscCommon.changestype_2_Element_and_Type,
-					Element   : this,
+					Type      : AscCommon.changestype_2_ElementsArray_and_Type,
+					Elements  : true === this.Selection.Data2.bCol ? this.GetTablesChangedByColumnResize() : [this],
 					CheckType : AscCommon.changestype_Table_Properties
 				}))
 			{
@@ -5218,6 +5258,8 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 
 				if (true === this.Selection.Data2.bCol)
 				{
+					this.private_SetTopTableLayoutFixed();
+
 					// Найдем колонку в TableGrid, с которой мы работаем
 					var Index  = this.Selection.Data2.Index;
 					var CurRow = this.Selection.Data2.Pos.Row;
@@ -5370,6 +5412,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								Rows_info[nCurRow].push({W : WBefore, Type : -1, GridSpan : 1});
 
 							var TempDx = Dx;
+							var nShrinkRest = 0;
 							var isFindLeft = true, isFindRight = false;
 							for (var nCurCell = 0, nCellsCount = oRow.GetCellsCount(); nCurCell < nCellsCount; ++nCurCell)
 							{
@@ -5379,6 +5422,8 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								var nCellGridEnd    = nCellGridStart + oCell.GetGridSpan() - 1;
 
 								var nCellW = 0;
+								// true for the cells right of the moved border: they give up the width the border took
+								var isRightPart = false;
 
 								if (isFindLeft)
 								{
@@ -5386,6 +5431,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 									{
 										isFindLeft  = false;
 										isFindRight = false;
+										isRightPart = true;
 										nCellW      = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - Dx;
 									}
 									else
@@ -5413,14 +5459,22 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								else if (isFindRight)
 								{
 									isFindRight = false;
+									isRightPart = true;
 									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - TempDx;
 								}
 								else
 								{
-									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1];
+									isRightPart = !isFindLeft;
+									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1] - nShrinkRest;
 								}
 
-								nCellW = Math.max(1, Math.max(nCellW, oCellMargins.Left.W + oCellMargins.Right.W));
+								var nMinCellW = Math.max(1, oCellMargins.Left.W + oCellMargins.Right.W);
+								// Like Word: if the right neighbour can't give up all the width, the next cells of this row give up the
+								// rest, so that the row (and the table) keeps its width
+								if (isRightPart)
+									nShrinkRest = Math.max(0, nMinCellW - nCellW);
+
+								nCellW = Math.max(nCellW, nMinCellW);
 
 								Rows_info[nCurRow].push({W : nCellW, Type : 0, GridSpan : 1});
 							}
@@ -5534,6 +5588,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								Rows_info[nCurRow].push({W : WBefore, Type : -1, GridSpan : 1});
 
 							var TempDx     = Dx;
+							var nShrinkRest = 0;
 							var isFindLeft = true, isFindRight = false;
 							for (var nCurCell = 0, nCellsCount = oRow.GetCellsCount(); nCurCell < nCellsCount; ++nCurCell)
 							{
@@ -5543,6 +5598,8 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								var nCellGridEnd    = nCellGridStart + oCell.GetGridSpan() - 1;
 
 								var nCellW = 0;
+								// true for the cells right of the moved border: they give up the width the border took
+								var isRightPart = false;
 
 								if (isFindLeft)
 								{
@@ -5550,6 +5607,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 									{
 										isFindLeft  = false;
 										isFindRight = false;
+										isRightPart = true;
 										nCellW      = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - Dx;
 									}
 									else
@@ -5576,14 +5634,22 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 								else if (isFindRight)
 								{
 									isFindRight = false;
+									isRightPart = true;
 									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[Col - 1] - TempDx;
 								}
 								else
 								{
-									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1];
+									isRightPart = !isFindLeft;
+									nCellW = this.TableSumGrid[nCellGridEnd] - this.TableSumGrid[nCellGridStart - 1] - nShrinkRest;
 								}
 
-								nCellW = Math.max(1, Math.max(nCellW, oCellMargins.Left.W + oCellMargins.Right.W));
+								var nMinCellW = Math.max(1, oCellMargins.Left.W + oCellMargins.Right.W);
+								// Like Word: if the right neighbour can't give up all the width, the next cells of this row give up the
+								// rest, so that the row (and the table) keeps its width
+								if (isRightPart)
+									nShrinkRest = Math.max(0, nMinCellW - nCellW);
+
+								nCellW = Math.max(nCellW, nMinCellW);
 
 								Rows_info[nCurRow].push({W : nCellW, Type : 0, GridSpan : 1});
 							}
@@ -5598,26 +5664,7 @@ CTable.prototype.Selection_SetEnd = function(X, Y, CurPage, MouseEvent)
 						this.SetTableLayout(tbllayout_Fixed);
 
 					this.Internal_CreateNewGrid(Rows_info);
-
-					if (undefined !== oTablePr.TableW && tblwidth_Auto !== oTablePr.TableW.Type)
-					{
-						var nTableW = 0;
-						for (var nCurCol = 0, nColsCount = this.TableGrid.length; nCurCol < nColsCount; ++nCurCol)
-							nTableW += this.TableGrid[nCurCol];
-
-						if (tblwidth_Pct === oTablePr.TableW.Type)
-						{
-							var nPctWidth = this.private_RecalculatePercentWidth();
-							if (nPctWidth < 0.01)
-								this.Set_TableW(tblwidth_Auto, 0);
-							else
-								this.Set_TableW(tblwidth_Pct, nTableW / nPctWidth * 100);
-						}
-						else
-						{
-							this.Set_TableW(tblwidth_Mm, nTableW);
-						}
-					}
+					this.private_UpdateTableWidthByGrid();
 
 					this.private_RecalculateGrid();
 				}
@@ -14126,6 +14173,8 @@ CTable.prototype.Update_TableMarkupFromRuler = function(NewMarkup, bCol, Index)
 		if (0 === Dx)
 			return;
 
+		this.private_SetTopTableLayoutFixed();
+
 		if (0 === Col)
 		{
 			Dx = this.Markup.X - NewMarkup.X;
@@ -15138,7 +15187,7 @@ CTable.prototype.private_GetRowsInfo = function()
 		var oRow = this.GetRow(nCurRow);
 
 		var oBeforeInfo = oRow.GetBefore();
-		if (oBeforeInfo.GridBefore > 0)
+		if (oBeforeInfo.Grid > 0)
 			arrRowsInfo[nCurRow].push({W : this.TableSumGrid[oBeforeInfo.Grid - 1], Type : -1, GridSpan : 1});
 
 		for (var nCurCell = 0, nCellsCount = oRow.GetCellsCount(); nCurCell < nCellsCount; ++nCurCell)
@@ -17759,6 +17808,99 @@ CTable.prototype.private_SetTableLayoutFixedAndUpdateCellsWidth = function(nExce
 		}
 	}
 };
+/**
+ * A nested table is laid out like its top table (see private_RecalculateGrid): if the top table fits its contents,
+ * the columns of every table in it are calculated from the contents again and a moved border goes back to where it
+ * was. So the top table has to get fixed column widths, and then every table in it is shown with its grid and its
+ * cell widths. To keep all tables as they look now:
+ * - this table and the tables that contain it get fixed column widths;
+ * - the other tables in the top table keep their own layout setting (and fit their contents again as soon as the top
+ *   table does);
+ * - in all of them the grid and the cell widths are set to the widths they are shown with now. A cell width keeps its
+ *   type: a width in percent stays in percent, an automatic width stays automatic.
+ * Check the lock of the tables from GetTablesChangedByColumnResize before.
+ */
+CTable.prototype.private_SetTopTableLayoutFixed = function()
+{
+	var arrTables = this.GetTablesChangedByColumnResize();
+	if (arrTables.length <= 1)
+		return;
+
+	for (var nIndex = 0, nCount = arrTables.length; nIndex < nCount; ++nIndex)
+	{
+		var oTable = arrTables[nIndex];
+		oTable.private_SetCurrentColumns(oTable === this || -1 !== oTable.GetNestedTables().indexOf(this));
+	}
+};
+/**
+ * The tables that can change when a column of this table gets a new width with the mouse or the ruler: this table
+ * and, if it is nested in a table that fits its contents, all tables in that top table
+ * (see private_SetTopTableLayoutFixed).
+ * @returns {CTable[]} this table is the first one
+ */
+CTable.prototype.GetTablesChangedByColumnResize = function()
+{
+	var oTopTable = this.Parent ? this.Parent.IsInTable(true) : null;
+	if (!oTopTable || oTopTable === this || tbllayout_AutoFit !== oTopTable.Get_CompiledPr(false).TablePr.TableLayout)
+		return [this];
+
+	var arrResult = [this];
+	var arrTables = oTopTable.GetAllTables();
+	for (var nIndex = 0, nCount = arrTables.length; nIndex < nCount; ++nIndex)
+	{
+		if (arrTables[nIndex] !== this)
+			arrResult.push(arrTables[nIndex]);
+	}
+
+	return arrResult;
+};
+/**
+ * Sets the grid and the cell widths to the widths the table is shown with now. A cell width in mm or percent keeps its
+ * type (a percent width stays in percent), an automatic cell width stays automatic.
+ * @param {boolean} isSetFixed - the table also gets fixed column widths
+ */
+CTable.prototype.private_SetCurrentColumns = function(isSetFixed)
+{
+	var arrGrid = this.private_CopyTableGridCalc();
+
+	var isGridChanged = this.TableGrid.length !== arrGrid.length;
+	for (var nCol = 0, nColsCount = arrGrid.length; !isGridChanged && nCol < nColsCount; ++nCol)
+		isGridChanged = Math.abs(this.TableGrid[nCol] - arrGrid[nCol]) > 0.001;
+
+	if (isGridChanged)
+		this.SetTableGrid(arrGrid);
+
+	var nPctWidth = this.private_RecalculatePercentWidth();
+	for (var nCurRow = 0, nRowsCount = this.GetRowsCount(); nCurRow < nRowsCount; ++nCurRow)
+	{
+		var oRow     = this.GetRow(nCurRow);
+		var nGridCol = oRow.GetBefore().Grid;
+		for (var nCurCell = 0, nCellsCount = oRow.GetCellsCount(); nCurCell < nCellsCount; ++nCurCell)
+		{
+			var oCell     = oRow.GetCell(nCurCell);
+			var nGridSpan = oCell.GetGridSpan();
+			var oCellW    = oCell.GetW();
+
+			var nW = 0;
+			for (var nSpanCol = nGridCol; nSpanCol < nGridCol + nGridSpan && nSpanCol < arrGrid.length; ++nSpanCol)
+				nW += arrGrid[nSpanCol];
+
+			var nNewW = null;
+			if (tblwidth_Pct === oCellW.Type)
+				nNewW = nPctWidth > 0.01 ? nW / nPctWidth * 100 : null;
+			else if (tblwidth_Mm === oCellW.Type)
+				nNewW = nW;
+
+			if (null !== nNewW && Math.abs(nNewW - oCellW.W) > 0.001)
+				oCell.SetW(new CTableMeasurement(oCellW.Type, nNewW));
+
+			nGridCol += nGridSpan;
+		}
+	}
+
+	if (isSetFixed && tbllayout_AutoFit === this.Get_CompiledPr(false).TablePr.TableLayout)
+		this.SetTableLayout(tbllayout_Fixed);
+};
 CTable.prototype.GotoFootnoteRef = function(isNext, isCurrent, isStepFootnote, isStepEndnote)
 {
 	var nRow = 0, nCell = 0;
@@ -18996,30 +19138,114 @@ CTable.prototype.SetColumnWidth = function(nWidth)
 	if (nWidth > 558.8)
 		nWidth = 558.8;
 
+	this.private_SetCellsWidthInGrid(nWidth, this.IsCellSelection(), true);
+};
+/**
+ * Sets the width of cells in the table grid.
+ * Like Word: with a cell selection only the selected cells change (and the cells merged with them vertically), the
+ * other rows keep their cells, the cells right of the selected ones move. Without a cell selection the cells with
+ * the index of the current cell change in every row (as before).
+ * As when a border is moved, the table gets fixed column widths (also a top table that fits its contents, so the
+ * widths in a nested table stay), and a table width in mm or percent follows the new grid, so that it doesn't scale
+ * the new widths back.
+ * @param {number} nWidth - in mm
+ * @param {boolean} isOnlySelected
+ * @param {boolean} isUpdateTableW
+ */
+CTable.prototype.private_SetCellsWidthInGrid = function(nWidth, isOnlySelected, isUpdateTableW)
+{
+	var arrRowsInfo      = this.private_GetRowsInfo();
 	var arrSelectedCells = this.GetSelectionArray();
 
-	var oCells = {};
-	for (var nIndex = 0, nCount = arrSelectedCells.length; nIndex < nCount; ++nIndex)
+	if (isOnlySelected)
 	{
-		var nCurCell = arrSelectedCells[nIndex].Cell;
-		if (!oCells[nCurCell])
-			oCells[nCurCell] = 1;
-	}
-
-	var arrRowsInfo = this.private_GetRowsInfo();
-	for (var nCurRow = 0, nCount = arrRowsInfo.length; nCurRow < nCount; ++nCurRow)
-	{
-		var nAdd = -1 === arrRowsInfo[nCurRow][0].Type ? 1 : 0;
-
-		for (var nCurCell in oCells)
+		for (var nIndex = 0, nCount = arrSelectedCells.length; nIndex < nCount; ++nIndex)
 		{
-			var _nCurCell = nCurCell | 0;
-			if (arrRowsInfo[nCurRow][_nCurCell + nAdd])
-				arrRowsInfo[nCurRow][_nCurCell + nAdd].W = nWidth;
+			var nRow  = arrSelectedCells[nIndex].Row;
+			var nCell = arrSelectedCells[nIndex].Cell;
+			var oRow  = this.GetRow(nRow);
+			if (!oRow || !oRow.GetCell(nCell))
+				continue;
+
+			var nStartGridCol = oRow.GetCellInfo(nCell).StartGridCol;
+			var nVMergeCount  = this.GetVMergeCount(nCell, nRow);
+			for (var nMergeRow = nRow; nMergeRow < nRow + nVMergeCount; ++nMergeRow)
+			{
+				var nMergeCell = nMergeRow === nRow ? nCell : this.private_GetCellIndexByStartGridCol(nMergeRow, nStartGridCol);
+				var oCellInfo  = -1 !== nMergeCell ? this.private_GetCellInRowsInfo(arrRowsInfo, nMergeRow, nMergeCell) : null;
+				if (oCellInfo)
+					oCellInfo.W = nWidth;
+			}
+		}
+	}
+	else
+	{
+		var oCells = {};
+		for (var nIndex = 0, nCount = arrSelectedCells.length; nIndex < nCount; ++nIndex)
+		{
+			oCells[arrSelectedCells[nIndex].Cell] = 1;
+		}
+
+		for (var nCurRow = 0, nRowsCount = arrRowsInfo.length; nCurRow < nRowsCount; ++nCurRow)
+		{
+			for (var nCurCell in oCells)
+			{
+				var oCellInfo = this.private_GetCellInRowsInfo(arrRowsInfo, nCurRow, nCurCell | 0);
+				if (oCellInfo)
+					oCellInfo.W = nWidth;
+			}
 		}
 	}
 
+	this.private_SetTopTableLayoutFixed();
+	if (tbllayout_AutoFit === this.Get_CompiledPr(false).TablePr.TableLayout)
+		this.SetTableLayout(tbllayout_Fixed);
+
 	this.private_CreateNewGrid(arrRowsInfo);
+
+	if (isUpdateTableW)
+		this.private_UpdateTableWidthByGrid();
+};
+/**
+ * @param {Array} arrRowsInfo - from private_GetRowsInfo
+ * @param {number} nRow
+ * @param {number} nCell
+ * @returns {?{W : number}} the entry of the cell (a row can start with an entry for the grid before)
+ */
+CTable.prototype.private_GetCellInRowsInfo = function(arrRowsInfo, nRow, nCell)
+{
+	var arrRowInfo = arrRowsInfo[nRow];
+	if (!arrRowInfo || !arrRowInfo.length)
+		return null;
+
+	var nAdd = -1 === arrRowInfo[0].Type ? 1 : 0;
+	return arrRowInfo[nCell + nAdd] || null;
+};
+/**
+ * A table width in mm or percent follows the sum of the new table grid.
+ */
+CTable.prototype.private_UpdateTableWidthByGrid = function()
+{
+	var oTablePr = this.Get_CompiledPr(false).TablePr;
+	if (undefined === oTablePr.TableW || tblwidth_Auto === oTablePr.TableW.Type)
+		return;
+
+	var nTableW = 0;
+	for (var nCurCol = 0, nColsCount = this.TableGrid.length; nCurCol < nColsCount; ++nCurCol)
+		nTableW += this.TableGrid[nCurCol];
+
+	if (tblwidth_Pct === oTablePr.TableW.Type)
+	{
+		var nPctWidth = this.private_RecalculatePercentWidth();
+		if (nPctWidth < 0.01)
+			this.Set_TableW(tblwidth_Auto, 0);
+		else
+			this.Set_TableW(tblwidth_Pct, nTableW / nPctWidth * 100);
+	}
+	else
+	{
+		this.Set_TableW(tblwidth_Mm, nTableW);
+	}
 };
 /**
  * Выставляем высоту текущей строки
