@@ -518,9 +518,9 @@
 		else
 		{
 			if (true === bCaps)
-				return (String.fromCharCode(this.Value)).toUpperCase();
+				return (String.fromCodePoint(this.Value)).toUpperCase();
 			else
-				return String.fromCharCode(this.Value);
+				return String.fromCodePoint(this.Value);
 		}
 	};
 	CRunText.prototype.SetSpaceAfter = function(bSpaceAfter)

@@ -387,7 +387,8 @@
 	 */
 	CParagraphSpellChecker.prototype.IsNeedCheckWord = function(sWord)
 	{
-		if (1 >= sWord.length || ((this.Flags & IGNORE_UPPERCASE) && AscCommon.IsAbbreviation(sWord)))
+		let isOneCodePoint = sWord.length <= 1 || (2 === sWord.length && sWord.codePointAt(0) > 0xFFFF);
+		if (isOneCodePoint || ((this.Flags & IGNORE_UPPERCASE) && AscCommon.IsAbbreviation(sWord)))
 			return false;
 
 		if (this.Flags & IGNORE_NUMBERS)
