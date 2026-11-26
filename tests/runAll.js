@@ -61,6 +61,8 @@ const allTests = [
 	'common/api/api-visio.html',
 	'common/libfont/like-fonts.html',
 
+	'pdf/watermark/watermark.html',
+
 	'word/unit-tests/paragraphContentPos.html',
 	'word/unit-tests/deleted-text-recovery.html',
 	'word/unit-tests/fieldInstructionParser.html',
