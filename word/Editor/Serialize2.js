@@ -743,7 +743,8 @@ var c_oSer_SettingsType = {
 	AutoHyphenation: 21,
 	HyphenationZone: 22,
 	DoNotHyphenateCaps: 23,
-	ConsecutiveHyphenLimit: 24
+	ConsecutiveHyphenLimit: 24,
+	RevisionViewInsDel: 31
 };
 var c_oDocProtect = {
 	AlgorithmName: 0,
@@ -7301,6 +7302,8 @@ function BinarySettingsTableWriter(memory, doc, saveParams)
 		this.bs.WriteItem(c_oSer_SettingsType.ClrSchemeMapping, function(){oThis.WriteColorSchemeMapping();});
 		this.bs.WriteItem(c_oSer_SettingsType.DefaultTabStopTwips, function(){oThis.bs.writeMmToTwips(AscCommonWord.Default_Tab_Stop);});
 		this.bs.WriteItem(c_oSer_SettingsType.MathPr, function(){oThis.WriteMathPr();});
+		if (oThis.Document.Settings && false === oThis.Document.Settings.RevisionViewInsDel)
+			this.bs.WriteItem(c_oSer_SettingsType.RevisionViewInsDel, function(){oThis.memory.WriteBool(false);});
 		this.bs.WriteItem(c_oSer_SettingsType.TrackRevisions, function(){
 			let trackRevisionsFlag = oThis.Document.GetGlobalTrackRevisions();
 			if (!trackRevisionsFlag) {
@@ -8575,6 +8578,11 @@ function BinaryFileReader(doc, openParams)
 		}
 		if (null !== this.oReadResult.TrackRevisions) {
 			this.Document.Settings.TrackRevisions = this.oReadResult.TrackRevisions;
+		}
+		if (null !== this.oReadResult.RevisionViewInsDel) {
+			// w:revisionView w:insDel = false (ODF ShowRedlineChanges false): show the document without
+			// its tracked insertions and deletions (Final view)
+			this.Document.Settings.RevisionViewInsDel = this.oReadResult.RevisionViewInsDel;
 		}
 		for (var i = 0; i < this.oReadResult.drawingToMath.length; ++i) {
 			this.oReadResult.drawingToMath[i].ConvertToMath();
@@ -16548,6 +16556,10 @@ function Binary_SettingsTableReader(doc, oReadResult, stream)
 		{
 			this.oReadResult.TrackRevisions = this.stream.GetBool();
 		}
+		else if ( c_oSer_SettingsType.RevisionViewInsDel === type )
+		{
+			this.oReadResult.RevisionViewInsDel = this.stream.GetBool();
+		}
 		else if ( c_oSer_SettingsType.FootnotePr === type )
 		{
 			var props = {Format: null, restart: null, start: null, fntPos: null, endPos: null};
@@ -17561,6 +17573,7 @@ function DocReadResult(doc) {
 	this.AppVersion;
 	this.defaultTabStop = null;
 	this.TrackRevisions = null;
+	this.RevisionViewInsDel = null;
 	this.bdtr = null;
 	this.runsToSplit = [];
 	this.runsToSplitBySym = [];
