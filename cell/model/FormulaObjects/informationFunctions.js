@@ -369,9 +369,12 @@ function (window, undefined) {
 					cell = ws.getCell3(bbox.r1, bbox.c1);
 					cell._foreachNoEmpty(function (cell) {
 						if (cell) {
-							let xfs = cell.xfs ? cell.xfs : cell.getCompiledStyle();
+							// Protection is a property of the cell's own format. Do not compile the style here:
+							// that evaluates conditional formats, which may call CELL("protect") on this cell again.
+							// A format without a protection entry (locked null) is locked, as in the protection code.
+							let xfs = cell.xfs;
 							if (xfs) {
-								isLocked = xfs.getLocked();
+								isLocked = xfs.getLocked() !== false;
 							}
 						}
 					});
