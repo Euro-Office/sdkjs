@@ -31,6 +31,57 @@ $(function ()
 		return p;
 	}
 
+	// With the sdkjs-forms addon in the build, the document has a forms part (OForm), and the binary
+	// writer and reader pack it with AscCommon.ZLib. That is a wasm module the test page does not load,
+	// so the round trip uses this stand-in, which keeps the files of the part in memory.
+	function MemoryZLib()
+	{
+		this.files = {};
+	}
+	MemoryZLib.prototype.create = function()
+	{
+		this.files = {};
+		return true;
+	};
+	MemoryZLib.prototype.addFile = function(path, data)
+	{
+		this.files[path] = data;
+		return true;
+	};
+	MemoryZLib.prototype.getFile = function(path)
+	{
+		return Object.prototype.hasOwnProperty.call(this.files, path) ? this.files[path] : null;
+	};
+	MemoryZLib.prototype.removeFile = function(path)
+	{
+		let found = Object.prototype.hasOwnProperty.call(this.files, path);
+		delete this.files[path];
+		return found;
+	};
+	MemoryZLib.prototype.getPaths = function()
+	{
+		return Object.keys(this.files);
+	};
+	MemoryZLib.prototype.save = function()
+	{
+		let files = {};
+		for (let path in this.files)
+			files[path] = Array.from(this.files[path]);
+		return new TextEncoder().encode(JSON.stringify(files));
+	};
+	MemoryZLib.prototype.open = function(data)
+	{
+		let files = JSON.parse(new TextDecoder().decode(data));
+		this.files = {};
+		for (let path in files)
+			this.files[path] = new Uint8Array(files[path]);
+		return true;
+	};
+	MemoryZLib.prototype.close = function()
+	{
+		this.files = {};
+	};
+
 	function writeAndRead(revisionViewInsDel)
 	{
 		// The writer reads the macros of the editor; the test editor has none.
@@ -38,8 +89,10 @@ $(function ()
 		if (!editorApi.macros)
 			editorApi.macros = new AscCommon.CDocumentMacros();
 
+		let zLib = AscCommon.ZLib;
 		try
 		{
+			AscCommon.ZLib = MemoryZLib;
 			logicDocument.Settings.RevisionViewInsDel = revisionViewInsDel;
 			let data = new AscCommonWord.BinaryFileWriter(logicDocument).Write();
 			logicDocument.Settings.RevisionViewInsDel = "not read";
@@ -48,6 +101,7 @@ $(function ()
 		}
 		finally
 		{
+			AscCommon.ZLib = zLib;
 			logicDocument.Settings.RevisionViewInsDel = undefined;
 		}
 	}
