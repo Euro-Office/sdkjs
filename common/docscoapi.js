@@ -309,6 +309,10 @@
     }
     return "";
   };
+
+  CDocsCoApi.prototype.isParticipant = function(userId) {
+    return !!(this._CoAuthoringApi && this._onlineWork && this._CoAuthoringApi.isParticipant(userId));
+  };
   
   CDocsCoApi.prototype.get_serverChangesSize = function() {
     if (this._CoAuthoringApi && this._onlineWork) {
@@ -708,6 +712,10 @@
     return "";
   };
 
+  DocsCoApi.prototype.isParticipant = function(userId) {
+    return !!this._participants[userId];
+  };
+
   DocsCoApi.prototype.getLocks = function() {
     return this._locks;
   };
@@ -1024,7 +1032,20 @@
   };
 
   DocsCoApi.prototype._onCursor = function(data) {
-    if (this.check_state() && data["messages"] && this.onCursor) {
+    var t = this;
+    if (!this.check_state()) {
+      // When the second editor joins, the server tells the first one about it before it answers the auth of the
+      // second: a cursor that the first one sends at once comes before the auth. It is kept until the auth, as the
+      // connection state changes are, unless its user left in the meantime.
+      this._msgInputBuffer.push(function () {
+        var messages = data["messages"];
+        if (messages && messages.length && t.isParticipant(messages[messages.length - 1]["user"])) {
+          t._onCursor(data);
+        }
+      });
+      return;
+    }
+    if (data["messages"] && this.onCursor) {
       this.onCursor(data["messages"]);
     }
   };

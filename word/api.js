@@ -1620,6 +1620,9 @@ background-repeat: no-repeat;\
 		var t                                        = this;
 		this.CoAuthoringApi.onCursor                 = function(e)
 		{
+			if (t.deferCursorUntilReady(e))
+				return;
+
 			if (true === AscCommon.CollaborativeEditing.Is_Fast())
 			{
 				t.WordControl.m_oLogicDocument.Update_ForeignCursor(e[e.length - 1]['cursor'], e[e.length - 1]['user'], true, e[e.length - 1]['useridoriginal']);
@@ -1630,6 +1633,11 @@ background-repeat: no-repeat;\
 			if (true === AscCommon.CollaborativeEditing.Is_Fast() && false === e['state'])
 			{
 				t.WordControl.m_oLogicDocument.Remove_ForeignCursor(e['id']);
+			}
+			else if (true === AscCommon.CollaborativeEditing.Is_Fast() && true === e['state'] && t.WordControl.m_oLogicDocument)
+			{
+				// A co-author who joins knows no cursor yet: send the own one again
+				t.WordControl.m_oLogicDocument.NeedUpdateTargetForCollaboration = true;
 			}
 			t.sendEvent("asc_onConnectionStateChanged", e);
 		};
@@ -6856,6 +6864,25 @@ background-repeat: no-repeat;\
 	{
 		this.sendEvent("asc_onHideForeignCursorLabel", UserId);
 	};
+	asc_docs_api.prototype.asc_moveToUserCursor = function(UserId)
+	{
+		var Cursor = AscCommon.CollaborativeEditing.m_aForeignCursorsXY[UserId];
+		if (!Cursor || !this.WordControl)
+			return false;
+
+		var X = Cursor.Transform ? Cursor.X0 : Cursor.X;
+		var Y = Cursor.Transform ? Cursor.Y0 : Cursor.Y;
+		var H = Cursor.Transform ? Cursor.Y1 - Cursor.Y0 : Cursor.H;
+
+		// Horizontally into the view, then vertically into the middle of the view
+		var WordControl = this.WordControl;
+		var ViewHeight  = AscCommon.AscBrowser.convertToRetinaValue(WordControl.m_oEditor.HtmlElement.height) * AscCommon.g_dKoef_pix_to_mm * 100 / WordControl.m_nZoomValue;
+		WordControl.ScrollToPosition(X, Y, Cursor.PageIndex, H);
+		WordControl.ScrollToAbsolutePosition(X, Y + H / 2 - ViewHeight / 2, Cursor.PageIndex);
+
+		AscCommon.CollaborativeEditing.Show_ForeignCursorLabel(UserId);
+		return true;
+	};
 
 	//-----------------------------------------------------------------
 	// Функции для работы с гиперссылками
@@ -10205,6 +10232,7 @@ background-repeat: no-repeat;\
 		AscCommon.CollaborativeEditing.Clear();
 		this.isApplyChangesOnOpenEnabled = true;
 		this.isDocumentLoadComplete = false;
+		this.preReadyCursors = {}; // the cursors of the closed document
 		this.ServerImagesWaitComplete = false;
 		this.turnOffSpecialModes();
 
@@ -15092,6 +15120,7 @@ background-repeat: no-repeat;\
 	asc_docs_api.prototype['asc_coAuthoringChatSendMessage']            = asc_docs_api.prototype.asc_coAuthoringChatSendMessage;
 	asc_docs_api.prototype['asc_coAuthoringChatGetMessages']            = asc_docs_api.prototype.asc_coAuthoringChatGetMessages;
 	asc_docs_api.prototype['asc_coAuthoringGetUsers']                   = asc_docs_api.prototype.asc_coAuthoringGetUsers;
+	asc_docs_api.prototype['asc_moveToUserCursor']                      = asc_docs_api.prototype.asc_moveToUserCursor;
 	asc_docs_api.prototype['asc_coAuthoringDisconnect']                 = asc_docs_api.prototype.asc_coAuthoringDisconnect;
 	asc_docs_api.prototype['asc_SpellCheckDisconnect']                  = asc_docs_api.prototype.asc_SpellCheckDisconnect;
 	asc_docs_api.prototype['_onUpdateDocumentCanSave']                  = asc_docs_api.prototype._onUpdateDocumentCanSave;

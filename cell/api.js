@@ -1858,6 +1858,7 @@ var editor;
 		AscCommon.g_oDocumentUrls.Clear();
 		this.isApplyChangesOnOpenEnabled = true;
 		this.isDocumentLoadComplete = false;
+		this.preReadyCursors = {}; // the cursors of the closed document
 		this.FontLoadWaitComplete = false;
         this.turnOffSpecialModes();
 
@@ -2791,6 +2792,9 @@ var editor;
     this.CoAuthoringApi.onConnectionStateChanged = function(e) {
 		if (true === AscCommon.CollaborativeEditing.Is_Fast() && false === e['state']) {
 			t.wb.Remove_ForeignCursor(e['id']);
+		} else if (true === AscCommon.CollaborativeEditing.Is_Fast() && true === e['state'] && t.wb) {
+			// A co-author who joins knows no cursor yet: send the own one again
+			t.wb.updateTargetForCollaboration();
 		}
     	t.handlers.trigger("asc_onConnectionStateChanged", e);
     };
@@ -3011,6 +3015,9 @@ var editor;
         }
     };
     this.CoAuthoringApi.onCursor = function(e) {
+      if (t.deferCursorUntilReady(e)) {
+        return;
+      }
       if (AscCommon.CollaborativeEditing && true === AscCommon.CollaborativeEditing.Is_Fast() && e && e[e.length - 1]) {
         t.wb.Update_ForeignCursor(e[e.length - 1]['cursor'], e[e.length - 1]['user'], true, e[e.length - 1]['useridoriginal']);
       }
@@ -8758,6 +8765,29 @@ var editor;
 	spreadsheet_api.prototype.hideForeignSelectLabel = function (UserId) {
 		this.sendEvent("asc_onHideForeignCursorLabel", UserId);
 	};
+	spreadsheet_api.prototype.asc_moveToUserCursor = function (UserId) {
+		if (!this.wb || this.asc_getCellEditMode()) {
+			return false;
+		}
+		var cursor = this.wb.collaborativeEditing.m_aForeignCursorsData[UserId];
+		if (!cursor || !cursor.ranges || 0 === cursor.ranges.length) {
+			return false;
+		}
+		var ws = this.wbModel.getWorksheetById(cursor.sheetId);
+		if (!ws || ws.getHidden()) {
+			return false;
+		}
+		if (this.asc_getActiveWorksheetIndex() !== ws.getIndex()) {
+			this.asc_showWorksheet(ws.getIndex());
+		}
+
+		// The label of the user is drawn at the first range
+		var wsView = this.wb.getWorksheet();
+		wsView._scrollToRange(cursor.ranges[0]);
+		cursor.needDrawLabel = true;
+		wsView._drawSelection();
+		return true;
+	};
 
 	//TODO временно положил в прототип. перенести!
 	spreadsheet_api.prototype.sheetViewManagerLocks = [];
@@ -10486,6 +10516,7 @@ var editor;
   /////////////////////////////////////////////////////////////////////////
   prot["asc_coAuthoringChatSendMessage"] = prot.asc_coAuthoringChatSendMessage;
   prot["asc_coAuthoringGetUsers"] = prot.asc_coAuthoringGetUsers;
+  prot["asc_moveToUserCursor"] = prot.asc_moveToUserCursor;
   prot["asc_coAuthoringChatGetMessages"] = prot.asc_coAuthoringChatGetMessages;
   prot["asc_coAuthoringDisconnect"] = prot.asc_coAuthoringDisconnect;
 

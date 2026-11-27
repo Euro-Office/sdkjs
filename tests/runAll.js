@@ -59,6 +59,7 @@ const allTests = [
 	'common/api/api-cell.html',
 	'common/api/api-slide.html',
 	'common/api/api-visio.html',
+	'common/foreign-cursor/foreign-cursor.html',
 	'common/libfont/like-fonts.html',
 
 	'word/unit-tests/paragraphContentPos.html',
